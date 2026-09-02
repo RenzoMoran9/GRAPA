@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grapa · Taller de PDF</title>
+<meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="barra-superior">
+  <div class="marca">
+    <div class="marca-logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7" /></svg>
+    </div>
+    <div class="marca-texto">
+      <strong>Grapa</strong>
+      <span>Taller de PDF · une, ordena y firma</span>
+    </div>
+  </div>
+
+  <div class="barra-acciones">
+    <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" disabled>↶</button>
+    <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" disabled>↷</button>
+    <span class="separador-vertical"></span>
+    <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema">◐</button>
+    <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos">?</button>
+    <button class="btn btn-secundario" id="btnAbrir">＋ Abrir archivos</button>
+    <button class="btn btn-primario" id="btnGuardar">⤓ Guardar PDF</button>
+  </div>
+</header>
+
+<div class="cuerpo">
+
+  <!-- ============ PANEL LATERAL ============ -->
+  <aside class="panel" id="panel">
+    <section class="bloque abierto" data-bloque="docs">
+      <button class="bloque-cabecera" type="button"><span class="ico">🗂️</span> Documentos <em id="contDocs">0</em></button>
+      <div class="bloque-cuerpo">
+        <div class="zona-soltar" id="zonaSoltar">
+          <strong>Arrastra tus PDF aquí</strong>
+          <span>o haz clic para buscarlos</span>
+          <small>También acepta JPG y PNG</small>
+        </div>
+        <ul class="lista-docs" id="listaDocs"></ul>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="guardados">
+      <button class="bloque-cabecera" type="button"><span class="ico">💾</span> Expedientes guardados <em id="contGuardados">0</em></button>
+      <div class="bloque-cuerpo">
+        <p class="nota">Guarda el expediente a medio armar y retómalo otro día. Se queda en este navegador, no se sube a ningún lado.</p>
+        <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor"></label>
+        <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar el trabajo actual</button>
+        <ul class="lista-guardados" id="listaGuardados"></ul>
+        <p class="nota" id="espacioUsado"></p>
+      </div>
+    </section>
+
+    <section class="bloque abierto" data-bloque="firmas">
+      <button class="bloque-cabecera" type="button"><span class="ico">✍️</span> Firmas y sellos <em id="contFirmas">0</em></button>
+      <div class="bloque-cuerpo">
+        <p class="nota">Crea tu firma una sola vez. Para colocarla, usa el botón <strong>✍</strong> de la página (o haz doble clic en ella).</p>
+        <ul class="lista-firmas" id="listaFirmas"></ul>
+        <div class="rejilla-botones">
+          <button class="btn btn-suave" id="btnNuevaFirmaEscaneo">Desde escaneo</button>
+          <button class="btn btn-suave" id="btnNuevaFirmaArchivo">Desde imagen</button>
+          <button class="btn btn-suave ocupa-2" id="btnNuevaFirmaDibujo">Dibujar a mano</button>
+        </div>
+        <p class="nota nota-privacidad">Tus firmas se guardan solo en este navegador, nunca se envían a ningún servidor.</p>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="foliar">
+      <button class="bloque-cabecera" type="button"><span class="ico">🔢</span> Foliación y numeración</button>
+      <div class="bloque-cuerpo">
+        <label class="campo">Formato
+          <select id="folioFormato">
+            <option value="{n}">1, 2, 3…</option>
+            <option value="Folio {n}">Folio 1</option>
+            <option value="Folio N° {n}">Folio N° 1</option>
+            <option value="{n} de {t}">1 de 10</option>
+            <option value="Pág. {n} / {t}">Pág. 1 / 10</option>
+            <option value="__libre__">Texto libre…</option>
+          </select>
+        </label>
+        <label class="campo oculto" id="campoFolioLibre">Texto ( {n} = número, {t} = total )
+          <input type="text" id="folioTextoLibre" value="Folio {n}">
+        </label>
+        <label class="campo">Sentido
+          <select id="folioSentido">
+            <option value="inverso" selected>De abajo hacia arriba (expediente)</option>
+            <option value="directo">De arriba hacia abajo (1, 2, 3…)</option>
+          </select>
+        </label>
+        <p class="nota" id="folioExplica">La última página lleva el folio 1 y se cuenta hacia arriba, así los documentos que adjuntes encima no obligan a renumerar los anteriores.</p>
+        <div class="rejilla-2">
+          <label class="campo">Empezar en <input type="number" id="folioInicio" value="1" min="0"></label>
+          <label class="campo">Tamaño <input type="number" id="folioTam" value="11" min="5" max="48"></label>
+        </div>
+        <label class="campo">Posición</label>
+        <div class="rejilla-pos" id="folioPos" data-valor="ad"></div>
+        <div class="rejilla-2">
+          <label class="campo">Margen (mm) <input type="number" id="folioMargen" value="12" min="0" max="60"></label>
+          <label class="campo">Color <input type="color" id="folioColor" value="#111111"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="folioSaltaPrimera"> No numerar la primera página</label>
+        <label class="check"><input type="checkbox" id="folioSoloSel"> Solo las páginas seleccionadas</label>
+        <div class="fila-botones">
+          <button class="btn btn-suave" id="btnFoliarAplicar">Aplicar foliación</button>
+          <button class="btn btn-suave btn-peligro-suave" id="btnFoliarQuitar">Quitar</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="marca">
+      <button class="bloque-cabecera" type="button"><span class="ico">💧</span> Sello de texto / marca de agua</button>
+      <div class="bloque-cuerpo">
+        <label class="campo">Texto <input type="text" id="marcaTexto" value="COPIA FIEL DEL ORIGINAL"></label>
+        <div class="rejilla-2">
+          <label class="campo">Tamaño <input type="number" id="marcaTam" value="34" min="6" max="140"></label>
+          <label class="campo">Giro ° <input type="number" id="marcaGiro" value="45" min="-180" max="180"></label>
+        </div>
+        <div class="rejilla-2">
+          <label class="campo">Color <input type="color" id="marcaColor" value="#d33b28"></label>
+          <label class="campo">Opacidad <input type="range" id="marcaOpacidad" min="5" max="100" value="22"></label>
+        </div>
+        <label class="campo">Posición</label>
+        <div class="rejilla-pos" id="marcaPos" data-valor="cc"></div>
+        <label class="check"><input type="checkbox" id="marcaSoloSel"> Solo las páginas seleccionadas</label>
+        <div class="fila-botones">
+          <button class="btn btn-suave" id="btnMarcaAplicar">Aplicar sello</button>
+          <button class="btn btn-suave btn-peligro-suave" id="btnMarcaQuitar">Quitar</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="dividir">
+      <button class="bloque-cabecera" type="button"><span class="ico">✂️</span> Dividir y extraer</button>
+      <div class="bloque-cuerpo">
+        <p class="nota">Usa las tijeras <span class="tijera-demo">✂</span> entre páginas para marcar dónde cortar.</p>
+        <button class="btn btn-suave ancho" id="btnDividirMarcas">Dividir por las marcas de corte</button>
+        <button class="btn btn-suave ancho" id="btnExtraerSel">Extraer selección a un PDF nuevo</button>
+        <button class="btn btn-suave ancho" id="btnDividirUna">Un archivo por cada página</button>
+        <label class="campo">Rangos (ej. 1-3, 5, 8-10)
+          <input type="text" id="divRangos" placeholder="1-3, 5, 8-10">
+        </label>
+        <button class="btn btn-suave ancho" id="btnDividirRangos">Dividir por rangos</button>
+        <p class="nota">Si sale más de un archivo, se descarga un ZIP.</p>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="salida">
+      <button class="bloque-cabecera" type="button"><span class="ico">📦</span> Archivo de salida</button>
+      <div class="bloque-cuerpo">
+        <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido"></label>
+        <label class="campo">Título del PDF <input type="text" id="metaTitulo" placeholder="(opcional)"></label>
+        <label class="campo">Autor <input type="text" id="metaAutor" placeholder="(opcional)"></label>
+        <label class="campo">Carpeta de destino</label>
+        <div class="carpeta-estado" id="carpetaEstado">Los PDF van a la carpeta de Descargas.</div>
+        <div class="fila-botones" id="carpetaBotones">
+          <button class="btn btn-suave" id="btnVincularCarpeta">Elegir carpeta</button>
+          <button class="btn btn-suave btn-peligro-suave" id="btnDesvincularCarpeta" hidden>Quitar</button>
+        </div>
+        <p class="nota" id="carpetaNota">Si vinculas una carpeta, el PDF terminado se escribe ahí directamente, sin pasar por Descargas.</p>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ============ ÁREA DE TRABAJO ============ -->
+  <main class="taller">
+    <div class="taller-barra">
+      <div class="taller-info">
+        <strong id="infoPaginas">0 páginas</strong>
+        <span id="infoSeleccion">nada seleccionado</span>
+      </div>
+      <div class="taller-herramientas">
+        <button class="btn btn-mini" id="btnSelTodo">Seleccionar todo</button>
+        <button class="btn btn-mini" id="btnSelNada">Ninguna</button>
+        <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
+        <span class="separador-vertical"></span>
+        <button class="btn btn-mini" id="btnLector" title="Ver las hojas en grande (V)">🔍 Ver en grande</button>
+        <span class="separador-vertical"></span>
+        <button class="btn btn-mini" id="btnGirarIzq" title="Girar 90° izquierda ( [ )">↺</button>
+        <button class="btn btn-mini" id="btnGirarDer" title="Girar 90° derecha ( ] )">↻</button>
+        <button class="btn btn-mini" id="btnDuplicar" title="Duplicar (Ctrl+D)">⧉</button>
+        <button class="btn btn-mini" id="btnMoverInicio" title="Mover al inicio">⇤</button>
+        <button class="btn btn-mini" id="btnMoverFin" title="Mover al final">⇥</button>
+        <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)">🗑</button>
+        <span class="separador-vertical"></span>
+        <label class="zoom">Zoom
+          <input type="range" id="zoom" min="110" max="360" value="180">
+        </label>
+      </div>
+    </div>
+
+    <div class="lienzo" id="lienzo">
+      <div class="vacio" id="vacio">
+        <div class="vacio-arte">
+          <svg viewBox="0 0 120 96" aria-hidden="true">
+            <rect x="16" y="10" width="52" height="70" rx="5"/>
+            <rect x="40" y="22" width="52" height="70" rx="5"/>
+            <path d="M52 46v-9a6 6 0 0 1 12 0v14a4 4 0 0 0 8 0v-9"/>
+          </svg>
+        </div>
+        <h2>Aún no hay páginas</h2>
+        <p>Arrastra aquí tus PDF escaneados y sus anexos, o usa <strong>Abrir archivos</strong>.<br>
+           Todo se procesa dentro de tu computadora: ningún documento sale de aquí.</p>
+        <button class="btn btn-primario" id="btnAbrir2">Abrir archivos</button>
+      </div>
+      <div class="rejilla-paginas" id="rejilla"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ LECTOR: LAS HOJAS EN GRANDE ============ -->
+<div class="lector" id="lector" hidden>
+  <header class="lector-barra">
+    <div class="lector-info">
+      <strong id="lectorTitulo">Página 1</strong>
+      <span id="lectorOrigen"></span>
+    </div>
+    <div class="lector-acciones">
+      <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)">↑</button>
+      <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)">↓</button>
+      <span class="separador-vertical"></span>
+      <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )">↺</button>
+      <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )">↻</button>
+      <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja">✍</button>
+      <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja">🗑</button>
+      <span class="separador-vertical"></span>
+      <label class="zoom">Tamaño <input type="range" id="lectorZoom" min="45" max="150" value="85"></label>
+      <button class="btn btn-secundario" id="lectorCerrar" title="Cerrar (Esc)">Cerrar</button>
+    </div>
+  </header>
+  <div class="lector-hojas" id="lectorHojas"></div>
+</div>
+
+<div class="restaurar" id="restaurar" hidden>
+  <span id="restaurarTexto">Quedó un trabajo sin terminar.</span>
+  <button class="btn btn-primario" id="btnRestaurar">Continuar donde lo dejé</button>
+  <button class="btn btn-fantasma" id="btnDescartarAuto">Descartar</button>
+</div>
+
+<input type="file" id="entradaArchivos" accept="application/pdf,image/png,image/jpeg" multiple hidden>
+<input type="file" id="entradaImagenFirma" accept="image/png,image/jpeg,image/webp" hidden>
+
+<!-- ============ EDITOR DE FIRMA SOBRE LA PÁGINA ============ -->
+<div class="modal" id="modalFirmar" hidden>
+  <div class="modal-caja modal-ancha">
+    <header class="modal-cabecera">
+      <h3>Colocar firma o sello</h3>
+      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+    </header>
+    <div class="modal-cuerpo firmar-cuerpo">
+      <div class="firmar-escenario" id="firmarEscenario">
+        <div class="firmar-pagina" id="firmarPagina">
+          <canvas id="firmarLienzo"></canvas>
+          <div class="firmar-sello" id="firmarSello" hidden>
+            <img id="firmarSelloImg" alt="firma">
+            <span class="tirador" data-tirador="se"></span>
+          </div>
+        </div>
+      </div>
+      <div class="firmar-panel">
+        <label class="campo">Firma
+          <select id="firmarSelector"></select>
+        </label>
+        <div class="rejilla-2">
+          <label class="campo">Ancho (%) <input type="number" id="firmarAncho" min="4" max="100" value="28"></label>
+          <label class="campo">Giro ° <input type="number" id="firmarGiro" min="-180" max="180" value="0"></label>
+        </div>
+        <label class="campo">Opacidad <input type="range" id="firmarOpacidad" min="10" max="100" value="100"></label>
+        <label class="campo">Posición rápida</label>
+        <div class="rejilla-pos" id="firmarPos"></div>
+        <label class="campo">Aplicar a
+          <select id="firmarAlcance">
+            <option value="pagina">Solo esta página</option>
+            <option value="seleccion">Las páginas seleccionadas</option>
+            <option value="todas">Todas las páginas</option>
+            <option value="ultima">Solo la última página</option>
+          </select>
+        </label>
+        <div class="fila-botones">
+          <button class="btn btn-primario ancho" id="btnFirmarAplicar">Colocar firma</button>
+        </div>
+        <button class="btn btn-suave ancho btn-peligro-suave" id="btnFirmarQuitarPagina">Quitar firmas de esta página</button>
+        <p class="nota">Arrastra la firma sobre la página para moverla y usa la esquina para cambiar el tamaño.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RECORTE DE FIRMA DESDE ESCANEO ============ -->
+<div class="modal" id="modalRecorte" hidden>
+  <div class="modal-caja modal-ancha">
+    <header class="modal-cabecera">
+      <h3>Recortar firma desde un escaneo</h3>
+      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+    </header>
+    <div class="modal-cuerpo recorte-cuerpo">
+      <div class="recorte-escenario" id="recorteEscenario">
+        <div class="recorte-lienzo-envoltura" id="recorteEnvoltura">
+          <canvas id="recorteLienzo"></canvas>
+          <div class="recorte-marco" id="recorteMarco" hidden>
+            <span class="tirador" data-tirador="se"></span>
+          </div>
+        </div>
+      </div>
+      <div class="recorte-panel">
+        <label class="campo">Página de origen
+          <select id="recorteOrigen"></select>
+        </label>
+        <div class="fila-botones">
+          <button class="btn btn-suave" id="btnRecorteGirar">Girar 90°</button>
+          <button class="btn btn-suave" id="btnRecorteTodo">Todo</button>
+        </div>
+        <label class="campo">Limpieza del fondo <input type="range" id="recorteLimpieza" min="0" max="100" value="50"></label>
+        <label class="campo">Intensidad del trazo <input type="range" id="recorteIntensidad" min="0" max="100" value="50"></label>
+        <button class="btn btn-suave ancho" id="btnRecorteAuto">Volver a lo automático</button>
+        <label class="check"><input type="checkbox" id="recorteMotitas" checked> Quitar motitas del escaneo</label>
+        <label class="check"><input type="checkbox" id="recorteMono"> Convertir a negro puro</label>
+        <label class="check"><input type="checkbox" id="recorteRecortar" checked> Recortar márgenes vacíos</label>
+        <div class="recorte-previa">
+          <span>Vista previa</span>
+          <div class="previa-caja"><img id="recortePrevia" alt="previa de la firma"></div>
+          <p class="nota aviso-vacio" id="recorteVacio" hidden>Ahí no se ve tinta. Mueve el recuadro sobre la firma o baja la limpieza del fondo.</p>
+        </div>
+        <label class="campo">Nombre <input type="text" id="recorteNombre" placeholder="Ej. Firma y sello"></label>
+        <button class="btn btn-primario ancho" id="btnRecorteGuardar">Guardar en mis firmas</button>
+        <p class="nota">Grapa calcula sola el tono del papel, así que también sirve con fotos del sello tomadas con el celular.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DIBUJAR FIRMA ============ -->
+<div class="modal" id="modalDibujo" hidden>
+  <div class="modal-caja">
+    <header class="modal-cabecera">
+      <h3>Dibujar firma</h3>
+      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+    </header>
+    <div class="modal-cuerpo">
+      <canvas id="dibujoLienzo" class="dibujo-lienzo" width="900" height="320"></canvas>
+      <div class="rejilla-2">
+        <label class="campo">Color <input type="color" id="dibujoColor" value="#12277d"></label>
+        <label class="campo">Grosor <input type="range" id="dibujoGrosor" min="1" max="14" value="4"></label>
+      </div>
+      <label class="campo">Nombre <input type="text" id="dibujoNombre" placeholder="Ej. Mi firma"></label>
+      <div class="fila-botones">
+        <button class="btn btn-suave" id="btnDibujoLimpiar">Limpiar</button>
+        <button class="btn btn-primario" id="btnDibujoGuardar">Guardar firma</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ AYUDA ============ -->
+<div class="modal" id="modalAyuda" hidden>
+  <div class="modal-caja">
+    <header class="modal-cabecera">
+      <h3>Cómo se usa Grapa</h3>
+      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+    </header>
+    <div class="modal-cuerpo ayuda">
+      <ol>
+        <li><strong>Abre</strong> el PDF que escaneaste y, encima, los anexos (indagación de mercado, cotizaciones, etc.).</li>
+        <li><strong>Ordena</strong> arrastrando las miniaturas. El color del borde te dice de qué archivo viene cada página.</li>
+        <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
+        <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
+        <li><strong>Guarda</strong> el PDF final, o divídelo si necesitas archivos separados.</li>
+      </ol>
+      <h4>Atajos</h4>
+      <table class="tabla-atajos">
+        <tr><td>Ctrl+O</td><td>Abrir archivos</td></tr>
+        <tr><td>Ctrl+S</td><td>Guardar PDF</td></tr>
+        <tr><td>Ctrl+Z / Ctrl+Y</td><td>Deshacer / Rehacer</td></tr>
+        <tr><td>Ctrl+A</td><td>Seleccionar todas las páginas</td></tr>
+        <tr><td>Ctrl+D</td><td>Duplicar páginas</td></tr>
+        <tr><td>Supr</td><td>Eliminar páginas</td></tr>
+        <tr><td>V</td><td>Ver las hojas en grande</td></tr>
+        <tr><td>[ y ]</td><td>Girar a la izquierda / derecha</td></tr>
+        <tr><td>Clic + Shift</td><td>Seleccionar un rango</td></tr>
+        <tr><td>Clic + Ctrl</td><td>Añadir o quitar de la selección</td></tr>
+      </table>
+      <p class="nota nota-privacidad">Grapa funciona 100 % dentro de tu navegador. No hay servidor, no hay subidas y funciona sin internet.</p>
+    </div>
+  </div>
+</div>
+
+<div class="avisos" id="avisos"></div>
+<div class="cargando" id="cargando" hidden><div class="giro"></div><span id="cargandoTexto">Procesando…</span></div>
+
+<script src="lib/pdf-lib.min.js"></script>
+<script src="lib/pdf.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="assets/core.js"></script>
+<script src="assets/expedientes.js"></script>
+<script src="assets/firmas.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
