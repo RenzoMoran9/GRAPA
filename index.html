@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/styles.css?v=20260903c">
 </head>
 <body>
 
@@ -371,6 +371,22 @@
   </div>
 </div>
 
+<!-- ============ CONFIRMACIÓN ============ -->
+<div class="modal" id="modalConfirmar" hidden>
+  <div class="modal-caja modal-angosta">
+    <header class="modal-cabecera">
+      <h3 id="confirmarTitulo">¿Continuar?</h3>
+    </header>
+    <div class="modal-cuerpo">
+      <p class="confirmar-mensaje" id="confirmarMensaje"></p>
+      <div class="fila-botones">
+        <button class="btn btn-suave" id="confirmarNo">Cancelar</button>
+        <button class="btn btn-primario" id="confirmarSi">Continuar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ AYUDA ============ -->
 <div class="modal" id="modalAyuda" hidden>
   <div class="modal-caja">
@@ -412,9 +428,9 @@
 <script src="lib/pdf-lib.min.js"></script>
 <script src="lib/pdf.min.js"></script>
 <script src="lib/jszip.min.js"></script>
-<script src="assets/core.js"></script>
-<script src="assets/expedientes.js"></script>
-<script src="assets/firmas.js"></script>
-<script src="assets/app.js"></script>
+<script src="assets/core.js?v=20260903c"></script>
+<script src="assets/expedientes.js?v=20260903c"></script>
+<script src="assets/firmas.js?v=20260903c"></script>
+<script src="assets/app.js?v=20260903c"></script>
 </body>
 </html>

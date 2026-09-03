@@ -22,6 +22,47 @@
     }, tipo === 'error' ? 5200 : 3200);
   };
 
+  /**
+   * Pregunta dentro de la propia página. No usamos confirm() del navegador
+   * porque Chrome deja marcar "impedir que esta página cree más diálogos":
+   * a partir de ahí confirm() devuelve siempre que no, y los botones que
+   * dependían de él se quedaban muertos sin explicación.
+   */
+  G.confirmar = function (opciones) {
+    const o = opciones || {};
+    return new Promise((resolve) => {
+      const modal = $('#modalConfirmar');
+      const si = $('#confirmarSi');
+      const no = $('#confirmarNo');
+      $('#confirmarTitulo').textContent = o.titulo || '¿Continuar?';
+      $('#confirmarMensaje').textContent = o.mensaje || '';
+      si.textContent = o.aceptar || 'Continuar';
+      si.className = 'btn ' + (o.peligro ? 'btn-primario btn-riesgo' : 'btn-primario');
+
+      const cerrar = (valor) => {
+        modal.hidden = true;
+        si.removeEventListener('click', alSi);
+        no.removeEventListener('click', alNo);
+        modal.removeEventListener('click', alFondo);
+        document.removeEventListener('keydown', alTecla, true);
+        resolve(valor);
+      };
+      const alSi = () => cerrar(true);
+      const alNo = () => cerrar(false);
+      const alFondo = (ev) => { if (ev.target === modal) cerrar(false); };
+      const alTecla = (ev) => {
+        if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(false); }
+        else if (ev.key === 'Enter') { ev.stopPropagation(); cerrar(true); }
+      };
+      si.addEventListener('click', alSi);
+      no.addEventListener('click', alNo);
+      modal.addEventListener('click', alFondo);
+      document.addEventListener('keydown', alTecla, true);
+      modal.hidden = false;
+      si.focus();
+    });
+  };
+
   let contadorCarga = 0;
   G.cargando = function (activo, texto) {
     const capa = $('#cargando');
@@ -400,9 +441,15 @@
       borrar.className = 'btn btn-mini btn-peligro-suave';
       borrar.textContent = '✕';
       borrar.title = 'Borrar esta firma';
-      borrar.addEventListener('click', (ev) => {
+      borrar.addEventListener('click', async (ev) => {
         ev.stopPropagation();
-        if (confirm(`¿Borrar la firma «${f.nombre}»?`)) G.borrarFirma(f.id);
+        const sigue = await G.confirmar({
+          titulo: 'Borrar la firma',
+          mensaje: `Se borra «${f.nombre}» de tu biblioteca de firmas.`,
+          aceptar: 'Borrar',
+          peligro: true,
+        });
+        if (sigue) G.borrarFirma(f.id);
       });
       li.append(previa, nom, borrar);
       li.addEventListener('click', () => { E.firmaActiva = f.id; pintarFirmas(); });
@@ -1146,7 +1193,14 @@
       abrir.className = 'btn btn-mini';
       abrir.textContent = 'Abrir';
       abrir.addEventListener('click', async () => {
-        if (E.paginas.length && !confirm('Se reemplaza lo que tienes en el taller. ¿Abrir de todos modos?')) return;
+        if (E.paginas.length) {
+          const sigue = await G.confirmar({
+            titulo: 'Abrir este expediente',
+            mensaje: `Se reemplaza lo que tienes ahora en el taller por «${r.nombre}».`,
+            aceptar: 'Abrir',
+          });
+          if (!sigue) return;
+        }
         await restaurarExpediente(r);
       });
 
@@ -1155,7 +1209,13 @@
       borrar.textContent = '✕';
       borrar.title = 'Borrar este expediente guardado';
       borrar.addEventListener('click', async () => {
-        if (!confirm(`¿Borrar «${r.nombre}»? Esto no toca los PDF de tu computadora.`)) return;
+        const sigue = await G.confirmar({
+          titulo: 'Borrar el expediente guardado',
+          mensaje: `Se borra «${r.nombre}» de la lista. Esto no toca los PDF de tu computadora.`,
+          aceptar: 'Borrar',
+          peligro: true,
+        });
+        if (!sigue) return;
         await G.bd.borrarExpediente(r.id);
         pintarGuardados();
       });
@@ -1228,9 +1288,15 @@
   async function empezarDeCero() {
     if (E.paginas.length) {
       const mensaje = expedienteAbierto
-        ? `Se vacía el taller para empezar otro expediente.\n\n«${expedienteAbierto.nombre}» queda guardado y lo puedes volver a abrir cuando quieras.`
-        : 'Se vacía el taller para empezar otro expediente.\n\nLo que tienes armado se perderá si no lo has guardado antes.';
-      if (!confirm(mensaje + '\n\n¿Continuar?')) return;
+        ? `«${expedienteAbierto.nombre}» queda guardado y lo puedes volver a abrir cuando quieras.`
+        : 'Lo que tienes armado se perderá si no lo has guardado antes.';
+      const sigue = await G.confirmar({
+        titulo: 'Empezar otro expediente',
+        mensaje: 'Se vacía el taller. ' + mensaje,
+        aceptar: 'Vaciar el taller',
+        peligro: !expedienteAbierto,
+      });
+      if (!sigue) return;
     }
     E.paginas = [];
     E.seleccion.clear();
@@ -1246,10 +1312,12 @@
     $('#guardarNombre').value = '';
     $('#divRangos').value = '';
     $('#restaurar').hidden = true;
-    // si no, al volver a entrar ofrecería recuperar lo que se acaba de descartar
-    try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
+    // la pantalla se refresca ya; el borrado del autoguardado va a disco y no
+    // debe dejar la insignia "Editando…" visible mientras tanto
     pintar();
     G.aviso('Taller vacío. Ya puedes armar otro expediente.', 'ok');
+    // si no se borra, al volver a entrar ofrecería recuperar lo descartado
+    try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
   }
 
   /* ---------------- carpeta de destino ---------------- */
@@ -1644,6 +1712,7 @@
     // modales
     $('#btnAyuda').addEventListener('click', () => { $('#modalAyuda').hidden = false; });
     $$('.modal').forEach((m) => {
+      if (m.id === 'modalConfirmar') return;   // se cierra por su propia promesa
       m.addEventListener('click', (ev) => { if (ev.target === m) m.hidden = true; });
       $$('[data-cerrar]', m).forEach((b) => b.addEventListener('click', () => { m.hidden = true; }));
     });
