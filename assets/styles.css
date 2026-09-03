@@ -474,3 +474,13 @@ button,input,select,textarea{font:inherit;color:inherit}
   .firmar-cuerpo,.recorte-cuerpo{grid-template-columns:1fr}
   .marca-texto span{display:none}
 }
+
+/* Aviso bajo el nombre del archivo de salida */
+.nombre-nota {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: -4px;
+}
+.nombre-nota .btn-mini { flex: none; }

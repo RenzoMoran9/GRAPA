@@ -373,6 +373,7 @@
     actualizarBotonesHistorial();
     if (!E.paginas.length && expedienteAbierto) expedienteAbierto = null;
     actualizarEstadoGuardado();
+    sincronizarNombreSalida();
     afinarVisibles();
     programarAutoguardado();
   }
@@ -658,10 +659,6 @@
         }
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
         pintar();
-        const nom = $('#nombreSalida');
-        if (r.fuentes.length && (!nom.value || nom.value === 'documento-unido')) {
-          nom.value = G.nombreSeguro(r.fuentes[0].nombre, 'documento-unido');
-        }
         G.aviso(`Se añadieron ${r.paginas.length} página(s) de ${r.fuentes.length} archivo(s).`, 'ok');
       }
       r.errores.forEach((e) => G.aviso(e, 'error'));
@@ -1073,6 +1070,7 @@
         nombre: $('#nombreSalida').value,
         titulo: $('#metaTitulo').value,
         autor: $('#metaAutor').value,
+        nombreManual,
       },
     };
     // El autoguardado recuerda de qué expediente con nombre venía, para que
@@ -1097,16 +1095,22 @@
       E.seleccion.clear();
       historial.atras.length = 0;
       historial.adelante.length = 0;
-      if (registro.salida) {
-        $('#nombreSalida').value = registro.salida.nombre || 'documento-unido';
-        $('#metaTitulo').value = registro.salida.titulo || '';
-        $('#metaAutor').value = registro.salida.autor || '';
-      }
       // Deja anotado sobre qué guardado se está trabajando: el próximo
       // guardado lo actualiza en vez de crear uno nuevo por separado.
       expedienteAbierto = registro.id === '__auto'
         ? (registro.origenId ? { id: registro.origenId, nombre: registro.origenNombre || 'expediente' } : null)
         : { id: registro.id, nombre: registro.nombre };
+      if (registro.salida) {
+        const guardado = registro.salida.nombre || '';
+        $('#metaTitulo').value = registro.salida.titulo || '';
+        $('#metaAutor').value = registro.salida.autor || '';
+        nombreManual = typeof registro.salida.nombreManual === 'boolean'
+          ? registro.salida.nombreManual
+          // Expedientes guardados antes de que el nombre se sincronizara: se
+          // respeta el que traen si no es el que saldría solo.
+          : !!guardado && guardado !== G.nombreSeguro(nombreDelTrabajo(), 'documento-unido');
+        if (nombreManual) $('#nombreSalida').value = guardado;
+      }
       actualizarEstadoGuardado();
       pintar();
       await pintarGuardados();
@@ -1235,6 +1239,45 @@
       : '';
   }
 
+  /* ---------------- nombre del archivo de salida ---------------- */
+  // El nombre del PDF terminado sigue solo al documento que se está
+  // trabajando. En cuanto lo escribes tú, manda el tuyo y deja de moverse.
+  let nombreManual = false;
+
+  /** Cómo se llama lo que hay ahora mismo en el taller. */
+  function nombreDelTrabajo() {
+    const escribiendo = ($('#guardarNombre').value || '').trim();
+    if (escribiendo) return escribiendo;                       // lo que va a guardar
+    if (expedienteAbierto && expedienteAbierto.nombre) return expedienteAbierto.nombre;
+    // Lo que se adjunta va encima, así que el documento base es el de abajo:
+    // el que lleva el folio 1 y da nombre al expediente.
+    const base = E.paginas[E.paginas.length - 1];
+    const fuente = base && E.fuentes.get(base.fuenteId);
+    return fuente ? fuente.nombre : '';
+  }
+
+  function sincronizarNombreSalida() {
+    const campo = $('#nombreSalida');
+    if (!campo) return;
+    if (!nombreManual) {
+      const automatico = G.nombreSeguro(nombreDelTrabajo(), 'documento-unido');
+      if (campo.value !== automatico) campo.value = automatico;
+    }
+    const nota = $('#nombreNotaTexto');
+    const btn = $('#btnNombreAuto');
+    if (!nota || !btn) return;
+    nota.textContent = nombreManual
+      ? 'Nombre puesto por ti.'
+      : 'Toma el nombre del documento que estás trabajando.';
+    btn.hidden = !nombreManual;
+  }
+
+  function volverANombreAutomatico() {
+    nombreManual = false;
+    sincronizarNombreSalida();
+    G.aviso('El nombre vuelve a seguir al documento que estás trabajando.', 'ok');
+  }
+
   async function guardarComoNuevo() {
     if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
     const nombre = ($('#guardarNombre').value || '').trim()
@@ -1247,6 +1290,7 @@
       expedienteAbierto = { id, nombre };
       actualizarEstadoGuardado();
       $('#guardarNombre').value = '';
+      sincronizarNombreSalida();
       await pintarGuardados();
       G.aviso(`Expediente «${nombre}» guardado.`, 'ok');
     } catch (e) {
@@ -1277,6 +1321,7 @@
   function dejarDeEditar() {
     expedienteAbierto = null;
     actualizarEstadoGuardado();
+    sincronizarNombreSalida();
   }
 
   /**
@@ -1306,6 +1351,7 @@
     historial.atras.length = 0;
     historial.adelante.length = 0;
     expedienteAbierto = null;
+    nombreManual = false;
     $('#nombreSalida').value = 'documento-unido';
     $('#metaTitulo').value = '';
     $('#metaAutor').value = '';
@@ -1720,8 +1766,16 @@
     // empezar otro expediente
     $('#btnNuevo').addEventListener('click', empezarDeCero);
 
+    // nombre del archivo de salida
+    $('#nombreSalida').addEventListener('input', () => {
+      nombreManual = true;
+      sincronizarNombreSalida();
+    });
+    $('#btnNombreAuto').addEventListener('click', volverANombreAutomatico);
+
     // guardar el trabajo
     $('#btnGuardarTrabajo').addEventListener('click', guardarComoNuevo);
+    $('#guardarNombre').addEventListener('input', sincronizarNombreSalida);
     $('#btnActualizarTrabajo').addEventListener('click', actualizarGuardado);
     $('#btnDejarDeEditar').addEventListener('click', dejarDeEditar);
 
