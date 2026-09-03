@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260903d">
+<link rel="stylesheet" href="assets/styles.css?v=20260903e">
 </head>
 <body>
 
@@ -58,7 +58,7 @@
           <button class="btn btn-mini" id="btnDejarDeEditar" title="El próximo guardado creará uno nuevo en vez de actualizar este">✕</button>
         </div>
         <button class="btn btn-primario ancho" id="btnActualizarTrabajo" hidden>Actualizar</button>
-        <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor"></label>
+        <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor" autocomplete="off"></label>
         <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar como nuevo</button>
         <ul class="lista-guardados" id="listaGuardados"></ul>
         <p class="nota" id="espacioUsado"></p>
@@ -161,7 +161,7 @@
     <section class="bloque" data-bloque="salida">
       <button class="bloque-cabecera" type="button"><span class="ico">📦</span> Archivo de salida</button>
       <div class="bloque-cuerpo">
-        <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido"></label>
+        <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido" autocomplete="off"></label>
         <p class="nota nombre-nota">
           <span id="nombreNotaTexto">Toma el nombre del documento que estás trabajando.</span>
           <button class="btn btn-mini" id="btnNombreAuto" hidden>Volver al automático</button>
@@ -432,9 +432,9 @@
 <script src="lib/pdf-lib.min.js"></script>
 <script src="lib/pdf.min.js"></script>
 <script src="lib/jszip.min.js"></script>
-<script src="assets/core.js?v=20260903d"></script>
-<script src="assets/expedientes.js?v=20260903d"></script>
-<script src="assets/firmas.js?v=20260903d"></script>
-<script src="assets/app.js?v=20260903d"></script>
+<script src="assets/core.js?v=20260903e"></script>
+<script src="assets/expedientes.js?v=20260903e"></script>
+<script src="assets/firmas.js?v=20260903e"></script>
+<script src="assets/app.js?v=20260903e"></script>
 </body>
 </html>

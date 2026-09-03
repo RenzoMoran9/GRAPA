@@ -371,7 +371,14 @@
     pintarDocs();
     pintarFirmas();
     actualizarBotonesHistorial();
-    if (!E.paginas.length && expedienteAbierto) expedienteAbierto = null;
+    // Taller vacío es empezar de nuevo, se haya llegado ahí por el botón
+    // Nuevo o borrando las hojas: el nombre escrito para el documento
+    // anterior no lo puede heredar el siguiente.
+    if (!E.paginas.length) {
+      expedienteAbierto = null;
+      nombreManual = false;
+      if ($('#guardarNombre').value) $('#guardarNombre').value = '';
+    }
     actualizarEstadoGuardado();
     sincronizarNombreSalida();
     afinarVisibles();

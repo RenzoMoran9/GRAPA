@@ -551,7 +551,7 @@ button,input,select,textarea{font:inherit;color:inherit}
           <button class="btn btn-mini" id="btnDejarDeEditar" title="El próximo guardado creará uno nuevo en vez de actualizar este">✕</button>
         </div>
         <button class="btn btn-primario ancho" id="btnActualizarTrabajo" hidden>Actualizar</button>
-        <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor"></label>
+        <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor" autocomplete="off"></label>
         <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar como nuevo</button>
         <ul class="lista-guardados" id="listaGuardados"></ul>
         <p class="nota" id="espacioUsado"></p>
@@ -654,7 +654,7 @@ button,input,select,textarea{font:inherit;color:inherit}
     <section class="bloque" data-bloque="salida">
       <button class="bloque-cabecera" type="button"><span class="ico">📦</span> Archivo de salida</button>
       <div class="bloque-cuerpo">
-        <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido"></label>
+        <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido" autocomplete="off"></label>
         <p class="nota nombre-nota">
           <span id="nombreNotaTexto">Toma el nombre del documento que estás trabajando.</span>
           <button class="btn btn-mini" id="btnNombreAuto" hidden>Volver al automático</button>
@@ -2806,7 +2806,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     pintarDocs();
     pintarFirmas();
     actualizarBotonesHistorial();
-    if (!E.paginas.length && expedienteAbierto) expedienteAbierto = null;
+    // Taller vacío es empezar de nuevo, se haya llegado ahí por el botón
+    // Nuevo o borrando las hojas: el nombre escrito para el documento
+    // anterior no lo puede heredar el siguiente.
+    if (!E.paginas.length) {
+      expedienteAbierto = null;
+      nombreManual = false;
+      if ($('#guardarNombre').value) $('#guardarNombre').value = '';
+    }
     actualizarEstadoGuardado();
     sincronizarNombreSalida();
     afinarVisibles();
