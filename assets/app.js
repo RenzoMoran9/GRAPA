@@ -186,6 +186,7 @@
         if (!firma) return;
         const img = document.createElement('img');
         img.className = 'sello-mini';
+        img.draggable = false;
         img.src = firma.dataUrl;
         img.style.left = s.fx * 100 + '%';
         img.style.top = s.fy * 100 + '%';
@@ -262,6 +263,10 @@
 
     const img = document.createElement('img');
     img.className = 'mini';
+    // Una imagen es arrastrable por su cuenta: si no se apaga, al agarrar la
+    // miniatura el navegador arrastra LA IMAGEN (y le adjunta un JPEG), no la
+    // hoja, y ese archivo acaba entrando como una página nueva.
+    img.draggable = false;
     img.alt = 'Página ' + (indice + 1);
     img.style.cssText = 'display:none;width:100%;height:auto';
     // si ya se dibujó antes, se muestra al instante y luego se afina
@@ -575,7 +580,14 @@
   }
 
   /* ---------------- reordenar arrastrando ---------------- */
+  // Tipo propio: viaja dentro del arrastre y dice que la carga es una hoja de
+  // Grapa. Sobrevive aunque el estado se haya limpiado antes de que el evento
+  // termine de subir, así que es el guardia fiable contra tratarla como
+  // archivo que llega de fuera.
+  const TIPO_HOJA = 'application/x-grapa-hoja';
   let arrastrando = null;
+  const esArrastreDeHoja = (ev) => !!arrastrando
+    || (!!ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes(TIPO_HOJA));
 
   $('#rejilla').addEventListener('dragstart', (ev) => {
     const tarjeta = ev.target.closest('.pag');
@@ -592,6 +604,7 @@
     arrastrando = Array.from(E.seleccion);
     ev.dataTransfer.effectAllowed = 'move';
     ev.dataTransfer.setData('text/plain', uid);
+    ev.dataTransfer.setData(TIPO_HOJA, uid);
     setTimeout(() => {
       $$('.pag').forEach((t) => { if (E.seleccion.has(t.dataset.uid)) t.classList.add('arrastrando'); });
     }, 0);
@@ -679,7 +692,7 @@
 
   function conectarSoltar(zona, resaltado, conPosicion) {
     ['dragenter', 'dragover'].forEach((t) => zona.addEventListener(t, (ev) => {
-      if (arrastrando) return;
+      if (esArrastreDeHoja(ev)) return;
       ev.preventDefault();
       zona.classList.add(resaltado);
     }));
@@ -689,7 +702,7 @@
       zona.classList.remove(resaltado);
     }));
     zona.addEventListener('drop', (ev) => {
-      if (arrastrando) return;
+      if (esArrastreDeHoja(ev)) return;
       const archivos = ev.dataTransfer && ev.dataTransfer.files;
       if (archivos && archivos.length) anadir(archivos, conPosicion ? indiceDesdeEvento(ev) : null);
     });
