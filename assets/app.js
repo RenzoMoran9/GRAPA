@@ -1219,6 +1219,39 @@
     actualizarEstadoGuardado();
   }
 
+  /**
+   * Vacía el taller para armar otro expediente, sin cerrar el navegador.
+   * No borra el historial de deshacer por capricho: al soltar también los
+   * PDF de origen, una vuelta atrás dejaría páginas apuntando a archivos
+   * que ya no están en memoria.
+   */
+  async function empezarDeCero() {
+    if (E.paginas.length) {
+      const mensaje = expedienteAbierto
+        ? `Se vacía el taller para empezar otro expediente.\n\n«${expedienteAbierto.nombre}» queda guardado y lo puedes volver a abrir cuando quieras.`
+        : 'Se vacía el taller para empezar otro expediente.\n\nLo que tienes armado se perderá si no lo has guardado antes.';
+      if (!confirm(mensaje + '\n\n¿Continuar?')) return;
+    }
+    E.paginas = [];
+    E.seleccion.clear();
+    E.fuentes.clear();
+    E.ancla = null;
+    G.olvidarDocs();
+    historial.atras.length = 0;
+    historial.adelante.length = 0;
+    expedienteAbierto = null;
+    $('#nombreSalida').value = 'documento-unido';
+    $('#metaTitulo').value = '';
+    $('#metaAutor').value = '';
+    $('#guardarNombre').value = '';
+    $('#divRangos').value = '';
+    $('#restaurar').hidden = true;
+    // si no, al volver a entrar ofrecería recuperar lo que se acaba de descartar
+    try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
+    pintar();
+    G.aviso('Taller vacío. Ya puedes armar otro expediente.', 'ok');
+  }
+
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
     const est = $('#carpetaEstado'), nota = $('#carpetaNota');
@@ -1614,6 +1647,9 @@
       m.addEventListener('click', (ev) => { if (ev.target === m) m.hidden = true; });
       $$('[data-cerrar]', m).forEach((b) => b.addEventListener('click', () => { m.hidden = true; }));
     });
+
+    // empezar otro expediente
+    $('#btnNuevo').addEventListener('click', empezarDeCero);
 
     // guardar el trabajo
     $('#btnGuardarTrabajo').addEventListener('click', guardarComoNuevo);

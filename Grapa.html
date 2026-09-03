@@ -505,6 +505,7 @@ button,input,select,textarea{font:inherit;color:inherit}
     <span class="separador-vertical"></span>
     <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema">◐</button>
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos">?</button>
+    <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
     <button class="btn btn-secundario" id="btnAbrir">＋ Abrir archivos</button>
     <button class="btn btn-primario" id="btnGuardar">⤓ Guardar PDF</button>
   </div>
@@ -862,6 +863,7 @@ button,input,select,textarea{font:inherit;color:inherit}
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
         <li><strong>Guarda</strong> el PDF final, o divídelo si necesitas archivos separados.</li>
+        <li>Para armar otro expediente, <strong>Nuevo</strong> vacía el taller. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
       </ol>
       <h4>Atajos</h4>
       <table class="tabla-atajos">
@@ -3617,6 +3619,39 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     actualizarEstadoGuardado();
   }
 
+  /**
+   * Vacía el taller para armar otro expediente, sin cerrar el navegador.
+   * No borra el historial de deshacer por capricho: al soltar también los
+   * PDF de origen, una vuelta atrás dejaría páginas apuntando a archivos
+   * que ya no están en memoria.
+   */
+  async function empezarDeCero() {
+    if (E.paginas.length) {
+      const mensaje = expedienteAbierto
+        ? `Se vacía el taller para empezar otro expediente.\n\n«${expedienteAbierto.nombre}» queda guardado y lo puedes volver a abrir cuando quieras.`
+        : 'Se vacía el taller para empezar otro expediente.\n\nLo que tienes armado se perderá si no lo has guardado antes.';
+      if (!confirm(mensaje + '\n\n¿Continuar?')) return;
+    }
+    E.paginas = [];
+    E.seleccion.clear();
+    E.fuentes.clear();
+    E.ancla = null;
+    G.olvidarDocs();
+    historial.atras.length = 0;
+    historial.adelante.length = 0;
+    expedienteAbierto = null;
+    $('#nombreSalida').value = 'documento-unido';
+    $('#metaTitulo').value = '';
+    $('#metaAutor').value = '';
+    $('#guardarNombre').value = '';
+    $('#divRangos').value = '';
+    $('#restaurar').hidden = true;
+    // si no, al volver a entrar ofrecería recuperar lo que se acaba de descartar
+    try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
+    pintar();
+    G.aviso('Taller vacío. Ya puedes armar otro expediente.', 'ok');
+  }
+
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
     const est = $('#carpetaEstado'), nota = $('#carpetaNota');
@@ -4012,6 +4047,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       m.addEventListener('click', (ev) => { if (ev.target === m) m.hidden = true; });
       $$('[data-cerrar]', m).forEach((b) => b.addEventListener('click', () => { m.hidden = true; }));
     });
+
+    // empezar otro expediente
+    $('#btnNuevo').addEventListener('click', empezarDeCero);
 
     // guardar el trabajo
     $('#btnGuardarTrabajo').addEventListener('click', guardarComoNuevo);
