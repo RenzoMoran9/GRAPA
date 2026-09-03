@@ -130,6 +130,13 @@
           bytes = new Uint8Array(await file.arrayBuffer());
         } else if (G.esImagen(file)) {
           bytes = await imagenAPdf(file);
+        } else if (G.esOffice && G.esOffice(file)) {
+          // Word y Excel se convierten aquí mismo, sin salir del navegador
+          bytes = await G.officeAPdf(file, alProgresar);
+        } else if (G.esOfficeNoLeible && G.esOfficeNoLeible(file)) {
+          errores.push(`${file.name}: ese formato de Office no se puede convertir `
+            + 'aquí. Ábrelo en Office y guárdalo como PDF.');
+          continue;
         } else {
           errores.push(`${file.name}: formato no admitido`);
           continue;

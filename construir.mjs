@@ -19,12 +19,17 @@ const CREDITOS = `<!--
     · pdf-lib 1.17.1 — MIT — https://github.com/Hopding/pdf-lib
     · PDF.js 3.11.174 — Apache-2.0 — https://github.com/mozilla/pdf.js
     · JSZip 3.10.1 — MIT / GPLv3 — https://github.com/Stuk/jszip
+    · docx-preview 0.4.0 — Apache-2.0 — https://github.com/VolodymyrBaydalka/docxjs
+    · SheetJS 0.18.5 — Apache-2.0 — https://github.com/SheetJS/sheetjs
+    · html2canvas 1.4.1 — MIT — https://github.com/niklasvh/html2canvas
 -->
 `;
 
 const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
-  'assets/core.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/app.js',
+  'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
+  'assets/core.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
+  'assets/app.js',
 ];
 
 const html = leer('index.html');

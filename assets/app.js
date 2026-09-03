@@ -680,6 +680,11 @@
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
         pintar();
         G.aviso(`Se añadieron ${r.paginas.length} página(s) de ${r.fuentes.length} archivo(s).`, 'ok');
+        if (lote.some((f) => G.esOffice && G.esOffice(f))) {
+          // La composición la rehace el navegador, no Word: conviene mirarla
+          G.aviso('Word/Excel convertido a PDF. Revisa cómo quedó: el reparto de '
+            + 'líneas y hojas puede moverse un poco respecto a Office.', '');
+        }
       }
       r.errores.forEach((e) => G.aviso(e, 'error'));
     } catch (e) {
@@ -1668,6 +1673,14 @@
       anadir(lote);
     });
     ['#btnAbrir', '#btnAbrir2', '#zonaSoltar'].forEach((s) => $(s).addEventListener('click', () => entrada.click()));
+    // pegar con Ctrl+V: los archivos copiados entran igual que si se soltaran
+    document.addEventListener('paste', (ev) => {
+      const archivos = Array.from((ev.clipboardData && ev.clipboardData.files) || []);
+      if (!archivos.length) return;      // pegar texto en un campo sigue siendo pegar texto
+      ev.preventDefault();
+      anadir(archivos, null);
+    });
+
     conectarSoltar($('#zonaSoltar'), 'encima');
     conectarSoltar($('#lienzo'), 'encima', true);
 

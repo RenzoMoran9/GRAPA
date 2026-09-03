@@ -36,6 +36,13 @@ Funciona en Chrome, Edge y Firefox actuales.
 ### Armar el expediente
 - Abre varios PDF a la vez, arrastrándolos o con **Abrir archivos**.
 - También acepta **fotos y escaneos JPG / PNG**: los convierte en páginas A4.
+- Y acepta **Word y Excel** (`.docx`, `.xlsx`, `.xls`, `.csv`): los convierte a PDF
+  en el momento, dentro del navegador, sin subirlos a ningún sitio. Puedes soltarlos
+  o pegarlos con **Ctrl+V**. La composición la rehace el navegador con las fuentes
+  que tengas instaladas, así que se parece mucho pero puede no ser idéntica a lo que
+  imprime Office: si algo debe salir exacto, guárdalo como PDF desde Word o Excel.
+  Los `.xls` antiguos sí se leen; los `.doc` de Word 97 y los PowerPoint no, así que
+  esos hay que abrirlos en Office y guardarlos como PDF.
 - Cada archivo recibe un **color**, así sabes de un vistazo de dónde viene cada página.
 - **Arrastra las miniaturas** para cambiar el orden. Si sueltas un PDF nuevo
   encima de una página concreta, se inserta justo ahí.
