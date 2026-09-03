@@ -96,6 +96,25 @@
   }
 
   /* ---------------- pintado ---------------- */
+  /**
+   * Ancho real de una hoja en pantalla. Se mide del DOM y no de la variable
+   * CSS porque la rejilla usa 1fr: la columna se estira más allá del mínimo
+   * y, si nos guiábamos por el mínimo, la miniatura salía corta de detalle.
+   */
+  const anchoTarjeta = () => {
+    const marco = document.querySelector('.pag-marco');
+    const real = marco ? marco.getBoundingClientRect().width : 0;
+    return Math.round(real
+      || parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ancho-pag'))
+      || 180);
+  };
+
+  // El nivel se calcula una vez por pintada, no por tarjeta: medir el DOM
+  // dentro del bucle obligaba al navegador a recalcular la maqueta 80 veces.
+  let nivelActual = 0;
+  const refrescarNivel = () => (nivelActual = G.nivelPara(anchoTarjeta()));
+  const nivelVigente = () => nivelActual || refrescarNivel();
+
   const observador = new IntersectionObserver((entradas) => {
     entradas.forEach((en) => {
       if (!en.isIntersecting) return;
@@ -103,11 +122,14 @@
       const uid = en.target.dataset.uid;
       const pagina = E.paginas.find((p) => p.uid === uid);
       if (!pagina) return;
-      G.miniatura(pagina).then((url) => {
+      // Primero la versión ligera, para que la hoja aparezca cuanto antes;
+      // afinarVisibles() la vuelve a pedir con el detalle que pida el zoom.
+      G.miniatura(pagina, G.NIVELES_MINI[0]).then((url) => {
         const img = en.target.querySelector('.mini');
-        if (img) { img.src = url; img.style.display = 'block'; }
+        if (img && !img.src.startsWith('data:')) { img.src = url; img.style.display = 'block'; }
         const hueco = en.target.querySelector('.pag-cargando');
         if (hueco) hueco.remove();
+        afinarVisibles();
       }).catch(() => {});
     });
   }, { rootMargin: '400px 0px' });
@@ -157,6 +179,28 @@
     return capa;
   }
 
+  /** Vuelve a pedir las miniaturas visibles con el detalle que pide el zoom. */
+  let relojNitidez = null;
+  function afinarVisibles() {
+    clearTimeout(relojNitidez);
+    relojNitidez = setTimeout(() => {
+      const nivel = refrescarNivel();
+      const alto = window.innerHeight;
+      $$('.pag').forEach((el) => {
+        const caja = el.getBoundingClientRect();
+        if (caja.bottom < -600 || caja.top > alto + 600) return;   // fuera de vista
+        const pagina = E.paginas.find((p) => p.uid === el.dataset.uid);
+        const img = el.querySelector('.mini');
+        if (!pagina || !img) return;
+        G.miniatura(pagina, nivel).then((url) => {
+          if (url && img.src !== url) { img.src = url; img.style.display = 'block'; }
+          const hueco = el.querySelector('.pag-cargando');
+          if (hueco) hueco.remove();
+        }).catch(() => {});
+      });
+    }, 250);
+  }
+
   function tarjeta(pagina, indice) {
     const fuente = E.fuentes.get(pagina.fuenteId);
     const vis = visDe(pagina);
@@ -179,6 +223,13 @@
     img.className = 'mini';
     img.alt = 'Página ' + (indice + 1);
     img.style.cssText = 'display:none;width:100%;height:auto';
+    // si ya se dibujó antes, se muestra al instante y luego se afina
+    const previa = G.miniaturaCacheada(pagina, nivelVigente());
+    if (previa) {
+      img.src = previa;
+      img.style.display = 'block';
+      hueco.remove();
+    }
     marco.appendChild(img);
 
     const cinta = document.createElement('div');
@@ -250,6 +301,19 @@
     return el;
   }
 
+  /**
+   * Cambiar la selección no altera el contenido de las hojas, así que basta
+   * con mover las clases: reconstruir toda la rejilla en cada clic hacía
+   * parpadear las miniaturas y costaba cada vez más con expedientes largos.
+   */
+  function refrescarSeleccion() {
+    $$('.pag').forEach((el) => el.classList.toggle('sel', E.seleccion.has(el.dataset.uid)));
+    const n = E.seleccion.size;
+    $('#infoSeleccion').textContent = n
+      ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
+      : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos');
+  }
+
   function pintar() {
     recalcularFolios();
     const rejilla = $('#rejilla');
@@ -268,6 +332,7 @@
     actualizarBotonesHistorial();
     if (!E.paginas.length && expedienteAbierto) expedienteAbierto = null;
     actualizarEstadoGuardado();
+    afinarVisibles();
     programarAutoguardado();
   }
   G.pintar = pintar;
@@ -374,7 +439,7 @@
       if (!solaYa) E.seleccion.add(pagina.uid);
       E.ancla = indice;
     }
-    pintar();
+    refrescarSeleccion();
   }
 
   /* ---------------- operaciones sobre páginas ---------------- */
@@ -1444,13 +1509,13 @@
     $('#btnRehacer').addEventListener('click', rehacer);
 
     // barra del taller
-    $('#btnSelTodo').addEventListener('click', () => { E.seleccion = new Set(E.paginas.map((p) => p.uid)); pintar(); });
-    $('#btnSelNada').addEventListener('click', () => { E.seleccion.clear(); pintar(); });
+    $('#btnSelTodo').addEventListener('click', () => { E.seleccion = new Set(E.paginas.map((p) => p.uid)); refrescarSeleccion(); });
+    $('#btnSelNada').addEventListener('click', () => { E.seleccion.clear(); refrescarSeleccion(); });
     $('#btnSelInvertir').addEventListener('click', () => {
       const nueva = new Set();
       E.paginas.forEach((p) => { if (!E.seleccion.has(p.uid)) nueva.add(p.uid); });
       E.seleccion = nueva;
-      pintar();
+      refrescarSeleccion();
     });
     $('#btnGirarIzq').addEventListener('click', () => girar(-90));
     $('#btnGirarDer').addEventListener('click', () => girar(90));
@@ -1474,7 +1539,9 @@
     });
     $('#zoom').addEventListener('input', (ev) => {
       document.documentElement.style.setProperty('--ancho-pag', ev.target.value + 'px');
+      afinarVisibles();
     });
+    $('#lienzo').addEventListener('scroll', afinarVisibles, { passive: true });
     document.documentElement.style.setProperty('--ancho-pag', $('#zoom').value + 'px');
 
     // firmas

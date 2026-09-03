@@ -141,15 +141,25 @@
           disableAutoFetch: true,
         }).promise;
 
-        const metas = [];
-        for (let p = 1; p <= doc.numPages; p++) {
-          const pag = await doc.getPage(p);
-          const v = pag.view; // [x0,y0,x1,y1] del CropBox
-          metas.push({
-            w: Math.abs(v[2] - v[0]),
-            h: Math.abs(v[3] - v[1]),
-            giro: G.norm(pag.rotate || 0),
+        // Los tamaños de página se piden por lotes en paralelo: de a una,
+        // un expediente largo tardaba varios segundos en abrirse.
+        const metas = new Array(doc.numPages);
+        const LOTE = 16;
+        for (let desde = 0; desde < doc.numPages; desde += LOTE) {
+          const hasta = Math.min(doc.numPages, desde + LOTE);
+          const pedidos = [];
+          for (let p = desde + 1; p <= hasta; p++) pedidos.push(doc.getPage(p));
+          (await Promise.all(pedidos)).forEach((pag, k) => {
+            const v = pag.view; // [x0,y0,x1,y1] del CropBox
+            metas[desde + k] = {
+              w: Math.abs(v[2] - v[0]),
+              h: Math.abs(v[3] - v[1]),
+              giro: G.norm(pag.rotate || 0),
+            };
           });
+          if (alProgresar && doc.numPages > 40) {
+            alProgresar(`Leyendo ${file.name}: ${hasta} de ${doc.numPages} páginas…`);
+          }
         }
 
         const id = 'f' + (G.estado.fuentes.size + nuevasFuentes.length + 1) + '-' + Date.now().toString(36);
@@ -205,13 +215,64 @@
   };
 
   /* ---------- miniaturas ---------- */
-  const cacheMini = new Map();
-  const ANCHO_MINI = 340;
+  /**
+   * La miniatura se dibuja al detalle que haga falta según el zoom y la
+   * densidad de la pantalla. Con un solo tamaño fijo, al ampliar las hojas
+   * el texto se veía como una mancha: era un bitmap pequeño estirado.
+   */
+  G.NIVELES_MINI = [300, 620, 1000, 1500, 2100];
+
+  G.nivelPara = function (anchoCSS) {
+    const necesario = (anchoCSS || 180) * (window.devicePixelRatio || 1);
+    for (const n of G.NIVELES_MINI) if (n >= necesario) return n;
+    return G.NIVELES_MINI[G.NIVELES_MINI.length - 1];
+  };
+
+  const cacheMini = new Map();      // clave -> {url, peso}
+  const TOPE_CACHE = 72 * 1024 * 1024;
+  let pesoCache = 0;
+
+  function leerCache(clave) {
+    const v = cacheMini.get(clave);
+    if (!v) return null;
+    cacheMini.delete(clave);        // reinsertar = marcarla como reciente
+    cacheMini.set(clave, v);
+    return v.url;
+  }
+
+  function guardarCache(clave, url) {
+    const peso = Math.round(url.length * 0.75);
+    cacheMini.set(clave, { url, peso });
+    pesoCache += peso;
+    while (pesoCache > TOPE_CACHE && cacheMini.size > 1) {
+      const vieja = cacheMini.keys().next().value;
+      pesoCache -= cacheMini.get(vieja).peso;
+      cacheMini.delete(vieja);
+    }
+  }
+
+  const clave = (pagina, nivel) => `${pagina.fuenteId}:${pagina.indice}:${G.norm(pagina.giro)}:${nivel}`;
+
+  /** La mejor versión ya dibujada que no pase del nivel pedido, o null. */
+  G.miniaturaCacheada = function (pagina, nivelTope) {
+    for (let i = G.NIVELES_MINI.length - 1; i >= 0; i--) {
+      const n = G.NIVELES_MINI[i];
+      if (n > nivelTope) continue;
+      const url = leerCache(clave(pagina, n));
+      if (url) return url;
+    }
+    return null;
+  };
+
   let enCola = 0;
   const cola = [];
 
+  // Con worker propio se pueden dibujar varias a la vez; en hilo principal
+  // (al abrir el archivo con doble clic) conviene no atorar la interfaz.
+  const limiteCola = () => (window.pdfjsWorker ? 2 : 4);
+
   function siguienteDeCola() {
-    if (enCola >= 2 || !cola.length) return;
+    if (enCola >= limiteCola() || !cola.length) return;
     const tarea = cola.shift();
     enCola++;
     tarea().finally(() => { enCola--; siguienteDeCola(); });
@@ -224,18 +285,20 @@
     });
   }
 
-  G.miniatura = function (pagina) {
+  G.miniatura = function (pagina, nivel) {
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
     if (!fuente) return Promise.reject(new Error('fuente ausente'));
-    const clave = `${pagina.fuenteId}:${pagina.indice}:${G.norm(pagina.giro)}`;
-    if (cacheMini.has(clave)) return Promise.resolve(cacheMini.get(clave));
+    const n = nivel || G.NIVELES_MINI[0];
+    const k = clave(pagina, n);
+    const ya = leerCache(k);
+    if (ya) return Promise.resolve(ya);
 
     return encolar(async () => {
-      if (cacheMini.has(clave)) return cacheMini.get(clave);
+      const otra = leerCache(k);
+      if (otra) return otra;
       const pag = await fuente.doc.getPage(pagina.indice + 1);
       const base = pag.getViewport({ scale: 1, rotation: G.norm(pagina.giro) });
-      const escala = ANCHO_MINI / base.width;
-      const vp = pag.getViewport({ scale: escala, rotation: G.norm(pagina.giro) });
+      const vp = pag.getViewport({ scale: n / base.width, rotation: G.norm(pagina.giro) });
       const lienzo = document.createElement('canvas');
       lienzo.width = Math.max(1, Math.floor(vp.width));
       lienzo.height = Math.max(1, Math.floor(vp.height));
@@ -243,12 +306,9 @@
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, lienzo.width, lienzo.height);
       await pag.render({ canvasContext: ctx, viewport: vp }).promise;
-      const url = lienzo.toDataURL('image/jpeg', 0.82);
-      if (cacheMini.size > 400) {
-        const primera = cacheMini.keys().next().value;
-        cacheMini.delete(primera);
-      }
-      cacheMini.set(clave, url);
+      // más calidad en los niveles altos: ahí es donde se va a leer el texto
+      const url = lienzo.toDataURL('image/jpeg', n >= 620 ? 0.9 : 0.85);
+      guardarCache(k, url);
       return url;
     });
   };
