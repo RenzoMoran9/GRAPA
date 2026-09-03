@@ -52,8 +52,13 @@
       <button class="bloque-cabecera" type="button"><span class="ico">💾</span> Expedientes guardados <em id="contGuardados">0</em></button>
       <div class="bloque-cuerpo">
         <p class="nota">Guarda el expediente a medio armar y retómalo otro día. Se queda en este navegador, no se sube a ningún lado.</p>
+        <div class="expediente-actual" id="expedienteActual" hidden>
+          <span>📂 Editando <strong id="expedienteActualNombre"></strong></span>
+          <button class="btn btn-mini" id="btnDejarDeEditar" title="El próximo guardado creará uno nuevo en vez de actualizar este">✕</button>
+        </div>
+        <button class="btn btn-primario ancho" id="btnActualizarTrabajo" hidden>Actualizar</button>
         <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor"></label>
-        <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar el trabajo actual</button>
+        <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar como nuevo</button>
         <ul class="lista-guardados" id="listaGuardados"></ul>
         <p class="nota" id="espacioUsado"></p>
       </div>
@@ -188,6 +193,11 @@
         <button class="btn btn-mini" id="btnDuplicar" title="Duplicar (Ctrl+D)">⧉</button>
         <button class="btn btn-mini" id="btnMoverInicio" title="Mover al inicio">⇤</button>
         <button class="btn btn-mini" id="btnMoverFin" title="Mover al final">⇥</button>
+        <label class="salto-pos" title="Mueve la selección a esa posición (o Alt+↑ / Alt+↓ de a una)">
+          Ir a
+          <input type="number" id="saltoPos" min="1" placeholder="Nº">
+        </label>
+        <button class="btn btn-mini" id="btnSaltoPos">Mover</button>
         <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)">🗑</button>
         <span class="separador-vertical"></span>
         <label class="zoom">Zoom
@@ -228,6 +238,8 @@
       <span class="separador-vertical"></span>
       <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )">↺</button>
       <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )">↻</button>
+      <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
+      <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
       <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja">✍</button>
       <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja">🗑</button>
       <span class="separador-vertical"></span>
@@ -382,6 +394,7 @@
         <tr><td>Ctrl+D</td><td>Duplicar páginas</td></tr>
         <tr><td>Supr</td><td>Eliminar páginas</td></tr>
         <tr><td>V</td><td>Ver las hojas en grande</td></tr>
+        <tr><td>Alt+↑ / Alt+↓</td><td>Mover la selección una posición (o la hoja actual, dentro del lector)</td></tr>
         <tr><td>[ y ]</td><td>Girar a la izquierda / derecha</td></tr>
         <tr><td>Clic + Shift</td><td>Seleccionar un rango</td></tr>
         <tr><td>Clic + Ctrl</td><td>Añadir o quitar de la selección</td></tr>

@@ -266,6 +266,8 @@
     pintarDocs();
     pintarFirmas();
     actualizarBotonesHistorial();
+    if (!E.paginas.length && expedienteAbierto) expedienteAbierto = null;
+    actualizarEstadoGuardado();
     programarAutoguardado();
   }
   G.pintar = pintar;
@@ -401,6 +403,47 @@
     objs.forEach((p) => { p.giro = G.norm(p.giro + delta); });
     pintar();
   }
+  /**
+   * Adelanta o retrasa las páginas dadas una posición, respetando el orden
+   * entre ellas. Es la manera rápida de reordenar sin arrastrar: sirve
+   * igual para una selección de varias páginas que para una sola.
+   */
+  function moverPosiciones(objs, delta) {
+    if (!objs.length || !delta) return;
+    marcar();
+    const marcados = new Set(objs.map((p) => p.uid));
+    const orden = E.paginas;
+    if (delta < 0) {
+      for (let i = 1; i < orden.length; i++) {
+        if (marcados.has(orden[i].uid) && !marcados.has(orden[i - 1].uid)) {
+          const t = orden[i - 1]; orden[i - 1] = orden[i]; orden[i] = t;
+        }
+      }
+    } else {
+      for (let i = orden.length - 2; i >= 0; i--) {
+        if (marcados.has(orden[i].uid) && !marcados.has(orden[i + 1].uid)) {
+          const t = orden[i]; orden[i] = orden[i + 1]; orden[i + 1] = t;
+        }
+      }
+    }
+    pintar();
+  }
+
+  /** Mueve la selección para que empiece justo en la posición dada (1 = primera). */
+  function moverSeleccionAPosicion(numeroPos) {
+    const objs = seleccionadas();
+    if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
+    if (!Number.isFinite(numeroPos)) { G.aviso('Escribe el número de la posición.', 'error'); return; }
+    marcar();
+    const mover = new Set(objs.map((p) => p.uid));
+    const resto = E.paginas.filter((p) => !mover.has(p.uid));
+    const destino = Math.max(0, Math.min(resto.length, Math.round(numeroPos) - 1));
+    resto.splice(destino, 0, ...objs);
+    E.paginas = resto;
+    pintar();
+    G.aviso(`Movidas a la posición ${destino + 1}.`, 'ok');
+  }
+
   function moverExtremo(alInicio) {
     const objs = seleccionadas();
     if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
@@ -418,7 +461,14 @@
     const tarjeta = ev.target.closest('.pag');
     if (!tarjeta) return;
     const uid = tarjeta.dataset.uid;
-    if (!E.seleccion.has(uid)) { E.seleccion = new Set([uid]); pintar(); }
+    // Nunca repintar aquí: el navegador acaba de tomar la instantánea para
+    // arrastrar esta misma tarjeta. Si reconstruimos la rejilla (innerHTML),
+    // el nodo original queda fuera del documento y, por especificación,
+    // el navegador cancela el arrastre sin avisar: nunca llega el drop.
+    if (!E.seleccion.has(uid)) {
+      E.seleccion = new Set([uid]);
+      $$('.pag').forEach((t) => t.classList.toggle('sel', t.dataset.uid === uid));
+    }
     arrastrando = Array.from(E.seleccion);
     ev.dataTransfer.effectAllowed = 'move';
     ev.dataTransfer.setData('text/plain', uid);
@@ -487,10 +537,12 @@
       if (r.paginas.length) {
         marcar();
         r.fuentes.forEach((f) => E.fuentes.set(f.id, f));
-        if (indice == null || indice >= E.paginas.length) {
-          E.paginas = E.paginas.concat(r.paginas);
+        if (indice == null) {
+          // Lo nuevo va encima de lo que ya había, como al grapar un
+          // documento sobre un expediente físico: no al final.
+          E.paginas = r.paginas.concat(E.paginas);
         } else {
-          E.paginas.splice(Math.max(0, indice), 0, ...r.paginas);
+          E.paginas.splice(Math.max(0, Math.min(indice, E.paginas.length)), 0, ...r.paginas);
         }
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
         pintar();
@@ -867,6 +919,25 @@
      El expediente a medio armar (orden, giros, firmas, folios) vive en
      la base de datos del navegador junto con los PDF de origen.
      ========================================================= */
+  /** Expediente guardado que se está editando ahora mismo, o null si es nuevo. */
+  let expedienteAbierto = null;
+
+  function actualizarEstadoGuardado() {
+    const caja = $('#expedienteActual');
+    const btn = $('#btnActualizarTrabajo');
+    if (!caja || !btn) return;
+    if (expedienteAbierto) {
+      caja.hidden = false;
+      $('#expedienteActualNombre').textContent = expedienteAbierto.nombre;
+      btn.hidden = false;
+      btn.textContent = 'Actualizar este guardado';
+      btn.title = `Sobrescribe «${expedienteAbierto.nombre}» con lo que tienes ahora`;
+    } else {
+      caja.hidden = true;
+      btn.hidden = true;
+    }
+  }
+
   function fuentesUsadas() {
     const ids = new Set(E.paginas.map((p) => p.fuenteId));
     return Array.from(ids).map((id) => {
@@ -880,21 +951,25 @@
 
   function serializar(id, nombre) {
     const fuentes = fuentesUsadas();
-    return {
-      registro: {
-        id, nombre,
-        fecha: Date.now(),
-        numPaginas: E.paginas.length,
-        fuenteIds: fuentes.map((f) => f.id),
-        paginas: JSON.parse(JSON.stringify(E.paginas)),
-        salida: {
-          nombre: $('#nombreSalida').value,
-          titulo: $('#metaTitulo').value,
-          autor: $('#metaAutor').value,
-        },
+    const registro = {
+      id, nombre,
+      fecha: Date.now(),
+      numPaginas: E.paginas.length,
+      fuenteIds: fuentes.map((f) => f.id),
+      paginas: JSON.parse(JSON.stringify(E.paginas)),
+      salida: {
+        nombre: $('#nombreSalida').value,
+        titulo: $('#metaTitulo').value,
+        autor: $('#metaAutor').value,
       },
-      fuentes,
     };
+    // El autoguardado recuerda de qué expediente con nombre venía, para que
+    // "Continuar donde lo dejé" también recupere la opción de Actualizar.
+    if (id === '__auto' && expedienteAbierto) {
+      registro.origenId = expedienteAbierto.id;
+      registro.origenNombre = expedienteAbierto.nombre;
+    }
+    return { registro, fuentes };
   }
 
   async function restaurarExpediente(registro) {
@@ -915,7 +990,14 @@
         $('#metaTitulo').value = registro.salida.titulo || '';
         $('#metaAutor').value = registro.salida.autor || '';
       }
+      // Deja anotado sobre qué guardado se está trabajando: el próximo
+      // guardado lo actualiza en vez de crear uno nuevo por separado.
+      expedienteAbierto = registro.id === '__auto'
+        ? (registro.origenId ? { id: registro.origenId, nombre: registro.origenNombre || 'expediente' } : null)
+        : { id: registro.id, nombre: registro.nombre };
+      actualizarEstadoGuardado();
       pintar();
+      await pintarGuardados();
       G.aviso(perdidas
         ? `Expediente abierto; faltaban ${perdidas} página(s) por un archivo que ya no está.`
         : `Expediente abierto: ${E.paginas.length} página(s).`, perdidas ? 'error' : 'ok');
@@ -985,6 +1067,7 @@
     lista.innerHTML = '';
     regs.forEach((r) => {
       const li = document.createElement('li');
+      if (expedienteAbierto && expedienteAbierto.id === r.id) li.classList.add('actual');
       const datos = document.createElement('div');
       datos.className = 'guardado-datos';
       const nom = document.createElement('strong');
@@ -1027,14 +1110,17 @@
       : '';
   }
 
-  async function guardarTrabajo() {
+  async function guardarComoNuevo() {
     if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
     const nombre = ($('#guardarNombre').value || '').trim()
       || G.nombreSeguro($('#nombreSalida').value, 'Expediente');
     G.cargando(true, 'Guardando el expediente…');
     try {
-      const { registro, fuentes } = serializar('exp-' + Date.now().toString(36), nombre);
+      const id = 'exp-' + Date.now().toString(36);
+      const { registro, fuentes } = serializar(id, nombre);
       await G.bd.guardarExpediente(registro, fuentes);
+      expedienteAbierto = { id, nombre };
+      actualizarEstadoGuardado();
       $('#guardarNombre').value = '';
       await pintarGuardados();
       G.aviso(`Expediente «${nombre}» guardado.`, 'ok');
@@ -1044,6 +1130,28 @@
     } finally {
       G.cargando(false);
     }
+  }
+
+  async function actualizarGuardado() {
+    if (!expedienteAbierto) return;
+    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
+    G.cargando(true, 'Actualizando el expediente…');
+    try {
+      const { registro, fuentes } = serializar(expedienteAbierto.id, expedienteAbierto.nombre);
+      await G.bd.guardarExpediente(registro, fuentes);
+      await pintarGuardados();
+      G.aviso(`«${expedienteAbierto.nombre}» actualizado: no se pierde lo que acabas de firmar o adjuntar.`, 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo actualizar: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
+  function dejarDeEditar() {
+    expedienteAbierto = null;
+    actualizarEstadoGuardado();
   }
 
   /* ---------------- carpeta de destino ---------------- */
@@ -1191,6 +1299,17 @@
     irAHoja(indice == null ? lector.actual : indice, true);
   }
 
+  /** Sube o baja la hoja que se está viendo, y la sigue en la pantalla. */
+  function moverHojaLector(delta) {
+    const pagina = paginaActualLector();
+    if (!pagina) return;
+    const idx = E.paginas.indexOf(pagina);
+    const destino = idx + delta;
+    if (destino < 0 || destino >= E.paginas.length) return;
+    moverPosiciones([pagina], delta);
+    refrescarLector(destino);
+  }
+
   function accionLector(fn) {
     const pagina = paginaActualLector();
     if (!pagina) return;
@@ -1230,6 +1349,8 @@
       return;
     }
     if (lector.abierto && !enCampo && !$$('.modal:not([hidden])').length) {
+      if (ev.altKey && ev.key === 'ArrowUp') { ev.preventDefault(); moverHojaLector(-1); return; }
+      if (ev.altKey && ev.key === 'ArrowDown') { ev.preventDefault(); moverHojaLector(1); return; }
       if (ev.key === 'ArrowDown' || ev.key === 'PageDown' || ev.key === ' ') {
         ev.preventDefault(); irAHoja(lector.actual + 1); return;
       }
@@ -1261,6 +1382,20 @@
     if (ev.key === 'Delete' || ev.key === 'Backspace') {
       const objs = seleccionadas();
       if (objs.length) { ev.preventDefault(); marcar(); eliminar(objs); }
+      return;
+    }
+    if (ev.altKey && ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const objs = seleccionadas();
+      if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
+      moverPosiciones(objs, -1);
+      return;
+    }
+    if (ev.altKey && ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      const objs = seleccionadas();
+      if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
+      moverPosiciones(objs, 1);
       return;
     }
     if (ev.key === '[') { girar(-90); return; }
@@ -1331,6 +1466,12 @@
     });
     $('#btnMoverInicio').addEventListener('click', () => moverExtremo(true));
     $('#btnMoverFin').addEventListener('click', () => moverExtremo(false));
+    $('#btnSaltoPos').addEventListener('click', () => {
+      moverSeleccionAPosicion(Number($('#saltoPos').value));
+    });
+    $('#saltoPos').addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); $('#btnSaltoPos').click(); }
+    });
     $('#zoom').addEventListener('input', (ev) => {
       document.documentElement.style.setProperty('--ancho-pag', ev.target.value + 'px');
     });
@@ -1408,7 +1549,9 @@
     });
 
     // guardar el trabajo
-    $('#btnGuardarTrabajo').addEventListener('click', guardarTrabajo);
+    $('#btnGuardarTrabajo').addEventListener('click', guardarComoNuevo);
+    $('#btnActualizarTrabajo').addEventListener('click', actualizarGuardado);
+    $('#btnDejarDeEditar').addEventListener('click', dejarDeEditar);
 
     // carpeta de destino
     $('#btnVincularCarpeta').addEventListener('click', async () => {
@@ -1435,6 +1578,8 @@
     $('#lectorSiguiente').addEventListener('click', () => irAHoja(lector.actual + 1));
     $('#lectorGirarIzq').addEventListener('click', () => accionLector((p) => { p.giro = G.norm(p.giro - 90); }));
     $('#lectorGirarDer').addEventListener('click', () => accionLector((p) => { p.giro = G.norm(p.giro + 90); }));
+    $('#lectorSubir').addEventListener('click', () => moverHojaLector(-1));
+    $('#lectorBajar').addEventListener('click', () => moverHojaLector(1));
     $('#lectorFirmar').addEventListener('click', () => {
       const p = paginaActualLector();
       if (p) abrirFirmar(p);

@@ -257,6 +257,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 .taller-info span{font-size:11.5px;color:var(--texto-3)}
 .taller-herramientas{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-left:auto}
 .zoom{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--texto-3);font-weight:600}
+.salto-pos{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--texto-3);font-weight:600}
+.salto-pos input{
+  width:52px;background:var(--fondo);border:1px solid var(--borde);border-radius:var(--radio-s);
+  padding:4px 6px;font-size:12.5px;font-weight:600;color:var(--texto);font-variant-numeric:tabular-nums;
+}
 .zoom input{width:96px;accent-color:var(--acento)}
 
 /* ---------- lienzo de páginas ---------- */
@@ -408,11 +413,19 @@ button,input,select,textarea{font:inherit;color:inherit}
 .giro{width:34px;height:34px;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:girar .8s linear infinite}
 
 /* ---------- expedientes guardados ---------- */
+.expediente-actual{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 10px;border-radius:var(--radio-s);background:var(--acento-tenue);
+  border:1px solid var(--acento);font-size:12px;color:var(--texto);
+}
+.expediente-actual strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+
 .lista-guardados{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .lista-guardados li{
   display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:var(--radio-s);
   background:var(--fondo);border:1px solid var(--borde-suave);
 }
+.lista-guardados li.actual{border-color:var(--acento);background:var(--acento-tenue)}
 .guardado-datos{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
 .guardado-datos strong{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .guardado-datos span{font-size:11px;color:var(--texto-3);font-variant-numeric:tabular-nums}
@@ -517,8 +530,13 @@ button,input,select,textarea{font:inherit;color:inherit}
       <button class="bloque-cabecera" type="button"><span class="ico">💾</span> Expedientes guardados <em id="contGuardados">0</em></button>
       <div class="bloque-cuerpo">
         <p class="nota">Guarda el expediente a medio armar y retómalo otro día. Se queda en este navegador, no se sube a ningún lado.</p>
+        <div class="expediente-actual" id="expedienteActual" hidden>
+          <span>📂 Editando <strong id="expedienteActualNombre"></strong></span>
+          <button class="btn btn-mini" id="btnDejarDeEditar" title="El próximo guardado creará uno nuevo en vez de actualizar este">✕</button>
+        </div>
+        <button class="btn btn-primario ancho" id="btnActualizarTrabajo" hidden>Actualizar</button>
         <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor"></label>
-        <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar el trabajo actual</button>
+        <button class="btn btn-suave ancho" id="btnGuardarTrabajo">Guardar como nuevo</button>
         <ul class="lista-guardados" id="listaGuardados"></ul>
         <p class="nota" id="espacioUsado"></p>
       </div>
@@ -653,6 +671,11 @@ button,input,select,textarea{font:inherit;color:inherit}
         <button class="btn btn-mini" id="btnDuplicar" title="Duplicar (Ctrl+D)">⧉</button>
         <button class="btn btn-mini" id="btnMoverInicio" title="Mover al inicio">⇤</button>
         <button class="btn btn-mini" id="btnMoverFin" title="Mover al final">⇥</button>
+        <label class="salto-pos" title="Mueve la selección a esa posición (o Alt+↑ / Alt+↓ de a una)">
+          Ir a
+          <input type="number" id="saltoPos" min="1" placeholder="Nº">
+        </label>
+        <button class="btn btn-mini" id="btnSaltoPos">Mover</button>
         <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)">🗑</button>
         <span class="separador-vertical"></span>
         <label class="zoom">Zoom
@@ -693,6 +716,8 @@ button,input,select,textarea{font:inherit;color:inherit}
       <span class="separador-vertical"></span>
       <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )">↺</button>
       <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )">↻</button>
+      <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
+      <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
       <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja">✍</button>
       <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja">🗑</button>
       <span class="separador-vertical"></span>
@@ -847,6 +872,7 @@ button,input,select,textarea{font:inherit;color:inherit}
         <tr><td>Ctrl+D</td><td>Duplicar páginas</td></tr>
         <tr><td>Supr</td><td>Eliminar páginas</td></tr>
         <tr><td>V</td><td>Ver las hojas en grande</td></tr>
+        <tr><td>Alt+↑ / Alt+↓</td><td>Mover la selección una posición (o la hoja actual, dentro del lector)</td></tr>
         <tr><td>[ y ]</td><td>Girar a la izquierda / derecha</td></tr>
         <tr><td>Clic + Shift</td><td>Seleccionar un rango</td></tr>
         <tr><td>Clic + Ctrl</td><td>Añadir o quitar de la selección</td></tr>
@@ -2578,6 +2604,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     pintarDocs();
     pintarFirmas();
     actualizarBotonesHistorial();
+    if (!E.paginas.length && expedienteAbierto) expedienteAbierto = null;
+    actualizarEstadoGuardado();
     programarAutoguardado();
   }
   G.pintar = pintar;
@@ -2713,6 +2741,47 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     objs.forEach((p) => { p.giro = G.norm(p.giro + delta); });
     pintar();
   }
+  /**
+   * Adelanta o retrasa las páginas dadas una posición, respetando el orden
+   * entre ellas. Es la manera rápida de reordenar sin arrastrar: sirve
+   * igual para una selección de varias páginas que para una sola.
+   */
+  function moverPosiciones(objs, delta) {
+    if (!objs.length || !delta) return;
+    marcar();
+    const marcados = new Set(objs.map((p) => p.uid));
+    const orden = E.paginas;
+    if (delta < 0) {
+      for (let i = 1; i < orden.length; i++) {
+        if (marcados.has(orden[i].uid) && !marcados.has(orden[i - 1].uid)) {
+          const t = orden[i - 1]; orden[i - 1] = orden[i]; orden[i] = t;
+        }
+      }
+    } else {
+      for (let i = orden.length - 2; i >= 0; i--) {
+        if (marcados.has(orden[i].uid) && !marcados.has(orden[i + 1].uid)) {
+          const t = orden[i]; orden[i] = orden[i + 1]; orden[i + 1] = t;
+        }
+      }
+    }
+    pintar();
+  }
+
+  /** Mueve la selección para que empiece justo en la posición dada (1 = primera). */
+  function moverSeleccionAPosicion(numeroPos) {
+    const objs = seleccionadas();
+    if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
+    if (!Number.isFinite(numeroPos)) { G.aviso('Escribe el número de la posición.', 'error'); return; }
+    marcar();
+    const mover = new Set(objs.map((p) => p.uid));
+    const resto = E.paginas.filter((p) => !mover.has(p.uid));
+    const destino = Math.max(0, Math.min(resto.length, Math.round(numeroPos) - 1));
+    resto.splice(destino, 0, ...objs);
+    E.paginas = resto;
+    pintar();
+    G.aviso(`Movidas a la posición ${destino + 1}.`, 'ok');
+  }
+
   function moverExtremo(alInicio) {
     const objs = seleccionadas();
     if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
@@ -2730,7 +2799,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const tarjeta = ev.target.closest('.pag');
     if (!tarjeta) return;
     const uid = tarjeta.dataset.uid;
-    if (!E.seleccion.has(uid)) { E.seleccion = new Set([uid]); pintar(); }
+    // Nunca repintar aquí: el navegador acaba de tomar la instantánea para
+    // arrastrar esta misma tarjeta. Si reconstruimos la rejilla (innerHTML),
+    // el nodo original queda fuera del documento y, por especificación,
+    // el navegador cancela el arrastre sin avisar: nunca llega el drop.
+    if (!E.seleccion.has(uid)) {
+      E.seleccion = new Set([uid]);
+      $$('.pag').forEach((t) => t.classList.toggle('sel', t.dataset.uid === uid));
+    }
     arrastrando = Array.from(E.seleccion);
     ev.dataTransfer.effectAllowed = 'move';
     ev.dataTransfer.setData('text/plain', uid);
@@ -2799,10 +2875,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (r.paginas.length) {
         marcar();
         r.fuentes.forEach((f) => E.fuentes.set(f.id, f));
-        if (indice == null || indice >= E.paginas.length) {
-          E.paginas = E.paginas.concat(r.paginas);
+        if (indice == null) {
+          // Lo nuevo va encima de lo que ya había, como al grapar un
+          // documento sobre un expediente físico: no al final.
+          E.paginas = r.paginas.concat(E.paginas);
         } else {
-          E.paginas.splice(Math.max(0, indice), 0, ...r.paginas);
+          E.paginas.splice(Math.max(0, Math.min(indice, E.paginas.length)), 0, ...r.paginas);
         }
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
         pintar();
@@ -3179,6 +3257,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
      El expediente a medio armar (orden, giros, firmas, folios) vive en
      la base de datos del navegador junto con los PDF de origen.
      ========================================================= */
+  /** Expediente guardado que se está editando ahora mismo, o null si es nuevo. */
+  let expedienteAbierto = null;
+
+  function actualizarEstadoGuardado() {
+    const caja = $('#expedienteActual');
+    const btn = $('#btnActualizarTrabajo');
+    if (!caja || !btn) return;
+    if (expedienteAbierto) {
+      caja.hidden = false;
+      $('#expedienteActualNombre').textContent = expedienteAbierto.nombre;
+      btn.hidden = false;
+      btn.textContent = 'Actualizar este guardado';
+      btn.title = `Sobrescribe «${expedienteAbierto.nombre}» con lo que tienes ahora`;
+    } else {
+      caja.hidden = true;
+      btn.hidden = true;
+    }
+  }
+
   function fuentesUsadas() {
     const ids = new Set(E.paginas.map((p) => p.fuenteId));
     return Array.from(ids).map((id) => {
@@ -3192,21 +3289,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function serializar(id, nombre) {
     const fuentes = fuentesUsadas();
-    return {
-      registro: {
-        id, nombre,
-        fecha: Date.now(),
-        numPaginas: E.paginas.length,
-        fuenteIds: fuentes.map((f) => f.id),
-        paginas: JSON.parse(JSON.stringify(E.paginas)),
-        salida: {
-          nombre: $('#nombreSalida').value,
-          titulo: $('#metaTitulo').value,
-          autor: $('#metaAutor').value,
-        },
+    const registro = {
+      id, nombre,
+      fecha: Date.now(),
+      numPaginas: E.paginas.length,
+      fuenteIds: fuentes.map((f) => f.id),
+      paginas: JSON.parse(JSON.stringify(E.paginas)),
+      salida: {
+        nombre: $('#nombreSalida').value,
+        titulo: $('#metaTitulo').value,
+        autor: $('#metaAutor').value,
       },
-      fuentes,
     };
+    // El autoguardado recuerda de qué expediente con nombre venía, para que
+    // "Continuar donde lo dejé" también recupere la opción de Actualizar.
+    if (id === '__auto' && expedienteAbierto) {
+      registro.origenId = expedienteAbierto.id;
+      registro.origenNombre = expedienteAbierto.nombre;
+    }
+    return { registro, fuentes };
   }
 
   async function restaurarExpediente(registro) {
@@ -3227,7 +3328,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         $('#metaTitulo').value = registro.salida.titulo || '';
         $('#metaAutor').value = registro.salida.autor || '';
       }
+      // Deja anotado sobre qué guardado se está trabajando: el próximo
+      // guardado lo actualiza en vez de crear uno nuevo por separado.
+      expedienteAbierto = registro.id === '__auto'
+        ? (registro.origenId ? { id: registro.origenId, nombre: registro.origenNombre || 'expediente' } : null)
+        : { id: registro.id, nombre: registro.nombre };
+      actualizarEstadoGuardado();
       pintar();
+      await pintarGuardados();
       G.aviso(perdidas
         ? `Expediente abierto; faltaban ${perdidas} página(s) por un archivo que ya no está.`
         : `Expediente abierto: ${E.paginas.length} página(s).`, perdidas ? 'error' : 'ok');
@@ -3297,6 +3405,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     lista.innerHTML = '';
     regs.forEach((r) => {
       const li = document.createElement('li');
+      if (expedienteAbierto && expedienteAbierto.id === r.id) li.classList.add('actual');
       const datos = document.createElement('div');
       datos.className = 'guardado-datos';
       const nom = document.createElement('strong');
@@ -3339,14 +3448,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       : '';
   }
 
-  async function guardarTrabajo() {
+  async function guardarComoNuevo() {
     if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
     const nombre = ($('#guardarNombre').value || '').trim()
       || G.nombreSeguro($('#nombreSalida').value, 'Expediente');
     G.cargando(true, 'Guardando el expediente…');
     try {
-      const { registro, fuentes } = serializar('exp-' + Date.now().toString(36), nombre);
+      const id = 'exp-' + Date.now().toString(36);
+      const { registro, fuentes } = serializar(id, nombre);
       await G.bd.guardarExpediente(registro, fuentes);
+      expedienteAbierto = { id, nombre };
+      actualizarEstadoGuardado();
       $('#guardarNombre').value = '';
       await pintarGuardados();
       G.aviso(`Expediente «${nombre}» guardado.`, 'ok');
@@ -3356,6 +3468,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     } finally {
       G.cargando(false);
     }
+  }
+
+  async function actualizarGuardado() {
+    if (!expedienteAbierto) return;
+    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
+    G.cargando(true, 'Actualizando el expediente…');
+    try {
+      const { registro, fuentes } = serializar(expedienteAbierto.id, expedienteAbierto.nombre);
+      await G.bd.guardarExpediente(registro, fuentes);
+      await pintarGuardados();
+      G.aviso(`«${expedienteAbierto.nombre}» actualizado: no se pierde lo que acabas de firmar o adjuntar.`, 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo actualizar: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
+  function dejarDeEditar() {
+    expedienteAbierto = null;
+    actualizarEstadoGuardado();
   }
 
   /* ---------------- carpeta de destino ---------------- */
@@ -3503,6 +3637,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     irAHoja(indice == null ? lector.actual : indice, true);
   }
 
+  /** Sube o baja la hoja que se está viendo, y la sigue en la pantalla. */
+  function moverHojaLector(delta) {
+    const pagina = paginaActualLector();
+    if (!pagina) return;
+    const idx = E.paginas.indexOf(pagina);
+    const destino = idx + delta;
+    if (destino < 0 || destino >= E.paginas.length) return;
+    moverPosiciones([pagina], delta);
+    refrescarLector(destino);
+  }
+
   function accionLector(fn) {
     const pagina = paginaActualLector();
     if (!pagina) return;
@@ -3542,6 +3687,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return;
     }
     if (lector.abierto && !enCampo && !$$('.modal:not([hidden])').length) {
+      if (ev.altKey && ev.key === 'ArrowUp') { ev.preventDefault(); moverHojaLector(-1); return; }
+      if (ev.altKey && ev.key === 'ArrowDown') { ev.preventDefault(); moverHojaLector(1); return; }
       if (ev.key === 'ArrowDown' || ev.key === 'PageDown' || ev.key === ' ') {
         ev.preventDefault(); irAHoja(lector.actual + 1); return;
       }
@@ -3573,6 +3720,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (ev.key === 'Delete' || ev.key === 'Backspace') {
       const objs = seleccionadas();
       if (objs.length) { ev.preventDefault(); marcar(); eliminar(objs); }
+      return;
+    }
+    if (ev.altKey && ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const objs = seleccionadas();
+      if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
+      moverPosiciones(objs, -1);
+      return;
+    }
+    if (ev.altKey && ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      const objs = seleccionadas();
+      if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
+      moverPosiciones(objs, 1);
       return;
     }
     if (ev.key === '[') { girar(-90); return; }
@@ -3643,6 +3804,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
     $('#btnMoverInicio').addEventListener('click', () => moverExtremo(true));
     $('#btnMoverFin').addEventListener('click', () => moverExtremo(false));
+    $('#btnSaltoPos').addEventListener('click', () => {
+      moverSeleccionAPosicion(Number($('#saltoPos').value));
+    });
+    $('#saltoPos').addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); $('#btnSaltoPos').click(); }
+    });
     $('#zoom').addEventListener('input', (ev) => {
       document.documentElement.style.setProperty('--ancho-pag', ev.target.value + 'px');
     });
@@ -3720,7 +3887,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
 
     // guardar el trabajo
-    $('#btnGuardarTrabajo').addEventListener('click', guardarTrabajo);
+    $('#btnGuardarTrabajo').addEventListener('click', guardarComoNuevo);
+    $('#btnActualizarTrabajo').addEventListener('click', actualizarGuardado);
+    $('#btnDejarDeEditar').addEventListener('click', dejarDeEditar);
 
     // carpeta de destino
     $('#btnVincularCarpeta').addEventListener('click', async () => {
@@ -3747,6 +3916,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     $('#lectorSiguiente').addEventListener('click', () => irAHoja(lector.actual + 1));
     $('#lectorGirarIzq').addEventListener('click', () => accionLector((p) => { p.giro = G.norm(p.giro - 90); }));
     $('#lectorGirarDer').addEventListener('click', () => accionLector((p) => { p.giro = G.norm(p.giro + 90); }));
+    $('#lectorSubir').addEventListener('click', () => moverHojaLector(-1));
+    $('#lectorBajar').addEventListener('click', () => moverHojaLector(1));
     $('#lectorFirmar').addEventListener('click', () => {
       const p = paginaActualLector();
       if (p) abrirFirmar(p);
