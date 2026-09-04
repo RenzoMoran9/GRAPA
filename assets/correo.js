@@ -395,6 +395,19 @@
     .gcorreo .ficha div { margin:2px 0; }
     .gcorreo .ficha b { display:inline-block; min-width:64px; }
     .gcorreo .cuerpo { word-wrap:break-word; overflow-wrap:anywhere; }
+    /* Un correo se maqueta para una pantalla, no para una hoja: trae posiciones
+       absolutas, contenedores de alto fijo y recortes. Dibujado tal cual, los
+       bloques se montan unos sobre otros. Para el expediente se aplana todo a
+       flujo normal: prefiero que se lea entero aunque pierda la maqueta. */
+    .gcorreo .cuerpo * {
+      position: static !important;
+      float: none !important;
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      max-width: 100% !important;
+    }
     .gcorreo .cuerpo table { border-collapse:collapse; max-width:100%; }
     .gcorreo .cuerpo img { max-width:100%; height:auto; }
     .gcorreo .pie { margin-top:16px; border-top:1px solid #bbb; padding-top:6px;
