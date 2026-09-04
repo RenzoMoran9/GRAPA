@@ -695,9 +695,6 @@
     }
   }
 
-  // El módulo de correo mete los archivos por la misma puerta que todos
-  G.anadirArchivos = (archivos) => anadir(archivos, null);
-
   function conectarSoltar(zona, resaltado, conPosicion) {
     ['dragenter', 'dragover'].forEach((t) => zona.addEventListener(t, (ev) => {
       if (esArrastreDeHoja(ev)) return;
@@ -1394,158 +1391,6 @@
     try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
   }
 
-  /* ---------------- cotizaciones por correo ---------------- */
-  let cosecha = null;                 // lo último que se trajo de Gmail
-  G.cosechaCorreo = () => cosecha;
-
-  function correoEstado() {
-    const hay = G.correo && G.correo.conectado();
-    $('#correoCuenta').hidden = !hay;
-    $('#correoConectar').hidden = hay;
-    $('#correoBuscar').disabled = !hay;
-    if (hay) $('#correoCuentaNombre').textContent = G.correo.cuenta() || '';
-  }
-
-  function pintarResumenCorreo(r) {
-    const caja = $('#correoResumen');
-    caja.innerHTML = '';
-    caja.hidden = false;
-    const total = r.empresas.reduce((n, e) => n + e.archivos.length, 0);
-    const cab = document.createElement('p');
-    cab.className = 'correo-titulo';
-    cab.textContent = r.empresas.length
-      ? `EXP. ${r.numero}: respondieron ${r.empresas.length} empresa(s), ${total} archivo(s).`
-      : `EXP. ${r.numero}: no se encontraron respuestas con adjuntos.`;
-    caja.appendChild(cab);
-    if (r.hilos) {
-      const sub = document.createElement('p');
-      sub.className = 'nota';
-      sub.textContent = `${r.hilos} hilo(s) con ese expediente en el asunto`
-        + (r.mios ? `, incluidos ${r.mios} correo(s) tuyos (no se descargan).` : '.');
-      caja.appendChild(sub);
-    }
-    if (r.repetidos) {
-      const rep = document.createElement('p');
-      rep.className = 'nota';
-      // Al responder, el correo del proveedor readjunta lo anterior: se ve
-      // cuántas copias se saltaron para que no parezca que falta algo.
-      rep.textContent = `Se omitieron ${r.repetidos} copia(s) repetida(s): archivos `
-        + 'que el proveedor volvió a adjuntar al responder, o tu propio '
-        + 'requerimiento devuelto.';
-      caja.appendChild(rep);
-    }
-    const lista = document.createElement('ul');
-    lista.className = 'correo-empresas';
-    r.empresas.forEach((e) => {
-      const li = document.createElement('li');
-      const n = document.createElement('strong');
-      n.textContent = e.nombre;
-      li.appendChild(n);
-      const d = document.createElement('span');
-      d.textContent = ` · ${e.correo}`;
-      li.appendChild(d);
-      const c = document.createElement('em');
-      const adj = e.archivos.filter((a) => !a.esCorreo).length;
-      c.textContent = `${e.archivos.length} archivo(s): ${adj} adjunto(s) + `
-        + `${e.archivos.length - adj} correo(s) en PDF`;
-      li.appendChild(c);
-      lista.appendChild(li);
-    });
-    caja.appendChild(lista);
-    $('#correoAcciones').hidden = !r.empresas.length;
-  }
-
-  function conectarCorreo() {
-    if (!$('#correoConectar')) return;
-    const origen = $('#correoOrigen');
-    if (origen) origen.textContent = location.origin;
-    if (!G.correo.disponible()) {
-      $('#correoNoDisponible').hidden = false;
-      $('#correoConectar').disabled = true;
-    }
-    $('#correoClienteId').value = G.correo.clienteIdGuardado();
-    if (!$('#correoClienteId').value) $('#correoConfig').open = true;
-    correoEstado();
-
-    $('#correoConectar').addEventListener('click', async () => {
-      const id = ($('#correoClienteId').value || '').trim();
-      if (!id) {
-        $('#correoConfig').open = true;
-        G.aviso('Primero pega el ID de cliente de Google (ver la configuración).', 'error');
-        return;
-      }
-      G.cargando(true, 'Abriendo la ventana de Google…');
-      try {
-        const cuenta = await G.correo.conectar(id);
-        G.aviso(`Conectado como ${cuenta}. Solo lectura.`, 'ok');
-      } catch (e) {
-        G.aviso('No se pudo conectar: ' + e.message, 'error');
-      } finally {
-        G.cargando(false);
-        correoEstado();
-      }
-    });
-
-    $('#correoSalir').addEventListener('click', () => {
-      G.correo.desconectar();
-      correoEstado();
-      G.aviso('Sesión de Gmail cerrada.', 'ok');
-    });
-
-    $('#correoBuscar').addEventListener('click', async () => {
-      const numero = ($('#correoExpediente').value || '').replace(/[^\d]/g, '');
-      if (!numero) { G.aviso('Escribe el número de expediente.', 'error'); return; }
-      G.cargando(true, 'Buscando en tu correo…');
-      $('#correoResumen').hidden = true;
-      $('#correoAcciones').hidden = true;
-      try {
-        cosecha = await G.correo.recolectar(numero, (t) => {
-          $('#cargandoTexto').textContent = t;
-        });
-        pintarResumenCorreo(cosecha);
-        G.aviso(cosecha.empresas.length
-          ? `Listo: ${cosecha.empresas.length} empresa(s).`
-          : 'No se encontró nada con ese expediente.', cosecha.empresas.length ? 'ok' : '');
-      } catch (e) {
-        console.error(e);
-        G.aviso('No se pudo buscar: ' + e.message, 'error');
-        correoEstado();
-      } finally {
-        G.cargando(false);
-      }
-    });
-
-    $('#correoAlTaller').addEventListener('click', async () => {
-      if (!cosecha || !cosecha.empresas.length) return;
-      const archivos = G.correo.comoArchivos(cosecha);
-      await G.anadirArchivos(archivos);
-    });
-
-    $('#correoAGuardar').addEventListener('click', async () => {
-      if (!cosecha || !cosecha.empresas.length) return;
-      try {
-        if (!G.carpeta.actual()) {
-          if (!G.carpeta.soportado()) {
-            G.aviso('Elegir carpeta solo funciona en Chrome o Edge.', 'error');
-            return;
-          }
-          await G.carpeta.vincular();
-          pintarCarpeta();
-        }
-        G.cargando(true, 'Guardando…');
-        const r = await G.correo.guardarEnCarpeta(cosecha, (t) => {
-          $('#cargandoTexto').textContent = t;
-        });
-        G.aviso(`Guardado en «${r.carpeta}»: ${r.escritos} archivo(s).`, 'ok');
-      } catch (e) {
-        if (e && e.name === 'AbortError') return;
-        G.aviso('No se pudo guardar: ' + e.message, 'error');
-      } finally {
-        G.cargando(false);
-      }
-    });
-  }
-
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
     const est = $('#carpetaEstado'), nota = $('#carpetaNota');
@@ -1828,8 +1673,6 @@
       anadir(lote);
     });
     ['#btnAbrir', '#btnAbrir2', '#zonaSoltar'].forEach((s) => $(s).addEventListener('click', () => entrada.click()));
-    conectarCorreo();
-
     // pegar con Ctrl+V: los archivos copiados entran igual que si se soltaran
     document.addEventListener('paste', (ev) => {
       const archivos = Array.from((ev.clipboardData && ev.clipboardData.files) || []);
