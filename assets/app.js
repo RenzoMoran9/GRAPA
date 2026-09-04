@@ -1424,6 +1424,16 @@
         + (r.mios ? `, incluidos ${r.mios} correo(s) tuyos (no se descargan).` : '.');
       caja.appendChild(sub);
     }
+    if (r.repetidos) {
+      const rep = document.createElement('p');
+      rep.className = 'nota';
+      // Al responder, el correo del proveedor readjunta lo anterior: se ve
+      // cuántas copias se saltaron para que no parezca que falta algo.
+      rep.textContent = `Se omitieron ${r.repetidos} copia(s) repetida(s): archivos `
+        + 'que el proveedor volvió a adjuntar al responder, o tu propio '
+        + 'requerimiento devuelto.';
+      caja.appendChild(rep);
+    }
     const lista = document.createElement('ul');
     lista.className = 'correo-empresas';
     r.empresas.forEach((e) => {

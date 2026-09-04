@@ -244,8 +244,12 @@
   function partirLienzo(lienzo, altoHojaPx) {
     const partes = [];
     const altoTrozo = Math.round(altoHojaPx * NITIDEZ);
-    for (let y = 0; y < lienzo.height; y += altoTrozo) {
-      const alto = Math.min(altoTrozo, lienzo.height - y);
+    const holgura = Math.round(altoTrozo * 0.2);
+    let y = 0;
+    while (y < lienzo.height) {
+      let fin = Math.min(y + altoTrozo, lienzo.height);
+      if (fin < lienzo.height) fin = corteEnBlanco(lienzo, fin, holgura, y);
+      const alto = fin - y;
       const trozo = document.createElement('canvas');
       trozo.width = lienzo.width;
       trozo.height = altoTrozo;                       // hojas todas del mismo alto
@@ -254,8 +258,43 @@
       cx.fillRect(0, 0, trozo.width, trozo.height);
       cx.drawImage(lienzo, 0, y, lienzo.width, alto, 0, 0, lienzo.width, alto);
       partes.push(trozo);
+      y = fin;
     }
     return partes;
+  }
+
+  /**
+   * Busca hacia arriba una franja en blanco donde cortar. Cortar a ciegas por
+   * el alto de la hoja parte los renglones por la mitad: media línea abajo de
+   * una hoja y la otra media arriba de la siguiente.
+   */
+  function corteEnBlanco(lienzo, yIdeal, holgura, yMinimo) {
+    const desde = Math.max(yMinimo + 1, yIdeal - holgura);
+    const banda = yIdeal - desde;
+    if (banda <= 0) return yIdeal;
+    let datos;
+    try {
+      datos = lienzo.getContext('2d', { willReadFrequently: true })
+        .getImageData(0, desde, lienzo.width, banda).data;
+    } catch (e) {
+      return yIdeal;                                  // sin poder mirar, se corta igual
+    }
+    const blanca = (fila) => {
+      for (let x = 0; x < lienzo.width; x += 2) {      // de dos en dos basta
+        const i = (fila * lienzo.width + x) * 4;
+        if (datos[i] < 245 || datos[i + 1] < 245 || datos[i + 2] < 245) return false;
+      }
+      return true;
+    };
+    for (let fila = banda - 1; fila >= 0; fila--) {
+      if (!blanca(fila)) continue;
+      // Se corta por el MEDIO del blanco, no por su borde: así la hoja
+      // siguiente no empieza con el texto pegado al canto.
+      let arriba = fila;
+      while (arriba > 0 && blanca(arriba - 1)) arriba--;
+      return desde + Math.floor((arriba + fila) / 2) + 1;
+    }
+    return yIdeal;                                    // todo ocupado: no queda otra
   }
 
   /**

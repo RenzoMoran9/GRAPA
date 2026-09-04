@@ -210,11 +210,13 @@
     avisar('Buscando en tu correo…');
     let ids = await buscarHilos(`subject:${numero}`);
     if (!ids.length) ids = await buscarHilos(`${numero}`);   // por si el asunto no lo trae
-    if (!ids.length) return { numero, empresas: [], hilos: 0, mios: 0 };
+    if (!ids.length) return { numero, empresas: [], hilos: 0, mios: 0, repetidos: 0 };
 
     const empresas = new Map();
+    const devueltos = new Set();     // lo que yo mandé y me vuelve en las respuestas
     let hilosValidos = 0;
     let mios = 0;
+    let repetidos = 0;
     const limitados = ids.slice(0, MAX_HILOS);
 
     for (let i = 0; i < limitados.length; i++) {
@@ -226,6 +228,15 @@
       hilosValidos++;
 
       mensajes.sort((a, b) => Number(a.internalDate || 0) - Number(b.internalDate || 0));
+      // Al responder, el correo del proveedor vuelve a adjuntar lo que yo le
+      // mandé. Se apunta para no meter mi propio requerimiento como si fuera
+      // documentación suya.
+      mensajes.forEach((m) => {
+        const de = separarRemitente(cabecera(m, 'From'));
+        if (miCorreo && de.correo === miCorreo) {
+          adjuntosDe(m).forEach((a) => devueltos.add(senal(a)));
+        }
+      });
       for (const m of mensajes) {
         const de = separarRemitente(cabecera(m, 'From'));
         if (!de.correo) continue;
@@ -235,6 +246,7 @@
         if (!empresas.has(clave)) {
           empresas.set(clave, {
             correo: de.correo, nombre: nombreEmpresa(de), mensajes: [], archivos: [],
+            vistos: new Set(), huellas: new Set(),
           });
         }
         empresas.get(clave).mensajes.push({
@@ -274,12 +286,25 @@
         });
         for (const adj of men.adjuntos) {
           if (adj.enLinea) continue;                       // logos de la firma, no
+          const marca = senal(adj);
+          // Mi propio requerimiento, que vuelve pegado a la respuesta
+          if (devueltos.has(marca)) { repetidos++; continue; }
+          // La misma copia que ya trajo esta empresa en otro mensaje del hilo
+          if (emp.vistos.has(marca)) { repetidos++; continue; }
+          emp.vistos.add(marca);
+
           avisar(`${emp.nombre}: bajando ${adj.nombre}…`);
           const datos = await api(`/messages/${men.id}/attachments/${adj.id}`);
+          const bytes = deBase64Url(datos.data);
+          // Última red: el mismo contenido con otro nombre
+          const h = await huella(bytes);
+          if (emp.huellas.has(h)) { repetidos++; continue; }
+          emp.huellas.add(h);
+
           emp.archivos.push({
             orden: ++n,
             nombre: prefijo(n) + '-' + G.nombreSeguro(adj.nombre, 'adjunto'),
-            bytes: deBase64Url(datos.data), tipo: adj.tipo, cuando: men.cuando,
+            bytes, tipo: adj.tipo, cuando: men.cuando,
           });
         }
       }
@@ -289,10 +314,23 @@
       });
     }
     lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-    return { numero, empresas: lista, hilos: hilosValidos, mios };
+    return { numero, empresas: lista, hilos: hilosValidos, mios, repetidos };
   }
 
   const prefijo = (n) => String(n).padStart(2, '0');
+
+  /** Nombre + tamaño: reconoce la copia ANTES de gastar la descarga. */
+  const senal = (adj) => `${String(adj.nombre).toLowerCase()}|${adj.tam}`;
+
+  /** Huella del contenido: reconoce la copia aunque venga con otro nombre. */
+  async function huella(bytes) {
+    try {
+      const h = await crypto.subtle.digest('SHA-256', bytes.slice(0).buffer);
+      return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      return 'sin-huella-' + bytes.length + '-' + Math.random();
+    }
+  }
 
   async function buscarHilos(consulta) {
     const vistos = [];
