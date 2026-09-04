@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260904b">
+<link rel="stylesheet" href="assets/styles.css?v=20260904c">
 </head>
 <body>
 
@@ -47,6 +47,51 @@
         </div>
         <p class="nota">Word y Excel se convierten a PDF aquí mismo, sin subirlos a ningún lado. Revisa cómo quedan: el reparto de líneas y hojas puede moverse un poco respecto a Office. También puedes pegarlos con Ctrl+V.</p>
         <ul class="lista-docs" id="listaDocs"></ul>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="correo">
+      <button class="bloque-cabecera" type="button"><span class="ico">📧</span> Cotizaciones por correo</button>
+      <div class="bloque-cuerpo">
+        <p class="nota">Busca en <strong>tu</strong> Gmail los hilos de un expediente, baja los adjuntos de cada proveedor y arma también el PDF del correo con el que llegaron.</p>
+
+        <div class="correo-aviso" id="correoNoDisponible" hidden>
+          Este módulo necesita la versión web (https). Google no permite iniciar sesión desde el archivo local.
+        </div>
+
+        <details class="correo-config" id="correoConfig">
+          <summary>Configurar el acceso a Gmail (una sola vez)</summary>
+          <ol class="correo-pasos">
+            <li>Entra a <strong>console.cloud.google.com</strong> y crea un proyecto.</li>
+            <li>En <em>APIs y servicios → Biblioteca</em>, activa <strong>Gmail API</strong>.</li>
+            <li>En <em>Pantalla de consentimiento</em>, tipo <strong>Externo</strong>, y agrégate como <strong>usuario de prueba</strong>.</li>
+            <li>En <em>Credenciales → Crear → ID de cliente de OAuth → Aplicación web</em>, agrega este origen autorizado:
+              <code id="correoOrigen"></code></li>
+            <li>Pega aquí el <strong>ID de cliente</strong> que te da (termina en <code>.apps.googleusercontent.com</code>):</li>
+          </ol>
+          <label class="campo"><input type="text" id="correoClienteId" placeholder="0000000000-xxxxx.apps.googleusercontent.com" autocomplete="off"></label>
+          <p class="nota">El ID de cliente es público por diseño: va escrito en la página de cualquier app web. No es una contraseña.</p>
+        </details>
+
+        <div class="correo-sesion">
+          <button class="btn btn-primario ancho" id="correoConectar">Conectar con Gmail</button>
+          <div class="correo-cuenta" id="correoCuenta" hidden>
+            <span>✓ <strong id="correoCuentaNombre"></strong></span>
+            <button class="btn btn-mini" id="correoSalir" title="Cerrar la sesión de Gmail">Salir</button>
+          </div>
+        </div>
+
+        <label class="campo">N° de expediente
+          <input type="text" id="correoExpediente" placeholder="Ej. 10488" autocomplete="off" inputmode="numeric">
+        </label>
+        <button class="btn btn-suave ancho" id="correoBuscar" disabled>Buscar cotizaciones</button>
+
+        <div class="correo-resumen" id="correoResumen" hidden></div>
+        <div class="fila-botones" id="correoAcciones" hidden>
+          <button class="btn btn-primario" id="correoAlTaller">Cargar al taller</button>
+          <button class="btn btn-suave" id="correoAGuardar">Guardar en carpeta</button>
+        </div>
+        <p class="nota nota-privacidad">Permiso de <strong>solo lectura</strong>: no puede enviar, borrar ni cambiar nada de tu correo. Los mensajes van de Google a tu navegador y de ahí a tu carpeta, sin pasar por ningún servidor mío.</p>
       </div>
     </section>
 
@@ -436,10 +481,11 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260904b"></script>
-<script src="assets/office.js?v=20260904b"></script>
-<script src="assets/expedientes.js?v=20260904b"></script>
-<script src="assets/firmas.js?v=20260904b"></script>
-<script src="assets/app.js?v=20260904b"></script>
+<script src="assets/core.js?v=20260904c"></script>
+<script src="assets/office.js?v=20260904c"></script>
+<script src="assets/correo.js?v=20260904c"></script>
+<script src="assets/expedientes.js?v=20260904c"></script>
+<script src="assets/firmas.js?v=20260904c"></script>
+<script src="assets/app.js?v=20260904c"></script>
 </body>
 </html>

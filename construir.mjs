@@ -29,6 +29,7 @@ const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
   'assets/core.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
+  'assets/correo.js',
   'assets/app.js',
 ];
 

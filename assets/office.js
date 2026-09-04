@@ -236,6 +236,41 @@
     }
   }
 
+  /**
+   * Corta un lienzo muy alto en hojas del alto pedido. Se usa cuando el
+   * contenido no viene en bloques que se puedan repartir (el cuerpo de un
+   * correo, por ejemplo).
+   */
+  function partirLienzo(lienzo, altoHojaPx) {
+    const partes = [];
+    const altoTrozo = Math.round(altoHojaPx * NITIDEZ);
+    for (let y = 0; y < lienzo.height; y += altoTrozo) {
+      const alto = Math.min(altoTrozo, lienzo.height - y);
+      const trozo = document.createElement('canvas');
+      trozo.width = lienzo.width;
+      trozo.height = altoTrozo;                       // hojas todas del mismo alto
+      const cx = trozo.getContext('2d');
+      cx.fillStyle = '#fff';
+      cx.fillRect(0, 0, trozo.width, trozo.height);
+      cx.drawImage(lienzo, 0, y, lienzo.width, alto, 0, 0, lienzo.width, alto);
+      partes.push(trozo);
+    }
+    return partes;
+  }
+
+  /**
+   * Lo que necesita cualquier módulo que quiera imprimir HTML a PDF sin salir
+   * del navegador: una caja donde componer, la foto y el armado del PDF.
+   */
+  G.papel = {
+    A4,
+    MARGEN,
+    caja: cajaOculta,
+    fotografiar,
+    partir: partirLienzo,
+    aPdf: pdfDesdeLienzos,
+  };
+
   /* ------------------------------ entrada ----------------------------- */
 
   /** Devuelve los bytes de un PDF a partir de un archivo de Office. */

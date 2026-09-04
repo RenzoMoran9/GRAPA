@@ -98,6 +98,35 @@ o un archivo por página.
 
 ---
 
+
+## Cotizaciones por correo (módulo aparte)
+
+Busca en **tu** Gmail los hilos de un expediente, baja los adjuntos de cada
+proveedor y arma también un PDF del correo con el que llegaron, para adjuntarlo
+al expediente junto a la cotización.
+
+- Escribes el número (`10488`) y busca los asuntos con `EXP. 10488` y sus
+  variantes: `EXP 10488`, `EXP.10488`, `EXP-10488`, `EXPEDIENTE 10488`, con `//`
+  o guion detrás. No confunde `10488` con `104881`.
+- Agrupa por empresa usando el correo del remitente y numera los archivos
+  `01`, `02`, `03`… en el orden en que llegaron, para que el PDF final salga en
+  secuencia.
+- Guarda en la carpeta que elijas como `EXP-10488 / empresa / archivos`, sin
+  pasar por Descargas, y también carga todo de golpe al taller.
+- Los adjuntos en Word o Excel se convierten a PDF por el camino.
+
+**Permisos y privacidad.** Pide `gmail.readonly`: solo lectura, no puede enviar,
+borrar ni cambiar nada. El token vive en memoria y se pierde al cerrar la
+pestaña. Los correos van de Google a tu navegador y de ahí a tu carpeta, sin
+pasar por ningún servidor de nadie. El cuerpo del correo se lee en un documento
+inerte y se le quitan los recursos externos, así que los píxeles de rastreo que
+traen muchos correos no llegan a dispararse.
+
+**Requisitos.** Funciona en la versión web (https), no en el archivo local:
+Google no permite iniciar sesión desde `file://`. Hay que crear una vez un
+proyecto en Google Cloud, activar la Gmail API y pegar el ID de cliente en el
+panel; el propio panel lleva los pasos.
+
 ## Atajos
 
 | Atajo | Qué hace |
