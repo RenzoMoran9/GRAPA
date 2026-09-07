@@ -117,6 +117,10 @@ hojas sueltas.
   de paquetes se enciende sola al llegar el segundo, y **☰ Ver todas las hojas**
   las muestra todas juntas cuando hace falta.
 
+- **El tacho**: al arrastrar una hoja o un paquete asoma abajo a la derecha. Lo
+  que le sueltes se quita, y el aviso recuerda que **Ctrl+Z** lo devuelve —con
+  su nombre incluido, si era un paquete.
+
 Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 ## Atajos

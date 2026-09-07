@@ -111,11 +111,18 @@
   const historial = { atras: [], adelante: [] };
 
   function instantanea() {
-    return JSON.stringify({ paginas: E.paginas, seleccion: Array.from(E.seleccion) });
+    // Los paquetes van dentro: si no, al deshacer el borrado de uno volverían
+    // sus hojas pero con el nombre perdido, rebautizado con el del archivo.
+    return JSON.stringify({
+      paginas: E.paginas,
+      seleccion: Array.from(E.seleccion),
+      paquetes: Array.from(E.paquetes.values()),
+    });
   }
   function aplicarInstantanea(txt) {
     const d = JSON.parse(txt);
     E.paginas = d.paginas;
+    if (d.paquetes) E.paquetes = new Map(d.paquetes.map((q) => [q.id, q]));
     E.seleccion = new Set(d.seleccion.filter((u) => d.paginas.some((p) => p.uid === u)));
     pintar();
   }
@@ -877,12 +884,61 @@
 
   let arrastrandoPaquete = null;
 
+  /** El tacho solo asoma mientras arrastras: el resto del tiempo estorba. */
+  function mostrarTacho(si) {
+    const t = $('#tacho');
+    if (!t) return;
+    t.hidden = !si;
+    if (!si) t.classList.remove('encima');
+  }
+
+  function conectarTacho() {
+    const t = $('#tacho');
+    if (!t) return;
+    ['dragenter', 'dragover'].forEach((tipo) => t.addEventListener(tipo, (ev) => {
+      if (!arrastrando && !arrastrandoPaquete) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      t.classList.add('encima');
+    }));
+    t.addEventListener('dragleave', (ev) => {
+      if (t.contains(ev.relatedTarget)) return;
+      t.classList.remove('encima');
+    });
+    t.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      t.classList.remove('encima');
+      if (arrastrandoPaquete) {
+        const grupo = paquetesEnOrden().find((g) => g.paquete.id === arrastrandoPaquete);
+        arrastrandoPaquete = null;
+        mostrarTacho(false);
+        if (!grupo) return;
+        marcar();
+        const nombre = grupo.paquete.nombre;
+        const cuantas = grupo.paginas.length;
+        eliminar(grupo.paginas);
+        G.aviso(`«${nombre}» al tacho: ${cuantas} hoja(s). Ctrl+Z lo devuelve.`, 'ok');
+        return;
+      }
+      if (!arrastrando) return;
+      const fuera = new Set(arrastrando);
+      const objs = E.paginas.filter((p) => fuera.has(p.uid));
+      arrastrando = null;
+      mostrarTacho(false);
+      if (!objs.length) return;
+      marcar();
+      eliminar(objs);
+      G.aviso(`${objs.length} hoja(s) al tacho. Ctrl+Z las devuelve.`, 'ok');
+    });
+  }
+
   $('#rejilla').addEventListener('dragstart', (ev) => {
     const tarjeta = ev.target.closest('.pag');
     if (!tarjeta) return;
     if (tarjeta.dataset.paquete) {
       // se arrastra la cotización entera, con todas sus hojas dentro
       arrastrandoPaquete = tarjeta.dataset.paquete;
+      mostrarTacho(true);
       ev.dataTransfer.effectAllowed = 'move';
       ev.dataTransfer.setData('text/plain', arrastrandoPaquete);
       ev.dataTransfer.setData(TIPO_HOJA, arrastrandoPaquete);
@@ -899,6 +955,7 @@
       $$('.pag').forEach((t) => t.classList.toggle('sel', t.dataset.uid === uid));
     }
     arrastrando = Array.from(E.seleccion);
+    mostrarTacho(true);
     ev.dataTransfer.effectAllowed = 'move';
     ev.dataTransfer.setData('text/plain', uid);
     ev.dataTransfer.setData(TIPO_HOJA, uid);
@@ -910,6 +967,7 @@
   $('#rejilla').addEventListener('dragend', () => {
     arrastrando = null;
     arrastrandoPaquete = null;
+    mostrarTacho(false);
     $$('.pag').forEach((t) => t.classList.remove('arrastrando', 'destino-izq', 'destino-der'));
   });
 
@@ -955,6 +1013,7 @@
       let plano = [];
       orden.forEach((id) => { plano = plano.concat(porId.get(id) || []); });
       E.paginas = plano;
+      mostrarTacho(false);
       pintar();
       return;
     }
@@ -978,6 +1037,7 @@
     E.paginas = resto;
     adoptarPaquete(movidas);
     arrastrando = null;
+    mostrarTacho(false);
     pintar();
   });
 
@@ -2044,6 +2104,8 @@
       ev.preventDefault();
       anadir(archivos, null);
     });
+
+    conectarTacho();
 
     conectarSoltar($('#zonaSoltar'), 'encima');
     conectarSoltar($('#lienzo'), 'encima', true);
