@@ -1852,8 +1852,10 @@
     lector.obs = new IntersectionObserver((entradas) => {
       entradas.forEach((en) => {
         const hoja = en.target;
-        const i = Number(hoja.dataset.indice);
-        const pagina = E.paginas[i];
+        // La hoja se identifica por su uid, no por su posición: dentro de un
+        // paquete la posición es la del paquete y buscarla en la lista global
+        // dibujaba una página que no era la que se está mirando.
+        const pagina = E.paginas.find((p) => p.uid === hoja.dataset.uid);
         if (!pagina) return;
         if (en.isIntersecting) {
           if (hoja.dataset.pintada === '1') return;
@@ -1890,6 +1892,7 @@
       const hoja = document.createElement('div');
       hoja.className = 'hoja';
       hoja.dataset.indice = i;
+      hoja.dataset.uid = pagina.uid;
       hoja.dataset.pintada = '0';
 
       const hueco = document.createElement('div');
