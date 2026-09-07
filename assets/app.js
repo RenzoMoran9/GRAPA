@@ -571,9 +571,9 @@
     [
       ['↺', 'Girar a la izquierda', () => { marcar(); pagina.giro = G.norm(pagina.giro - 90); pintar(); }],
       ['↻', 'Girar a la derecha', () => { marcar(); pagina.giro = G.norm(pagina.giro + 90); pintar(); }],
-      // el índice es el de la lista que se está viendo: dentro de un paquete,
-      // el lector recorre solo sus hojas y el global no le corresponde
-      ['🔍', 'Ver esta hoja en grande', () => abrirLector(hojasVisibles().indexOf(pagina))],
+      // se pasa la página misma: cualquier posición que se calcule aquí puede
+      // no corresponder con la lista que el lector acabe recorriendo
+      ['🔍', 'Ver esta hoja en grande', () => abrirLector(pagina)],
       ['✍', 'Colocar firma o sello', () => abrirFirmar(pagina)],
       ['⧉', 'Duplicar', () => { marcar(); duplicar([pagina]); }],
       ['🗑', 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
@@ -1944,12 +1944,24 @@
     if (hoja) hoja.scrollIntoView({ behavior: alInstante ? 'instant' : 'smooth', block: 'start' });
   }
 
-  function abrirLector(indice) {
-    if (!hojasVisibles().length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+  /** Admite la página, su posición, o nada (y entonces la que esté marcada). */
+  function abrirLector(donde) {
+    const visibles = hojasVisibles();
+    if (!visibles.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    let indice;
+    if (donde && typeof donde === 'object') indice = visibles.indexOf(donde);
+    else if (typeof donde === 'number') indice = donde;
+    else {
+      // Sin decirle cuál, la primera seleccionada. Antes usaba la última que
+      // se hubiera mirado, que podía ser de otro rato y de otra hoja.
+      const sel = visibles.findIndex((p) => E.seleccion.has(p.uid));
+      indice = sel >= 0 ? sel : lector.actual;
+    }
+    if (!(indice >= 0)) indice = 0;
     lector.abierto = true;
     $('#lector').hidden = false;
     construirLector();
-    irAHoja(indice == null ? lector.actual : indice, true);
+    irAHoja(indice, true);
   }
 
   function cerrarLector() {
