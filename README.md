@@ -99,6 +99,26 @@ o un archivo por página.
 ---
 
 
+
+## Paquetes
+
+Lo que entra de una vez es un **paquete**. Si una empresa manda su cotización en
+tres archivos y los cargas juntos, esos tres son un solo paquete: en el taller
+se ve **una tarjeta** con la portada, el nombre y cuántas hojas trae, no quince
+hojas sueltas.
+
+- **Ver** entra en el paquete: ahí sí salen sus hojas y se giran, reordenan,
+  firman o borran como siempre. **◀ Paquetes** vuelve.
+- El nombre sale del archivo, pero se cambia con doble clic o con **✎**: ponle
+  el nombre de la empresa y lo reconoces de un vistazo.
+- **＋** carga más archivos dentro de un paquete que ya existe.
+- **Arrastrar** una tarjeta mueve la cotización entera con todas sus hojas.
+- Con un solo documento no cambia nada: se ven las hojas como siempre. La vista
+  de paquetes se enciende sola al llegar el segundo, y **☰ Ver todas las hojas**
+  las muestra todas juntas cuando hace falta.
+
+Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
+
 ## Atajos
 
 | Atajo | Qué hace |

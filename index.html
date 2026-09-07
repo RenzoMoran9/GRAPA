@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260907a">
+<link rel="stylesheet" href="assets/styles.css?v=20260907b">
 </head>
 <body>
 
@@ -188,6 +188,9 @@
         <span id="infoSeleccion">nada seleccionado</span>
       </div>
       <div class="taller-herramientas">
+        <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas">📦 Ver por paquetes</button>
+        <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes">◀ Paquetes</button>
+        <span class="separador-vertical"></span>
         <button class="btn btn-mini" id="btnSelTodo">Seleccionar todo</button>
         <button class="btn btn-mini" id="btnSelNada">Ninguna</button>
         <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
@@ -377,6 +380,20 @@
 </div>
 
 <!-- ============ CONFIRMACIÓN ============ -->
+<div class="modal" id="modalTexto" hidden>
+  <div class="modal-caja modal-angosta">
+    <header class="modal-cabecera"><h3 id="textoTitulo">Escribe un nombre</h3></header>
+    <div class="modal-cuerpo">
+      <p class="confirmar-mensaje" id="textoMensaje"></p>
+      <label class="campo"><input type="text" id="textoValor" autocomplete="off"></label>
+      <div class="fila-botones">
+        <button class="btn btn-suave" id="textoNo">Cancelar</button>
+        <button class="btn btn-primario" id="textoSi">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="modalConfirmar" hidden>
   <div class="modal-caja modal-angosta">
     <header class="modal-cabecera">
@@ -436,10 +453,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260907a"></script>
-<script src="assets/office.js?v=20260907a"></script>
-<script src="assets/expedientes.js?v=20260907a"></script>
-<script src="assets/firmas.js?v=20260907a"></script>
-<script src="assets/app.js?v=20260907a"></script>
+<script src="assets/core.js?v=20260907b"></script>
+<script src="assets/office.js?v=20260907b"></script>
+<script src="assets/expedientes.js?v=20260907b"></script>
+<script src="assets/firmas.js?v=20260907b"></script>
+<script src="assets/app.js?v=20260907b"></script>
 </body>
 </html>

@@ -34,7 +34,8 @@
 
   G.estado = {
     fuentes: new Map(),  // id -> {id, nombre, bytes, color, paginas:[{w,h,giro}]}
-    paginas: [],         // {uid, fuenteId, indice, giro, sellos:[], corte}
+    paginas: [],         // {uid, fuenteId, paqueteId, indice, giro, sellos:[], corte}
+    paquetes: new Map(), // id -> {id, nombre, color}  ·  lo que entró de una vez
     seleccion: new Set(),
     firmas: [],
     firmaActiva: null,

@@ -485,3 +485,53 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .nombre-nota .btn-mini { flex: none; }
 
+
+/* Paquetes: lo que entró de una vez se ve como un fajo grapado */
+.rejilla-paquetes { align-items: start; }
+
+.pag.paquete { cursor: default; padding-right: 10px; padding-bottom: 10px; }
+
+/* Todas las portadas con la misma altura, para que la parrilla quede pareja
+   aunque las cotizaciones vengan en A4, oficio o carta. */
+.pag.paquete .pag-marco {
+  aspect-ratio: 1 / 1.22 !important;
+  overflow: hidden;
+  /* las hojas de detrás: dos bordes desplazados, sin elementos de más */
+  box-shadow:
+    4px 4px 0 -1px var(--hoja, #fff), 5px 5px 0 0 var(--borde, #cfcfcf),
+    9px 9px 0 -1px var(--hoja, #fff), 10px 10px 0 0 var(--borde, #cfcfcf);
+}
+.pag.paquete .mini { width: 100% !important; height: auto !important; }
+
+.paquete-cuenta {
+  position: absolute; right: 6px; bottom: 6px;
+  background: rgba(0, 0, 0, .72); color: #fff;
+  font-size: 11px; padding: 2px 7px; border-radius: 999px;
+}
+.paquete-pie {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 8px 2px 2px; min-width: 0;
+}
+.paquete-nombre {
+  font-size: 12.5px; line-height: 1.25; cursor: text;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.paquete-meta { font-size: 11px; opacity: .65; }
+.paquete-acciones { display: flex; gap: 4px; align-items: center; padding: 6px 2px 2px; }
+.paquete-acciones .btn { padding: 3px 9px; font-size: 12px; }
+
+/* En la vista de paquetes no se enseñan herramientas de hoja suelta: actuarían
+   sobre una selección que no se está viendo. */
+.taller-herramientas.solo-paquetes #btnSelTodo,
+.taller-herramientas.solo-paquetes #btnSelNada,
+.taller-herramientas.solo-paquetes #btnSelInvertir,
+.taller-herramientas.solo-paquetes #btnLector,
+.taller-herramientas.solo-paquetes #btnGirarIzq,
+.taller-herramientas.solo-paquetes #btnGirarDer,
+.taller-herramientas.solo-paquetes #btnDuplicar,
+.taller-herramientas.solo-paquetes #btnMoverInicio,
+.taller-herramientas.solo-paquetes #btnMoverFin,
+.taller-herramientas.solo-paquetes #btnSaltoPos,
+.taller-herramientas.solo-paquetes #btnEliminar,
+.taller-herramientas.solo-paquetes .salto-pos,
+.taller-herramientas.solo-paquetes .separador-vertical { display: none; }

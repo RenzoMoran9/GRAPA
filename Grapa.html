@@ -502,6 +502,56 @@ button,input,select,textarea{font:inherit;color:inherit}
 .nombre-nota .btn-mini { flex: none; }
 
 
+/* Paquetes: lo que entró de una vez se ve como un fajo grapado */
+.rejilla-paquetes { align-items: start; }
+
+.pag.paquete { cursor: default; padding-right: 10px; padding-bottom: 10px; }
+
+/* Todas las portadas con la misma altura, para que la parrilla quede pareja
+   aunque las cotizaciones vengan en A4, oficio o carta. */
+.pag.paquete .pag-marco {
+  aspect-ratio: 1 / 1.22 !important;
+  overflow: hidden;
+  /* las hojas de detrás: dos bordes desplazados, sin elementos de más */
+  box-shadow:
+    4px 4px 0 -1px var(--hoja, #fff), 5px 5px 0 0 var(--borde, #cfcfcf),
+    9px 9px 0 -1px var(--hoja, #fff), 10px 10px 0 0 var(--borde, #cfcfcf);
+}
+.pag.paquete .mini { width: 100% !important; height: auto !important; }
+
+.paquete-cuenta {
+  position: absolute; right: 6px; bottom: 6px;
+  background: rgba(0, 0, 0, .72); color: #fff;
+  font-size: 11px; padding: 2px 7px; border-radius: 999px;
+}
+.paquete-pie {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 8px 2px 2px; min-width: 0;
+}
+.paquete-nombre {
+  font-size: 12.5px; line-height: 1.25; cursor: text;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.paquete-meta { font-size: 11px; opacity: .65; }
+.paquete-acciones { display: flex; gap: 4px; align-items: center; padding: 6px 2px 2px; }
+.paquete-acciones .btn { padding: 3px 9px; font-size: 12px; }
+
+/* En la vista de paquetes no se enseñan herramientas de hoja suelta: actuarían
+   sobre una selección que no se está viendo. */
+.taller-herramientas.solo-paquetes #btnSelTodo,
+.taller-herramientas.solo-paquetes #btnSelNada,
+.taller-herramientas.solo-paquetes #btnSelInvertir,
+.taller-herramientas.solo-paquetes #btnLector,
+.taller-herramientas.solo-paquetes #btnGirarIzq,
+.taller-herramientas.solo-paquetes #btnGirarDer,
+.taller-herramientas.solo-paquetes #btnDuplicar,
+.taller-herramientas.solo-paquetes #btnMoverInicio,
+.taller-herramientas.solo-paquetes #btnMoverFin,
+.taller-herramientas.solo-paquetes #btnSaltoPos,
+.taller-herramientas.solo-paquetes #btnEliminar,
+.taller-herramientas.solo-paquetes .salto-pos,
+.taller-herramientas.solo-paquetes .separador-vertical { display: none; }
+
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
 
@@ -685,6 +735,9 @@ button,input,select,textarea{font:inherit;color:inherit}
         <span id="infoSeleccion">nada seleccionado</span>
       </div>
       <div class="taller-herramientas">
+        <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas">📦 Ver por paquetes</button>
+        <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes">◀ Paquetes</button>
+        <span class="separador-vertical"></span>
         <button class="btn btn-mini" id="btnSelTodo">Seleccionar todo</button>
         <button class="btn btn-mini" id="btnSelNada">Ninguna</button>
         <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
@@ -874,6 +927,20 @@ button,input,select,textarea{font:inherit;color:inherit}
 </div>
 
 <!-- ============ CONFIRMACIÓN ============ -->
+<div class="modal" id="modalTexto" hidden>
+  <div class="modal-caja modal-angosta">
+    <header class="modal-cabecera"><h3 id="textoTitulo">Escribe un nombre</h3></header>
+    <div class="modal-cuerpo">
+      <p class="confirmar-mensaje" id="textoMensaje"></p>
+      <label class="campo"><input type="text" id="textoValor" autocomplete="off"></label>
+      <div class="fila-botones">
+        <button class="btn btn-suave" id="textoNo">Cancelar</button>
+        <button class="btn btn-primario" id="textoSi">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="modalConfirmar" hidden>
   <div class="modal-caja modal-angosta">
     <header class="modal-cabecera">
@@ -1112,7 +1179,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   G.estado = {
     fuentes: new Map(),  // id -> {id, nombre, bytes, color, paginas:[{w,h,giro}]}
-    paginas: [],         // {uid, fuenteId, indice, giro, sellos:[], corte}
+    paginas: [],         // {uid, fuenteId, paqueteId, indice, giro, sellos:[], corte}
+    paquetes: new Map(), // id -> {id, nombre, color}  ·  lo que entró de una vez
     seleccion: new Set(),
     firmas: [],
     firmaActiva: null,
@@ -2784,6 +2852,42 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    * a partir de ahí confirm() devuelve siempre que no, y los botones que
    * dependían de él se quedaban muertos sin explicación.
    */
+  /** Pide un texto con un cuadro propio (los del navegador se pueden suprimir). */
+  G.pedirTexto = function (opciones) {
+    const o = opciones || {};
+    return new Promise((resolve) => {
+      const modal = $('#modalTexto');
+      const campo = $('#textoValor');
+      const si = $('#textoSi');
+      const no = $('#textoNo');
+      $('#textoTitulo').textContent = o.titulo || 'Escribe un nombre';
+      $('#textoMensaje').textContent = o.mensaje || '';
+      campo.value = o.valor || '';
+      const cerrar = (valor) => {
+        modal.hidden = true;
+        si.removeEventListener('click', alSi);
+        no.removeEventListener('click', alNo);
+        modal.removeEventListener('click', alFondo);
+        document.removeEventListener('keydown', alTecla, true);
+        resolve(valor);
+      };
+      const alSi = () => cerrar(campo.value.trim() || null);
+      const alNo = () => cerrar(null);
+      const alFondo = (ev) => { if (ev.target === modal) cerrar(null); };
+      const alTecla = (ev) => {
+        if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(null); }
+        if (ev.key === 'Enter') { ev.stopPropagation(); ev.preventDefault(); alSi(); }
+      };
+      si.addEventListener('click', alSi);
+      no.addEventListener('click', alNo);
+      modal.addEventListener('click', alFondo);
+      document.addEventListener('keydown', alTecla, true);
+      modal.hidden = false;
+      campo.focus();
+      campo.select();
+    });
+  };
+
   G.confirmar = function (opciones) {
     const o = opciones || {};
     return new Promise((resolve) => {
@@ -2869,7 +2973,96 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   };
   const visDe = (p) => { const m = metaDe(p); return G.cajaVisible(m.w, m.h, p.giro); };
   const seleccionadas = () => E.paginas.filter((p) => E.seleccion.has(p.uid));
-  const objetivo = () => (E.seleccion.size ? seleccionadas() : E.paginas);
+  const objetivo = () => (E.seleccion.size ? seleccionadas() : hojasVisibles());
+
+  /* ---------------- paquetes ---------------- */
+  // Un paquete es lo que entró de una vez: si una empresa manda su cotización
+  // en tres archivos y se cargan juntos, esos tres son un paquete. Es solo una
+  // forma de ver y trabajar: el PDF final sale exactamente igual.
+  // Con un solo documento no hay nada que agrupar: se ven las hojas, como
+  // siempre. La vista de paquetes se enciende sola en cuanto llega el segundo,
+  // que es cuando empieza a estorbar tener todo suelto.
+  let vista = 'hojas';             // 'paquetes' | 'hojas'
+  let paqueteAbierto = null;       // id del paquete que se está mirando por dentro
+
+  const COLORES_PAQUETE = ['#e0532f', '#2f7de0', '#2fa36b', '#a3652f', '#7d2fe0', '#c02f7d'];
+  let contadorPaquete = 0;
+
+  function nuevoPaquete(nombre) {
+    const id = 'q' + (++contadorPaquete) + '-' + Date.now().toString(36);
+    const paq = {
+      id,
+      nombre: G.nombreSeguro(nombre, 'Paquete ' + contadorPaquete),
+      color: COLORES_PAQUETE[(contadorPaquete - 1) % COLORES_PAQUETE.length],
+    };
+    E.paquetes.set(id, paq);
+    return paq;
+  }
+
+  /** Páginas de antes de los paquetes (o de un expediente viejo): una por archivo. */
+  function asegurarPaquetes() {
+    const porFuente = new Map();
+    E.paginas.forEach((p) => {
+      if (p.paqueteId && E.paquetes.has(p.paqueteId)) return;
+      if (!porFuente.has(p.fuenteId)) {
+        const f = E.fuentes.get(p.fuenteId);
+        porFuente.set(p.fuenteId, nuevoPaquete(f ? f.nombre : 'Documento'));
+      }
+      p.paqueteId = porFuente.get(p.fuenteId).id;
+    });
+  }
+
+  /**
+   * Mantiene juntas las hojas de un mismo paquete y en el orden en que aparece
+   * cada paquete. Sin esto, mover una hoja al otro extremo dejaría el paquete
+   * partido en dos trozos por el expediente.
+   */
+  function normalizarPaquetes() {
+    const orden = [];
+    const grupos = new Map();
+    E.paginas.forEach((p) => {
+      if (!grupos.has(p.paqueteId)) { grupos.set(p.paqueteId, []); orden.push(p.paqueteId); }
+      grupos.get(p.paqueteId).push(p);
+    });
+    let plano = [];
+    orden.forEach((id) => { plano = plano.concat(grupos.get(id)); });
+    E.paginas = plano;
+    // se olvidan los paquetes que ya no tienen ninguna hoja
+    Array.from(E.paquetes.keys()).forEach((id) => { if (!grupos.has(id)) E.paquetes.delete(id); });
+    if (paqueteAbierto && !grupos.has(paqueteAbierto)) paqueteAbierto = null;
+  }
+
+  /** [{paquete, paginas}] en el orden en que están en el expediente. */
+  function paquetesEnOrden() {
+    const orden = [];
+    const grupos = new Map();
+    E.paginas.forEach((p) => {
+      if (!grupos.has(p.paqueteId)) { grupos.set(p.paqueteId, []); orden.push(p.paqueteId); }
+      grupos.get(p.paqueteId).push(p);
+    });
+    return orden.map((id) => ({ paquete: E.paquetes.get(id), paginas: grupos.get(id) }))
+      .filter((g) => g.paquete);
+  }
+
+  /** Lo que se ve ahora mismo: todo el expediente, o solo el paquete abierto. */
+  function hojasVisibles() {
+    return paqueteAbierto ? E.paginas.filter((p) => p.paqueteId === paqueteAbierto) : E.paginas;
+  }
+
+  /**
+   * Al soltar hojas en otro sitio del expediente, pasan a ser del paquete de
+   * su nuevo vecino: es lo que uno espera al meter una hoja dentro de otra
+   * cotización, y evita dejar el paquete partido.
+   */
+  function adoptarPaquete(movidas) {
+    if (!movidas.length) return;
+    const desde = E.paginas.indexOf(movidas[0]);
+    if (desde < 0) return;
+    const antes = E.paginas[desde - 1];
+    const despues = E.paginas[desde + movidas.length];
+    const destino = (antes && antes.paqueteId) || (despues && despues.paqueteId);
+    if (destino) movidas.forEach((p) => { p.paqueteId = destino; });
+  }
 
   /* ---------------- numeración de folios ---------------- */
   /**
@@ -2999,6 +3192,142 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     }, 250);
   }
 
+  /** Barra de arriba: dice en qué paquete estás y cómo salir. */
+  function pintarBarraPaquete() {
+    const btnVista = $('#btnVista');
+    const btnVolver = $('#btnVolverPaquetes');
+    if (!btnVista || !btnVolver) return;
+    const hay = E.paginas.length > 0;
+    btnVista.hidden = !hay || !!paqueteAbierto;
+    btnVista.textContent = vista === 'paquetes' ? '☰ Ver todas las hojas' : '📦 Ver por paquetes';
+    if (paqueteAbierto) {
+      const paq = E.paquetes.get(paqueteAbierto);
+      btnVolver.hidden = false;
+      btnVolver.textContent = '◀ Paquetes · ' + (paq ? paq.nombre : '');
+    } else {
+      btnVolver.hidden = true;
+    }
+  }
+
+  /** Tarjeta de un paquete: portada, nombre y lo que trae dentro. */
+  function tarjetaPaquete(grupo) {
+    const { paquete, paginas } = grupo;
+    const portada = paginas[0];
+    const vis = visDe(portada);
+
+    const el = document.createElement('div');
+    el.className = 'pag paquete';
+    el.dataset.uid = portada.uid;           // el observador dibuja la portada
+    el.dataset.paquete = paquete.id;
+    el.draggable = true;
+
+    const marco = document.createElement('div');
+    marco.className = 'pag-marco';
+    marco.style.aspectRatio = vis.w + ' / ' + vis.h;
+    const hueco = document.createElement('div');
+    hueco.className = 'pag-cargando';
+    marco.appendChild(hueco);
+    const img = document.createElement('img');
+    img.className = 'mini';
+    img.draggable = false;
+    img.alt = paquete.nombre;
+    img.style.cssText = 'display:none;width:100%;height:auto';
+    const previa = G.miniaturaCacheada(portada, nivelVigente());
+    if (previa) { img.src = previa; img.style.display = 'block'; hueco.remove(); }
+    marco.appendChild(img);
+    const cinta = document.createElement('div');
+    cinta.className = 'pag-cinta';
+    cinta.style.background = paquete.color;
+    marco.appendChild(cinta);
+    const cuenta = document.createElement('span');
+    cuenta.className = 'paquete-cuenta';
+    cuenta.textContent = paginas.length + (paginas.length === 1 ? ' hoja' : ' hojas');
+    marco.appendChild(cuenta);
+    el.appendChild(marco);
+
+    const pie = document.createElement('div');
+    pie.className = 'paquete-pie';
+    const nom = document.createElement('strong');
+    nom.className = 'paquete-nombre';
+    nom.textContent = paquete.nombre;
+    nom.title = 'Doble clic para cambiarle el nombre';
+    nom.addEventListener('dblclick', () => renombrarPaquete(paquete.id));
+    const archivos = new Set(paginas.map((p) => p.fuenteId)).size;
+    const meta = document.createElement('span');
+    meta.className = 'paquete-meta';
+    meta.textContent = archivos === 1 ? '1 archivo' : archivos + ' archivos';
+    pie.append(nom, meta);
+    el.appendChild(pie);
+
+    const acciones = document.createElement('div');
+    acciones.className = 'paquete-acciones';
+    [
+      ['Ver', 'Abrir este paquete y trabajar sus hojas', () => abrirPaquete(paquete.id)],
+      ['✎', 'Cambiar el nombre', () => renombrarPaquete(paquete.id)],
+      ['＋', 'Añadir más archivos a este paquete', () => anadirAPaquete(paquete.id)],
+      ['✕', 'Quitar el paquete entero del taller', async () => {
+        const sigue = await G.confirmar({
+          titulo: 'Quitar el paquete',
+          mensaje: `Se quitan del taller las ${paginas.length} hoja(s) de «${paquete.nombre}».`,
+          aceptar: 'Quitar', peligro: true,
+        });
+        if (!sigue) return;
+        marcar();
+        eliminar(paginas);
+      }],
+    ].forEach(([txt, tit, fn]) => {
+      const b = document.createElement('button');
+      b.className = 'btn btn-mini' + (txt === 'Ver' ? ' btn-primario' : '');
+      b.textContent = txt;
+      b.title = tit;
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
+      acciones.appendChild(b);
+    });
+    el.appendChild(acciones);
+
+    el.addEventListener('dblclick', (ev) => {
+      if (ev.target.closest('.paquete-nombre, .paquete-acciones')) return;
+      abrirPaquete(paquete.id);
+    });
+    observador.observe(el);
+    return el;
+  }
+
+  function abrirPaquete(id) {
+    paqueteAbierto = id;
+    vista = 'paquetes';
+    E.seleccion.clear();
+    pintar();
+    $('#lienzo').scrollTop = 0;
+  }
+
+  function cerrarPaquete() {
+    paqueteAbierto = null;
+    E.seleccion.clear();
+    pintar();
+  }
+
+  async function renombrarPaquete(id) {
+    const paq = E.paquetes.get(id);
+    if (!paq) return;
+    const nombre = await G.pedirTexto({
+      titulo: 'Nombre del paquete',
+      mensaje: 'Ponle el nombre de la empresa o del documento, para reconocerlo de un vistazo.',
+      valor: paq.nombre,
+    });
+    if (nombre == null) return;
+    marcar();
+    paq.nombre = G.nombreSeguro(nombre, paq.nombre);
+    pintar();
+  }
+
+  /** Carga archivos directamente dentro de un paquete que ya existe. */
+  function anadirAPaquete(id) {
+    const entrada = $('#entradaArchivos');
+    destinoCarga = id;
+    entrada.click();
+  }
+
   function tarjeta(pagina, indice) {
     const fuente = E.fuentes.get(pagina.fuenteId);
     const vis = visDe(pagina);
@@ -3117,17 +3446,39 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   function pintar() {
+    asegurarPaquetes();
+    normalizarPaquetes();
     recalcularFolios();
     const rejilla = $('#rejilla');
     rejilla.innerHTML = '';
-    E.paginas.forEach((p, i) => rejilla.appendChild(tarjeta(p, i)));
+    const enPaquetes = vista === 'paquetes' && !paqueteAbierto;
+    rejilla.classList.toggle('rejilla-paquetes', enPaquetes);
+    if (enPaquetes) {
+      paquetesEnOrden().forEach((g) => rejilla.appendChild(tarjetaPaquete(g)));
+    } else {
+      // el número que lleva la hoja es su sitio en el expediente entero, no
+      // dentro del paquete: si no, dentro de una cotización todo empieza en 1
+      hojasVisibles().forEach((p) => rejilla.appendChild(tarjeta(p, E.paginas.indexOf(p))));
+    }
     $('#vacio').hidden = E.paginas.length > 0;
+    pintarBarraPaquete();
 
-    $('#infoPaginas').textContent = E.paginas.length === 1 ? '1 página' : E.paginas.length + ' páginas';
+    const grupos = paquetesEnOrden();
+    const visibles = hojasVisibles().length;
+    $('#infoPaginas').textContent = enPaquetes
+      ? `${grupos.length} paquete(s) · ${E.paginas.length} páginas`
+      : (paqueteAbierto
+        ? `${visibles} de ${E.paginas.length} páginas`
+        : (E.paginas.length === 1 ? '1 página' : E.paginas.length + ' páginas'));
     const n = E.seleccion.size;
-    $('#infoSeleccion').textContent = n
-      ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
-      : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos');
+    $('#infoSeleccion').textContent = enPaquetes
+      ? (E.paginas.length ? 'arrastra un paquete para cambiarlo de orden · «Ver» para entrar' : 'sin documentos')
+      : (n
+        ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
+        : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos'));
+    // En la vista de paquetes no se enseñan herramientas de hoja suelta:
+    // actuarían sobre una selección que no se está viendo.
+    $('.taller-herramientas').classList.toggle('solo-paquetes', enPaquetes);
 
     pintarDocs();
     pintarFirmas();
@@ -3307,6 +3658,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         }
       }
     }
+    adoptarPaquete(objs);
     pintar();
   }
 
@@ -3321,6 +3673,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const destino = Math.max(0, Math.min(resto.length, Math.round(numeroPos) - 1));
     resto.splice(destino, 0, ...objs);
     E.paginas = resto;
+    adoptarPaquete(objs);
     pintar();
     G.aviso(`Movidas a la posición ${destino + 1}.`, 'ok');
   }
@@ -3332,6 +3685,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const mover = new Set(objs.map((p) => p.uid));
     const resto = E.paginas.filter((p) => !mover.has(p.uid));
     E.paginas = alInicio ? objs.concat(resto) : resto.concat(objs);
+    adoptarPaquete(objs);
     pintar();
   }
 
@@ -3345,9 +3699,20 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   const esArrastreDeHoja = (ev) => !!arrastrando
     || (!!ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes(TIPO_HOJA));
 
+  let arrastrandoPaquete = null;
+
   $('#rejilla').addEventListener('dragstart', (ev) => {
     const tarjeta = ev.target.closest('.pag');
     if (!tarjeta) return;
+    if (tarjeta.dataset.paquete) {
+      // se arrastra la cotización entera, con todas sus hojas dentro
+      arrastrandoPaquete = tarjeta.dataset.paquete;
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', arrastrandoPaquete);
+      ev.dataTransfer.setData(TIPO_HOJA, arrastrandoPaquete);
+      setTimeout(() => tarjeta.classList.add('arrastrando'), 0);
+      return;
+    }
     const uid = tarjeta.dataset.uid;
     // Nunca repintar aquí: el navegador acaba de tomar la instantánea para
     // arrastrar esta misma tarjeta. Si reconstruimos la rejilla (innerHTML),
@@ -3368,10 +3733,21 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   $('#rejilla').addEventListener('dragend', () => {
     arrastrando = null;
+    arrastrandoPaquete = null;
     $$('.pag').forEach((t) => t.classList.remove('arrastrando', 'destino-izq', 'destino-der'));
   });
 
   $('#rejilla').addEventListener('dragover', (ev) => {
+    if (arrastrandoPaquete) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      const t = ev.target.closest('.pag');
+      $$('.pag').forEach((x) => x.classList.remove('destino-izq', 'destino-der'));
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      t.classList.add(ev.clientX < r.left + r.width / 2 ? 'destino-izq' : 'destino-der');
+      return;
+    }
     if (!arrastrando) return;
     ev.preventDefault();
     ev.dataTransfer.dropEffect = 'move';
@@ -3383,6 +3759,29 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   });
 
   $('#rejilla').addEventListener('drop', (ev) => {
+    if (arrastrandoPaquete) {
+      ev.preventDefault();
+      $$('.pag').forEach((x) => x.classList.remove('destino-izq', 'destino-der'));
+      const t = ev.target.closest('.pag');
+      const movido = arrastrandoPaquete;
+      arrastrandoPaquete = null;
+      if (!t || !t.dataset.paquete || t.dataset.paquete === movido) return;
+      marcar();
+      const grupos = paquetesEnOrden();
+      const orden = grupos.map((g) => g.paquete.id).filter((id) => id !== movido);
+      const r = t.getBoundingClientRect();
+      let pos = orden.indexOf(t.dataset.paquete);
+      if (pos < 0) pos = orden.length;
+      else if (ev.clientX >= r.left + r.width / 2) pos++;
+      orden.splice(pos, 0, movido);
+      // se rehace el expediente con los paquetes en el orden nuevo
+      const porId = new Map(grupos.map((g) => [g.paquete.id, g.paginas]));
+      let plano = [];
+      orden.forEach((id) => { plano = plano.concat(porId.get(id) || []); });
+      E.paginas = plano;
+      pintar();
+      return;
+    }
     if (!arrastrando) return;
     ev.preventDefault();
     const tarjeta = ev.target.closest('.pag');
@@ -3401,6 +3800,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     }
     resto.splice(destino, 0, ...movidas);
     E.paginas = resto;
+    adoptarPaquete(movidas);
     arrastrando = null;
     pintar();
   });
@@ -3416,8 +3816,13 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     return ev.clientX < r.left + r.width / 2 ? pos : pos + 1;
   }
 
+  // Cuando se pulsa el «＋» de un paquete, lo que se cargue va dentro de él
+  let destinoCarga = null;
+
   async function anadir(files, indice) {
     const lote = Array.from(files || []);   // copia inmediata: la FileList puede vaciarse
+    const dentroDe = destinoCarga || (paqueteAbierto || null);
+    destinoCarga = null;
     if (!lote.length) return;
     G.cargando(true, 'Abriendo archivos…');
     try {
@@ -3426,7 +3831,20 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       if (r.paginas.length) {
         marcar();
         r.fuentes.forEach((f) => E.fuentes.set(f.id, f));
-        if (indice == null) {
+        // Lo que entra de una vez es un paquete: si una empresa manda su
+        // cotización en varios archivos y se cargan juntos, van juntos.
+        const paq = dentroDe && E.paquetes.has(dentroDe)
+          ? E.paquetes.get(dentroDe)
+          : nuevoPaquete(r.fuentes.length > 1
+            ? r.fuentes[0].nombre
+            : (r.fuentes[0] ? r.fuentes[0].nombre : 'Paquete'));
+        r.paginas.forEach((p) => { p.paqueteId = paq.id; });
+        if (dentroDe && E.paquetes.has(dentroDe)) {
+          // se meten al final de ese paquete, no encima de todo
+          const suyas = E.paginas.filter((x) => x.paqueteId === paq.id);
+          const fin = E.paginas.indexOf(suyas[suyas.length - 1]) + 1;
+          E.paginas.splice(fin, 0, ...r.paginas);
+        } else if (indice == null) {
           // Lo nuevo va encima de lo que ya había, como al grapar un
           // documento sobre un expediente físico: no al final.
           E.paginas = r.paginas.concat(E.paginas);
@@ -3434,6 +3852,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
           E.paginas.splice(Math.max(0, Math.min(indice, E.paginas.length)), 0, ...r.paginas);
         }
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
+        if (!paqueteAbierto && paquetesEnOrden().length > 1) vista = 'paquetes';
         pintar();
         G.aviso(`Se añadieron ${r.paginas.length} página(s) de ${r.fuentes.length} archivo(s).`, 'ok');
         if (lote.some((f) => G.esOffice && G.esOffice(f))) {
@@ -3847,6 +4266,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       numPaginas: E.paginas.length,
       fuenteIds: fuentes.map((f) => f.id),
       paginas: JSON.parse(JSON.stringify(E.paginas)),
+      paquetes: Array.from(E.paquetes.values()),
       salida: {
         nombre: $('#nombreSalida').value,
         titulo: $('#metaTitulo').value,
@@ -3870,9 +4290,12 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       await G.restaurarFuentes(fuentes);
       const vivas = new Set(fuentes.map((f) => f.id));
       const perdidas = (registro.paginas || []).filter((p) => !vivas.has(p.fuenteId)).length;
+      E.paquetes = new Map((registro.paquetes || []).map((q) => [q.id, Object.assign({}, q)]));
       E.paginas = (registro.paginas || [])
         .filter((p) => vivas.has(p.fuenteId))
         .map((p) => Object.assign({}, p, { uid: G.nuevoUid() }));
+      paqueteAbierto = null;
+      vista = 'hojas';   // se recalcula abajo, cuando ya están puestas las hojas
       E.seleccion.clear();
       historial.atras.length = 0;
       historial.adelante.length = 0;
@@ -3897,6 +4320,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         nombreManual = false;
       }
       actualizarEstadoGuardado();
+      asegurarPaquetes();
+      if (paquetesEnOrden().length > 1) vista = 'paquetes';
       pintar();
       await pintarGuardados();
       G.aviso(perdidas
@@ -4131,6 +4556,9 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     E.paginas = [];
     E.seleccion.clear();
     E.fuentes.clear();
+    E.paquetes.clear();
+    paqueteAbierto = null;
+    vista = 'hojas';
     E.ancla = null;
     G.olvidarDocs();
     historial.atras.length = 0;
@@ -4176,7 +4604,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
      ========================================================= */
   const lector = { abierto: false, actual: 0, obs: null };
 
-  function paginaActualLector() { return E.paginas[lector.actual] || null; }
+  function paginaActualLector() { return hojasVisibles()[lector.actual] || null; }
 
   function construirLector() {
     const cont = $('#lectorHojas');
@@ -4218,7 +4646,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       });
     }, { root: cont, rootMargin: '1400px 0px' });
 
-    E.paginas.forEach((pagina, i) => {
+    hojasVisibles().forEach((pagina, i) => {
       const vis = visDe(pagina);
       const fuente = E.fuentes.get(pagina.fuenteId);
       const hoja = document.createElement('div');
@@ -4449,14 +4877,20 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     $('#btnRehacer').addEventListener('click', rehacer);
 
     // barra del taller
-    $('#btnSelTodo').addEventListener('click', () => { E.seleccion = new Set(E.paginas.map((p) => p.uid)); refrescarSeleccion(); });
+    $('#btnSelTodo').addEventListener('click', () => { E.seleccion = new Set(hojasVisibles().map((p) => p.uid)); refrescarSeleccion(); });
     $('#btnSelNada').addEventListener('click', () => { E.seleccion.clear(); refrescarSeleccion(); });
     $('#btnSelInvertir').addEventListener('click', () => {
       const nueva = new Set();
-      E.paginas.forEach((p) => { if (!E.seleccion.has(p.uid)) nueva.add(p.uid); });
+      hojasVisibles().forEach((p) => { if (!E.seleccion.has(p.uid)) nueva.add(p.uid); });
       E.seleccion = nueva;
       refrescarSeleccion();
     });
+    $('#btnVista').addEventListener('click', () => {
+      vista = vista === 'paquetes' ? 'hojas' : 'paquetes';
+      E.seleccion.clear();
+      pintar();
+    });
+    $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
     $('#btnGirarIzq').addEventListener('click', () => girar(-90));
     $('#btnGirarDer').addEventListener('click', () => girar(90));
     $('#btnDuplicar').addEventListener('click', () => {
