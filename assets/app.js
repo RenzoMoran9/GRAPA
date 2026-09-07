@@ -571,7 +571,9 @@
     [
       ['↺', 'Girar a la izquierda', () => { marcar(); pagina.giro = G.norm(pagina.giro - 90); pintar(); }],
       ['↻', 'Girar a la derecha', () => { marcar(); pagina.giro = G.norm(pagina.giro + 90); pintar(); }],
-      ['🔍', 'Ver esta hoja en grande', () => abrirLector(E.paginas.indexOf(pagina))],
+      // el índice es el de la lista que se está viendo: dentro de un paquete,
+      // el lector recorre solo sus hojas y el global no le corresponde
+      ['🔍', 'Ver esta hoja en grande', () => abrirLector(hojasVisibles().indexOf(pagina))],
       ['✍', 'Colocar firma o sello', () => abrirFirmar(pagina)],
       ['⧉', 'Duplicar', () => { marcar(); duplicar([pagina]); }],
       ['🗑', 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
@@ -1921,13 +1923,14 @@
   }
 
   function marcarHoja(i) {
-    lector.actual = Math.max(0, Math.min(E.paginas.length - 1, i));
+    const cuantas = hojasVisibles().length;
+    lector.actual = Math.max(0, Math.min(cuantas - 1, i));
     $$('.hoja', $('#lectorHojas')).forEach((h) => {
       h.classList.toggle('actual', Number(h.dataset.indice) === lector.actual);
     });
     const pagina = paginaActualLector();
     const fuente = pagina ? E.fuentes.get(pagina.fuenteId) : null;
-    $('#lectorTitulo').textContent = `Hoja ${lector.actual + 1} de ${E.paginas.length}`;
+    $('#lectorTitulo').textContent = `Hoja ${lector.actual + 1} de ${cuantas}`;
     $('#lectorOrigen').textContent = fuente
       ? `${fuente.nombreCompleto} · página ${pagina.indice + 1}` : '';
   }
@@ -1939,7 +1942,7 @@
   }
 
   function abrirLector(indice) {
-    if (!E.paginas.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    if (!hojasVisibles().length) { G.aviso('Primero abre un PDF.', 'error'); return; }
     lector.abierto = true;
     $('#lector').hidden = false;
     construirLector();
@@ -1955,7 +1958,7 @@
 
   function refrescarLector(indice) {
     if (!lector.abierto) return;
-    if (!E.paginas.length) { cerrarLector(); return; }
+    if (!hojasVisibles().length) { cerrarLector(); return; }
     construirLector();
     irAHoja(indice == null ? lector.actual : indice, true);
   }
@@ -1964,9 +1967,10 @@
   function moverHojaLector(delta) {
     const pagina = paginaActualLector();
     if (!pagina) return;
-    const idx = E.paginas.indexOf(pagina);
+    const visibles = hojasVisibles();
+    const idx = visibles.indexOf(pagina);
     const destino = idx + delta;
-    if (destino < 0 || destino >= E.paginas.length) return;
+    if (destino < 0 || destino >= visibles.length) return;
     moverPosiciones([pagina], delta);
     refrescarLector(destino);
   }
@@ -2019,7 +2023,7 @@
         ev.preventDefault(); irAHoja(lector.actual - 1); return;
       }
       if (ev.key === 'Home') { ev.preventDefault(); irAHoja(0); return; }
-      if (ev.key === 'End') { ev.preventDefault(); irAHoja(E.paginas.length - 1); return; }
+      if (ev.key === 'End') { ev.preventDefault(); irAHoja(hojasVisibles().length - 1); return; }
       if (ev.key === '[') { accionLector((p) => { p.giro = G.norm(p.giro - 90); }); return; }
       if (ev.key === ']') { accionLector((p) => { p.giro = G.norm(p.giro + 90); }); return; }
     }
@@ -2030,7 +2034,7 @@
     if (enCampo) return;
     if (ctrl && ev.key.toLowerCase() === 'a') {
       ev.preventDefault();
-      E.seleccion = new Set(E.paginas.map((p) => p.uid));
+      E.seleccion = new Set(hojasVisibles().map((p) => p.uid));
       pintar();
       return;
     }
@@ -2061,6 +2065,7 @@
     }
     if (ev.key === '[') { girar(-90); return; }
     if (ev.key === ']') { girar(90); return; }
+    if (ev.key.toLowerCase() === 'p') { $('#btnPanel').click(); return; }
     if (ev.key.toLowerCase() === 'v') { abrirLector(); return; }
   });
 
@@ -2123,6 +2128,27 @@
       E.seleccion = nueva;
       refrescarSeleccion();
     });
+    // panel lateral plegable: con el expediente largo, la parrilla agradece
+    // los 300 px de más y el panel casi nunca hace falta a la vez
+    const CLAVE_PANEL = 'grapa.panel.oculto';
+    function pintarPanel(oculto) {
+      document.body.classList.toggle('sin-panel', oculto);
+      const b = $('#btnPanel');
+      b.textContent = oculto ? '▶' : '◀';
+      b.title = (oculto ? 'Mostrar' : 'Ocultar') + ' el panel lateral (P)';
+      b.setAttribute('aria-expanded', String(!oculto));
+      refrescarNivel();
+      afinarVisibles();
+    }
+    let panelOculto = false;
+    try { panelOculto = localStorage.getItem(CLAVE_PANEL) === '1'; } catch (e) {}
+    pintarPanel(panelOculto);
+    $('#btnPanel').addEventListener('click', () => {
+      panelOculto = !panelOculto;
+      try { localStorage.setItem(CLAVE_PANEL, panelOculto ? '1' : '0'); } catch (e) {}
+      pintarPanel(panelOculto);
+    });
+
     $('#btnVista').addEventListener('click', () => {
       vista = vista === 'paquetes' ? 'hojas' : 'paquetes';
       E.seleccion.clear();

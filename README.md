@@ -127,6 +127,7 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 | Atajo | Qué hace |
 |---|---|
+| `P` | Plegar o desplegar el panel lateral |
 | `Ctrl+O` | Abrir archivos |
 | `Ctrl+S` | Guardar PDF |
 | `Ctrl+Z` / `Ctrl+Y` | Deshacer / Rehacer |

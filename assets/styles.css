@@ -569,3 +569,6 @@ button,input,select,textarea{font:inherit;color:inherit}
   color: var(--peligro, #d33b28);
 }
 .tacho.encima .tacho-icono { transform: scale(1.1); }
+
+/* Panel lateral plegable: la parrilla se queda con todo el ancho */
+body.sin-panel .panel { display: none; }
