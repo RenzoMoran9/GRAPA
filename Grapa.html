@@ -3881,16 +3881,20 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       expedienteAbierto = registro.id === '__auto'
         ? (registro.origenId ? { id: registro.origenId, nombre: registro.origenNombre || 'expediente' } : null)
         : { id: registro.id, nombre: registro.nombre };
+      // Abrir un expediente es entrar en él: el nombre del archivo pasa a ser
+      // el suyo. Lo que quedara escrito en «Guardar como nuevo» era para otro
+      // trabajo y no debe mandar sobre el expediente que se acaba de abrir.
+      $('#guardarNombre').value = '';
       if (registro.salida) {
-        const guardado = registro.salida.nombre || '';
         $('#metaTitulo').value = registro.salida.titulo || '';
         $('#metaAutor').value = registro.salida.autor || '';
-        nombreManual = typeof registro.salida.nombreManual === 'boolean'
-          ? registro.salida.nombreManual
-          // Expedientes guardados antes de que el nombre se sincronizara: se
-          // respeta el que traen si no es el que saldría solo.
-          : !!guardado && guardado !== G.nombreSeguro(nombreDelTrabajo(), 'documento-unido');
-        if (nombreManual) $('#nombreSalida').value = guardado;
+        // Solo se conserva el nombre del archivo si consta que lo escribió el
+        // usuario. Los expedientes guardados antes de que el nombre se
+        // sincronizara no lo dicen, y ahí manda el nombre del expediente.
+        nombreManual = registro.salida.nombreManual === true;
+        if (nombreManual) $('#nombreSalida').value = registro.salida.nombre || '';
+      } else {
+        nombreManual = false;
       }
       actualizarEstadoGuardado();
       pintar();
