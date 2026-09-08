@@ -1128,7 +1128,50 @@
   }
 
   /* ---------------- editor de firma ---------------- */
-  const fir = { pagina: null, sello: null, vis: null, arrastre: null };
+  const fir = { pagina: null, sello: null, vis: null, arrastre: null,
+                dibujado: 0, reloj: null, base: 0 };
+
+  /**
+   * Ajusta el tamaño con el que se ve la página al colocar la firma. El 100 %
+   * es «lo que cabe en el hueco»; de ahí para arriba el escenario se desplaza.
+   * La firma se guarda en fracciones de la página, así que acercar no mueve
+   * nada de lo ya colocado: solo se ve más grande para afinar mejor.
+   */
+  function ajustarZoomFirma(volverADibujar) {
+    const esc = $('#firmarEscenario');
+    const caja = $('#firmarPagina');
+    if (!esc || !caja || !fir.vis) return;
+    const z = Number($('#firmarZoom').value || 100) / 100;
+    // La base —lo que mide la página al 100 %— se calcula una sola vez, al
+    // abrir o al cambiar de tamaño la ventana. Recalcularla en cada paso del
+    // acercamiento la hacía encoger: al crecer la página aparece la barra de
+    // desplazamiento, el hueco se estrecha y la cuenta salía cada vez menor.
+    if (!fir.base || volverADibujar === 'medir') {
+      const hueco = 28;                                 // el relleno del escenario
+      const dispW = Math.max(120, esc.clientWidth - hueco);
+      const dispH = Math.max(120, esc.clientHeight - hueco);
+      fir.base = Math.min(dispW, dispH * (fir.vis.w / fir.vis.h));
+    }
+    const ancho = Math.round(fir.base * z);
+    caja.style.setProperty('--firmar-ancho', ancho + 'px');
+    if (volverADibujar !== true) return;
+    // Si se acerca mucho, se vuelve a dibujar con más detalle: si no, se ve
+    // el mismo dibujo estirado y la firma se coloca a ciegas.
+    clearTimeout(fir.reloj);
+    fir.reloj = setTimeout(() => {
+      const quiere = Math.min(3000, Math.round(ancho * (window.devicePixelRatio || 1)));
+      if (quiere <= fir.dibujado + 200 || !fir.pagina) return;
+      const pagina = fir.pagina;
+      G.renderGrande(pagina, quiere).then((lienzo) => {
+        if (fir.pagina !== pagina) return;              // se cambió de página entretanto
+        const destino = $('#firmarLienzo');
+        destino.width = lienzo.width;
+        destino.height = lienzo.height;
+        destino.getContext('2d').drawImage(lienzo, 0, 0);
+        fir.dibujado = quiere;
+      }).catch(() => {});
+    }, 220);
+  }
 
   async function abrirFirmar(pagina) {
     if (!E.firmas.length) {
@@ -1153,6 +1196,10 @@
     $('#firmarOpacidad').value = Math.round((fir.sello.opacidad == null ? 1 : fir.sello.opacidad) * 100);
     $('#modalFirmar').hidden = false;
 
+    $('#firmarZoom').value = 100;
+    fir.base = 0;
+    ajustarZoomFirma('medir');
+
     G.cargando(true, 'Preparando la página…');
     try {
       const lienzo = await G.renderGrande(pagina, 1200);
@@ -1160,11 +1207,13 @@
       destino.width = lienzo.width;
       destino.height = lienzo.height;
       destino.getContext('2d').drawImage(lienzo, 0, 0);
+      fir.dibujado = 1200;
     } catch (e) {
       G.aviso('No se pudo mostrar la página: ' + e.message, 'error');
     } finally {
       G.cargando(false);
     }
+    ajustarZoomFirma('medir');
     pintarSello();
   }
 
@@ -1230,6 +1279,10 @@
       pintarSello();
     });
 
+    $('#firmarZoom').addEventListener('input', () => ajustarZoomFirma(true));
+    window.addEventListener('resize', () => {
+      if (!$('#modalFirmar').hidden) ajustarZoomFirma('medir');
+    });
     $('#firmarSelector').addEventListener('change', (ev) => {
       fir.sello.firmaId = ev.target.value;
       E.firmaActiva = ev.target.value;

@@ -228,7 +228,7 @@
    * densidad de la pantalla. Con un solo tamaño fijo, al ampliar las hojas
    * el texto se veía como una mancha: era un bitmap pequeño estirado.
    */
-  G.NIVELES_MINI = [300, 620, 1000, 1500, 2100];
+  G.NIVELES_MINI = [300, 620, 1000, 1500, 2100, 2900];
 
   G.nivelPara = function (anchoCSS) {
     const necesario = (anchoCSS || 180) * (window.devicePixelRatio || 1);

@@ -359,7 +359,10 @@ button,input,select,textarea{font:inherit;color:inherit}
   background:var(--fondo-2);border:1px solid var(--borde);border-radius:14px;box-shadow:var(--sombra-fuerte);
   width:min(560px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;
 }
+/* el de firmar aprovecha la pantalla: cuanto más grande se vea la página,
+   más fino se puede encajar la firma */
 .modal-ancha{width:min(1080px,100%)}
+#modalFirmar .modal-caja{width:min(1560px,97vw);max-height:96vh}
 .modal-angosta{width:min(430px,100%)}
 .confirmar-mensaje{margin:0;font-size:13.5px;line-height:1.5;color:var(--texto-2)}
 #modalConfirmar .fila-botones{justify-content:flex-end}
@@ -371,12 +374,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 .firmar-cuerpo,.recorte-cuerpo{display:grid;grid-template-columns:1fr 268px;gap:16px;align-items:start}
 .firmar-escenario,.recorte-escenario{
-  background:var(--fondo-3);border-radius:10px;padding:14px;display:grid;place-items:center;
+  background:var(--fondo-3);border-radius:10px;padding:14px;display:flex;
   min-height:340px;
 }
+/* al acercar, la página deja de caber: el escenario se desplaza en vez de
+   recortarla, y el margen automático la centra mientras todavía cabe */
+/* alto de verdad, no el mínimo de 340: al 100 % la página tiene que verse
+   tan grande como quepa, que es de donde parte todo lo demás */
+.firmar-escenario{overflow:auto;min-height:70vh;max-height:82vh}
+/* flex:none es lo que impide que el navegador la encoja para que quepa:
+   sin esto, acercar no la hacía crecer más allá del ancho del escenario */
+.firmar-escenario > .firmar-pagina{margin:auto;flex:none}
+.recorte-escenario{place-items:center}
 .firmar-pagina,.recorte-lienzo-envoltura{position:relative;box-shadow:var(--sombra);background:#fff;line-height:0;display:inline-block}
 /* el canvas se ajusta al hueco disponible sin deformarse ni desbordar */
-.firmar-pagina canvas,.recorte-lienzo-envoltura canvas{display:block;max-width:100%;max-height:60vh;width:auto;height:auto}
+.recorte-lienzo-envoltura canvas{display:block;max-width:100%;max-height:60vh;width:auto;height:auto}
+/* el ancho lo pone el control de acercar; el alto sale del propio lienzo */
+.firmar-pagina{width:var(--firmar-ancho,auto)}
+.firmar-pagina canvas{display:block;width:100%;height:auto;max-width:none;max-height:none}
 .firmar-panel,.recorte-panel{display:flex;flex-direction:column;gap:10px}
 
 .firmar-sello{position:absolute;cursor:grab;border:1.5px dashed var(--acento);touch-action:none}
@@ -801,7 +816,7 @@ body.sin-panel .panel { display: none; }
         <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)">🗑</button>
         <span class="separador-vertical"></span>
         <label class="zoom">Zoom
-          <input type="range" id="zoom" min="110" max="1000" value="180" title="Amplía las hojas hasta poder leerlas">
+          <input type="range" id="zoom" min="110" max="2400" value="180" title="Amplía las hojas hasta poder leerlas">
         </label>
       </div>
     </div>
@@ -879,6 +894,9 @@ body.sin-panel .panel { display: none; }
       <div class="firmar-panel">
         <label class="campo">Firma
           <select id="firmarSelector"></select>
+        </label>
+        <label class="campo">Acercar la página
+          <input type="range" id="firmarZoom" min="100" max="500" value="100" title="Amplía la página para colocar la firma con precisión">
         </label>
         <div class="rejilla-2">
           <label class="campo">Ancho (%) <input type="number" id="firmarAncho" min="4" max="100" value="28"></label>
@@ -1422,7 +1440,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    * densidad de la pantalla. Con un solo tamaño fijo, al ampliar las hojas
    * el texto se veía como una mancha: era un bitmap pequeño estirado.
    */
-  G.NIVELES_MINI = [300, 620, 1000, 1500, 2100];
+  G.NIVELES_MINI = [300, 620, 1000, 1500, 2100, 2900];
 
   G.nivelPara = function (anchoCSS) {
     const necesario = (anchoCSS || 180) * (window.devicePixelRatio || 1);
@@ -4007,7 +4025,50 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   /* ---------------- editor de firma ---------------- */
-  const fir = { pagina: null, sello: null, vis: null, arrastre: null };
+  const fir = { pagina: null, sello: null, vis: null, arrastre: null,
+                dibujado: 0, reloj: null, base: 0 };
+
+  /**
+   * Ajusta el tamaño con el que se ve la página al colocar la firma. El 100 %
+   * es «lo que cabe en el hueco»; de ahí para arriba el escenario se desplaza.
+   * La firma se guarda en fracciones de la página, así que acercar no mueve
+   * nada de lo ya colocado: solo se ve más grande para afinar mejor.
+   */
+  function ajustarZoomFirma(volverADibujar) {
+    const esc = $('#firmarEscenario');
+    const caja = $('#firmarPagina');
+    if (!esc || !caja || !fir.vis) return;
+    const z = Number($('#firmarZoom').value || 100) / 100;
+    // La base —lo que mide la página al 100 %— se calcula una sola vez, al
+    // abrir o al cambiar de tamaño la ventana. Recalcularla en cada paso del
+    // acercamiento la hacía encoger: al crecer la página aparece la barra de
+    // desplazamiento, el hueco se estrecha y la cuenta salía cada vez menor.
+    if (!fir.base || volverADibujar === 'medir') {
+      const hueco = 28;                                 // el relleno del escenario
+      const dispW = Math.max(120, esc.clientWidth - hueco);
+      const dispH = Math.max(120, esc.clientHeight - hueco);
+      fir.base = Math.min(dispW, dispH * (fir.vis.w / fir.vis.h));
+    }
+    const ancho = Math.round(fir.base * z);
+    caja.style.setProperty('--firmar-ancho', ancho + 'px');
+    if (volverADibujar !== true) return;
+    // Si se acerca mucho, se vuelve a dibujar con más detalle: si no, se ve
+    // el mismo dibujo estirado y la firma se coloca a ciegas.
+    clearTimeout(fir.reloj);
+    fir.reloj = setTimeout(() => {
+      const quiere = Math.min(3000, Math.round(ancho * (window.devicePixelRatio || 1)));
+      if (quiere <= fir.dibujado + 200 || !fir.pagina) return;
+      const pagina = fir.pagina;
+      G.renderGrande(pagina, quiere).then((lienzo) => {
+        if (fir.pagina !== pagina) return;              // se cambió de página entretanto
+        const destino = $('#firmarLienzo');
+        destino.width = lienzo.width;
+        destino.height = lienzo.height;
+        destino.getContext('2d').drawImage(lienzo, 0, 0);
+        fir.dibujado = quiere;
+      }).catch(() => {});
+    }, 220);
+  }
 
   async function abrirFirmar(pagina) {
     if (!E.firmas.length) {
@@ -4032,6 +4093,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     $('#firmarOpacidad').value = Math.round((fir.sello.opacidad == null ? 1 : fir.sello.opacidad) * 100);
     $('#modalFirmar').hidden = false;
 
+    $('#firmarZoom').value = 100;
+    fir.base = 0;
+    ajustarZoomFirma('medir');
+
     G.cargando(true, 'Preparando la página…');
     try {
       const lienzo = await G.renderGrande(pagina, 1200);
@@ -4039,11 +4104,13 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       destino.width = lienzo.width;
       destino.height = lienzo.height;
       destino.getContext('2d').drawImage(lienzo, 0, 0);
+      fir.dibujado = 1200;
     } catch (e) {
       G.aviso('No se pudo mostrar la página: ' + e.message, 'error');
     } finally {
       G.cargando(false);
     }
+    ajustarZoomFirma('medir');
     pintarSello();
   }
 
@@ -4109,6 +4176,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       pintarSello();
     });
 
+    $('#firmarZoom').addEventListener('input', () => ajustarZoomFirma(true));
+    window.addEventListener('resize', () => {
+      if (!$('#modalFirmar').hidden) ajustarZoomFirma('medir');
+    });
     $('#firmarSelector').addEventListener('change', (ev) => {
       fir.sello.firmaId = ev.target.value;
       E.firmaActiva = ev.target.value;

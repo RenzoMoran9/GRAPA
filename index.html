@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260908a">
+<link rel="stylesheet" href="assets/styles.css?v=20260908b">
 </head>
 <body>
 
@@ -216,7 +216,7 @@
         <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)">🗑</button>
         <span class="separador-vertical"></span>
         <label class="zoom">Zoom
-          <input type="range" id="zoom" min="110" max="1000" value="180" title="Amplía las hojas hasta poder leerlas">
+          <input type="range" id="zoom" min="110" max="2400" value="180" title="Amplía las hojas hasta poder leerlas">
         </label>
       </div>
     </div>
@@ -294,6 +294,9 @@
       <div class="firmar-panel">
         <label class="campo">Firma
           <select id="firmarSelector"></select>
+        </label>
+        <label class="campo">Acercar la página
+          <input type="range" id="firmarZoom" min="100" max="500" value="100" title="Amplía la página para colocar la firma con precisión">
         </label>
         <div class="rejilla-2">
           <label class="campo">Ancho (%) <input type="number" id="firmarAncho" min="4" max="100" value="28"></label>
@@ -464,10 +467,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260908a"></script>
-<script src="assets/office.js?v=20260908a"></script>
-<script src="assets/expedientes.js?v=20260908a"></script>
-<script src="assets/firmas.js?v=20260908a"></script>
-<script src="assets/app.js?v=20260908a"></script>
+<script src="assets/core.js?v=20260908b"></script>
+<script src="assets/office.js?v=20260908b"></script>
+<script src="assets/expedientes.js?v=20260908b"></script>
+<script src="assets/firmas.js?v=20260908b"></script>
+<script src="assets/app.js?v=20260908b"></script>
 </body>
 </html>
