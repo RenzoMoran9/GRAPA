@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260907f">
+<link rel="stylesheet" href="assets/styles.css?v=20260908a">
 </head>
 <body>
 
@@ -30,6 +30,7 @@
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos">?</button>
     <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
     <button class="btn btn-secundario" id="btnAbrir">＋ Abrir archivos</button>
+    <button class="btn btn-secundario" id="btnEditorExterno" title="Guarda el PDF y abre el editor externo en otra pestaña">✎ Editar fuera</button>
     <button class="btn btn-primario" id="btnGuardar">⤓ Guardar PDF</button>
   </div>
 </header>
@@ -177,6 +178,10 @@
           <button class="btn btn-suave btn-peligro-suave" id="btnDesvincularCarpeta" hidden>Quitar</button>
         </div>
         <p class="nota" id="carpetaNota">Si vinculas una carpeta, el PDF terminado se escribe ahí directamente, sin pasar por Descargas.</p>
+        <label class="campo">Editor externo
+          <input type="url" id="editorUrl" placeholder="https://pdfguru.com/app/account" autocomplete="off">
+        </label>
+        <p class="nota">El botón <strong>✎ Editar fuera</strong> guarda el PDF y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
       </div>
     </section>
   </aside>
@@ -459,10 +464,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260907f"></script>
-<script src="assets/office.js?v=20260907f"></script>
-<script src="assets/expedientes.js?v=20260907f"></script>
-<script src="assets/firmas.js?v=20260907f"></script>
-<script src="assets/app.js?v=20260907f"></script>
+<script src="assets/core.js?v=20260908a"></script>
+<script src="assets/office.js?v=20260908a"></script>
+<script src="assets/expedientes.js?v=20260908a"></script>
+<script src="assets/firmas.js?v=20260908a"></script>
+<script src="assets/app.js?v=20260908a"></script>
 </body>
 </html>

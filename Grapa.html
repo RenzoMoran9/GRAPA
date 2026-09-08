@@ -319,7 +319,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .pag:hover .pag-origen{opacity:1}
 .pag-acciones{
-  position:absolute;top:6px;right:6px;display:flex;gap:3px;opacity:0;transition:opacity .12s;
+  position:absolute;top:6px;right:6px;left:6px;display:flex;gap:3px;opacity:0;
+  transition:opacity .12s;flex-wrap:wrap;justify-content:flex-end;
 }
 .pag:hover .pag-acciones,.pag.sel .pag-acciones{opacity:1}
 .pag-acciones button{
@@ -614,6 +615,7 @@ body.sin-panel .panel { display: none; }
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos">?</button>
     <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
     <button class="btn btn-secundario" id="btnAbrir">＋ Abrir archivos</button>
+    <button class="btn btn-secundario" id="btnEditorExterno" title="Guarda el PDF y abre el editor externo en otra pestaña">✎ Editar fuera</button>
     <button class="btn btn-primario" id="btnGuardar">⤓ Guardar PDF</button>
   </div>
 </header>
@@ -761,6 +763,10 @@ body.sin-panel .panel { display: none; }
           <button class="btn btn-suave btn-peligro-suave" id="btnDesvincularCarpeta" hidden>Quitar</button>
         </div>
         <p class="nota" id="carpetaNota">Si vinculas una carpeta, el PDF terminado se escribe ahí directamente, sin pasar por Descargas.</p>
+        <label class="campo">Editor externo
+          <input type="url" id="editorUrl" placeholder="https://pdfguru.com/app/account" autocomplete="off">
+        </label>
+        <p class="nota">El botón <strong>✎ Editar fuera</strong> guarda el PDF y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
       </div>
     </section>
   </aside>
@@ -1710,8 +1716,14 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    * Orden: carpeta vinculada · visor que lo aloja · descarga normal.
    * @returns {{estado:'carpeta'|'guardado'|'cancelado', nombre:string}}
    */
-  G.guardarArchivo = async function (bytes, nombre, tipo) {
-    if (G.carpeta && G.carpeta.actual()) {
+  /**
+   * @param {{aDescargas?:boolean}} [opciones] aDescargas fuerza la carpeta de
+   *   Descargas aunque haya una vinculada: sirve para lo suelto y rápido, que
+   *   no tiene por qué acabar mezclado con el expediente terminado.
+   */
+  G.guardarArchivo = async function (bytes, nombre, tipo, opciones) {
+    const o = opciones || {};
+    if (!o.aDescargas && G.carpeta && G.carpeta.actual()) {
       const permiso = await G.carpeta.permiso(true);
       if (permiso === 'granted') {
         try {
@@ -3442,6 +3454,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       // no corresponder con la lista que el lector acabe recorriendo
       ['🔍', 'Ver esta hoja en grande', () => abrirLector(pagina)],
       ['✍', 'Colocar firma o sello', () => abrirFirmar(pagina)],
+      ['⤓', 'Descargar solo esta hoja', () => descargarHoja(pagina)],
       ['⧉', 'Duplicar', () => { marcar(); duplicar([pagina]); }],
       ['🗑', 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
     ].forEach(([txt, titulo, fn, clase]) => {
@@ -4684,6 +4697,89 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
   }
 
+  /** Saca una sola hoja a su propio PDF, sin tocar el expediente. */
+  async function descargarHoja(pagina) {
+    G.cargando(true, 'Armando la hoja…');
+    try {
+      // se numera por su sitio en el expediente, para reconocerla después
+      const n = String(E.paginas.indexOf(pagina) + 1).padStart(2, '0');
+      const bytes = await G.construirPdf([pagina], opcionesSalida([pagina]));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // a Descargas a propósito: la carpeta vinculada es para el expediente
+      // terminado, no para una hoja que se saca de paso
+      const r = await G.guardarArchivo(
+        bytes, `${base} - hoja ${n}.pdf`, 'application/pdf', { aDescargas: true });
+      G.aviso(r.estado === 'cancelado'
+        ? 'Descarga cancelada.'
+        : `Hoja ${n} descargada (va a Descargas, no a la carpeta vinculada).`,
+        r.estado === 'cancelado' ? '' : 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo descargar la hoja: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
+  /* ---------------- editor externo ---------------- */
+  const EDITOR_POR_DEFECTO = 'https://pdfguru.com/app/account';
+  const CLAVE_EDITOR = 'grapa.editor.url';
+
+  function urlEditor() {
+    const escrita = ($('#editorUrl').value || '').trim();
+    if (escrita) return escrita;
+    try { return localStorage.getItem(CLAVE_EDITOR) || EDITOR_POR_DEFECTO; } catch (e) {}
+    return EDITOR_POR_DEFECTO;
+  }
+
+  /** El botón dice a dónde lleva, sacándolo de la propia dirección. */
+  function pintarEditorExterno() {
+    const btn = $('#btnEditorExterno');
+    if (!btn) return;
+    let donde = '';
+    try { donde = new URL(urlEditor()).hostname.replace(/^www\./, ''); } catch (e) {}
+    btn.textContent = donde ? '✎ Editar en ' + donde : '✎ Editar fuera';
+    btn.title = donde
+      ? `Guarda el PDF y abre ${donde} en otra pestaña para que lo subas ahí`
+      : 'Escribe primero la dirección del editor en «Archivo de salida»';
+  }
+
+  /**
+   * Guarda lo que se está viendo y abre el editor externo. La pestaña se abre
+   * antes de armar el PDF: si se abriera después, el navegador la tomaría por
+   * una ventana emergente no pedida y la bloquearía.
+   */
+  async function editarFuera() {
+    const objs = E.seleccion.size ? seleccionadas() : hojasVisibles();
+    if (!objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    const destino = urlEditor();
+    let bien = true;
+    try { new URL(destino); } catch (e) { bien = false; }
+    if (!bien) {
+      G.aviso('La dirección del editor no es válida. Revísala en «Archivo de salida».', 'error');
+      return;
+    }
+    window.open(destino, '_blank', 'noopener,noreferrer');
+    G.cargando(true, 'Armando el PDF para editar…');
+    try {
+      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // a Descargas, como la hoja suelta: es un archivo de paso para subirlo
+      // a otro sitio, no tiene por qué acabar en la carpeta del expediente
+      const r = await G.guardarArchivo(
+        bytes, `${base} - para editar.pdf`, 'application/pdf', { aDescargas: true });
+      G.aviso(r.estado === 'cancelado'
+        ? 'Se abrió el editor, pero no se guardó el PDF.'
+        : `«${base} - para editar.pdf» está en Descargas (${objs.length} hoja(s)). `
+          + 'Arrástralo en la pestaña que se abrió.', r.estado === 'cancelado' ? '' : 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo armar el PDF: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
     const est = $('#carpetaEstado'), nota = $('#carpetaNota');
@@ -5030,6 +5126,17 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       try { localStorage.setItem(CLAVE_PANEL, panelOculto ? '1' : '0'); } catch (e) {}
       pintarPanel(panelOculto);
     });
+
+    // editor externo
+    try { $('#editorUrl').value = localStorage.getItem(CLAVE_EDITOR) || EDITOR_POR_DEFECTO; } catch (e) {
+      $('#editorUrl').value = EDITOR_POR_DEFECTO;
+    }
+    pintarEditorExterno();
+    $('#editorUrl').addEventListener('input', () => {
+      try { localStorage.setItem(CLAVE_EDITOR, $('#editorUrl').value.trim()); } catch (e) {}
+      pintarEditorExterno();
+    });
+    $('#btnEditorExterno').addEventListener('click', editarFuera);
 
     $('#btnVista').addEventListener('click', () => {
       vista = vista === 'paquetes' ? 'hojas' : 'paquetes';

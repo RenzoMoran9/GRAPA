@@ -522,8 +522,14 @@
    * Orden: carpeta vinculada · visor que lo aloja · descarga normal.
    * @returns {{estado:'carpeta'|'guardado'|'cancelado', nombre:string}}
    */
-  G.guardarArchivo = async function (bytes, nombre, tipo) {
-    if (G.carpeta && G.carpeta.actual()) {
+  /**
+   * @param {{aDescargas?:boolean}} [opciones] aDescargas fuerza la carpeta de
+   *   Descargas aunque haya una vinculada: sirve para lo suelto y rápido, que
+   *   no tiene por qué acabar mezclado con el expediente terminado.
+   */
+  G.guardarArchivo = async function (bytes, nombre, tipo, opciones) {
+    const o = opciones || {};
+    if (!o.aDescargas && G.carpeta && G.carpeta.actual()) {
       const permiso = await G.carpeta.permiso(true);
       if (permiso === 'granted') {
         try {

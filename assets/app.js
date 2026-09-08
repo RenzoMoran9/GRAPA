@@ -575,6 +575,7 @@
       // no corresponder con la lista que el lector acabe recorriendo
       ['🔍', 'Ver esta hoja en grande', () => abrirLector(pagina)],
       ['✍', 'Colocar firma o sello', () => abrirFirmar(pagina)],
+      ['⤓', 'Descargar solo esta hoja', () => descargarHoja(pagina)],
       ['⧉', 'Duplicar', () => { marcar(); duplicar([pagina]); }],
       ['🗑', 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
     ].forEach(([txt, titulo, fn, clase]) => {
@@ -1817,6 +1818,89 @@
     try { await G.bd.borrarExpediente('__auto'); } catch (e) {}
   }
 
+  /** Saca una sola hoja a su propio PDF, sin tocar el expediente. */
+  async function descargarHoja(pagina) {
+    G.cargando(true, 'Armando la hoja…');
+    try {
+      // se numera por su sitio en el expediente, para reconocerla después
+      const n = String(E.paginas.indexOf(pagina) + 1).padStart(2, '0');
+      const bytes = await G.construirPdf([pagina], opcionesSalida([pagina]));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // a Descargas a propósito: la carpeta vinculada es para el expediente
+      // terminado, no para una hoja que se saca de paso
+      const r = await G.guardarArchivo(
+        bytes, `${base} - hoja ${n}.pdf`, 'application/pdf', { aDescargas: true });
+      G.aviso(r.estado === 'cancelado'
+        ? 'Descarga cancelada.'
+        : `Hoja ${n} descargada (va a Descargas, no a la carpeta vinculada).`,
+        r.estado === 'cancelado' ? '' : 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo descargar la hoja: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
+  /* ---------------- editor externo ---------------- */
+  const EDITOR_POR_DEFECTO = 'https://pdfguru.com/app/account';
+  const CLAVE_EDITOR = 'grapa.editor.url';
+
+  function urlEditor() {
+    const escrita = ($('#editorUrl').value || '').trim();
+    if (escrita) return escrita;
+    try { return localStorage.getItem(CLAVE_EDITOR) || EDITOR_POR_DEFECTO; } catch (e) {}
+    return EDITOR_POR_DEFECTO;
+  }
+
+  /** El botón dice a dónde lleva, sacándolo de la propia dirección. */
+  function pintarEditorExterno() {
+    const btn = $('#btnEditorExterno');
+    if (!btn) return;
+    let donde = '';
+    try { donde = new URL(urlEditor()).hostname.replace(/^www\./, ''); } catch (e) {}
+    btn.textContent = donde ? '✎ Editar en ' + donde : '✎ Editar fuera';
+    btn.title = donde
+      ? `Guarda el PDF y abre ${donde} en otra pestaña para que lo subas ahí`
+      : 'Escribe primero la dirección del editor en «Archivo de salida»';
+  }
+
+  /**
+   * Guarda lo que se está viendo y abre el editor externo. La pestaña se abre
+   * antes de armar el PDF: si se abriera después, el navegador la tomaría por
+   * una ventana emergente no pedida y la bloquearía.
+   */
+  async function editarFuera() {
+    const objs = E.seleccion.size ? seleccionadas() : hojasVisibles();
+    if (!objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    const destino = urlEditor();
+    let bien = true;
+    try { new URL(destino); } catch (e) { bien = false; }
+    if (!bien) {
+      G.aviso('La dirección del editor no es válida. Revísala en «Archivo de salida».', 'error');
+      return;
+    }
+    window.open(destino, '_blank', 'noopener,noreferrer');
+    G.cargando(true, 'Armando el PDF para editar…');
+    try {
+      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // a Descargas, como la hoja suelta: es un archivo de paso para subirlo
+      // a otro sitio, no tiene por qué acabar en la carpeta del expediente
+      const r = await G.guardarArchivo(
+        bytes, `${base} - para editar.pdf`, 'application/pdf', { aDescargas: true });
+      G.aviso(r.estado === 'cancelado'
+        ? 'Se abrió el editor, pero no se guardó el PDF.'
+        : `«${base} - para editar.pdf» está en Descargas (${objs.length} hoja(s)). `
+          + 'Arrástralo en la pestaña que se abrió.', r.estado === 'cancelado' ? '' : 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo armar el PDF: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
     const est = $('#carpetaEstado'), nota = $('#carpetaNota');
@@ -2163,6 +2247,17 @@
       try { localStorage.setItem(CLAVE_PANEL, panelOculto ? '1' : '0'); } catch (e) {}
       pintarPanel(panelOculto);
     });
+
+    // editor externo
+    try { $('#editorUrl').value = localStorage.getItem(CLAVE_EDITOR) || EDITOR_POR_DEFECTO; } catch (e) {
+      $('#editorUrl').value = EDITOR_POR_DEFECTO;
+    }
+    pintarEditorExterno();
+    $('#editorUrl').addEventListener('input', () => {
+      try { localStorage.setItem(CLAVE_EDITOR, $('#editorUrl').value.trim()); } catch (e) {}
+      pintarEditorExterno();
+    });
+    $('#btnEditorExterno').addEventListener('click', editarFuera);
 
     $('#btnVista').addEventListener('click', () => {
       vista = vista === 'paquetes' ? 'hojas' : 'paquetes';

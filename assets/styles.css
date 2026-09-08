@@ -303,7 +303,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .pag:hover .pag-origen{opacity:1}
 .pag-acciones{
-  position:absolute;top:6px;right:6px;display:flex;gap:3px;opacity:0;transition:opacity .12s;
+  position:absolute;top:6px;right:6px;left:6px;display:flex;gap:3px;opacity:0;
+  transition:opacity .12s;flex-wrap:wrap;justify-content:flex-end;
 }
 .pag:hover .pag-acciones,.pag.sel .pag-acciones{opacity:1}
 .pag-acciones button{
