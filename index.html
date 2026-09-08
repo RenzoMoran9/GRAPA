@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260908b">
+<link rel="stylesheet" href="assets/styles.css?v=20260908c">
 </head>
 <body>
 
@@ -285,6 +285,7 @@
       <div class="firmar-escenario" id="firmarEscenario">
         <div class="firmar-pagina" id="firmarPagina">
           <canvas id="firmarLienzo"></canvas>
+          <div class="firmar-puestas" id="firmarPuestas"></div>
           <div class="firmar-sello" id="firmarSello" hidden>
             <img id="firmarSelloImg" alt="firma">
             <span class="tirador" data-tirador="se"></span>
@@ -316,8 +317,13 @@
         <div class="fila-botones">
           <button class="btn btn-primario ancho" id="btnFirmarAplicar">Colocar firma</button>
         </div>
+        <div class="fila-botones">
+          <button class="btn btn-suave ancho" id="btnFirmarListo">✓ Listo, cerrar</button>
+        </div>
+        <button class="btn btn-suave ancho" id="btnFirmarRecoger" disabled>↺ Recoger la última puesta</button>
         <button class="btn btn-suave ancho btn-peligro-suave" id="btnFirmarQuitarPagina">Quitar firmas de esta página</button>
-        <p class="nota">Arrastra la firma sobre la página para moverla y usa la esquina para cambiar el tamaño.</p>
+        <p class="nota">Arrastra la firma sobre la página para moverla y usa la esquina para cambiar el tamaño. Al colocarla se queda fija y aparece otra: puedes poner las que necesites y salir con <strong>Listo</strong>.</p>
+        <p class="nota">¿Una firma ya puesta quedó torcida? Haz clic sobre ella para volver a cogerla.</p>
       </div>
     </div>
   </div>
@@ -467,10 +473,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260908b"></script>
-<script src="assets/office.js?v=20260908b"></script>
-<script src="assets/expedientes.js?v=20260908b"></script>
-<script src="assets/firmas.js?v=20260908b"></script>
-<script src="assets/app.js?v=20260908b"></script>
+<script src="assets/core.js?v=20260908c"></script>
+<script src="assets/office.js?v=20260908c"></script>
+<script src="assets/expedientes.js?v=20260908c"></script>
+<script src="assets/firmas.js?v=20260908c"></script>
+<script src="assets/app.js?v=20260908c"></script>
 </body>
 </html>

@@ -1184,12 +1184,19 @@
     sel.innerHTML = E.firmas.map((f) => `<option value="${f.id}">${G.escapaHtml(f.nombre)}</option>`).join('');
     sel.value = E.firmaActiva || E.firmas[0].id;
 
+    // La firma que se arrastra es siempre UNA NUEVA. De la última puesta solo
+    // se hereda el tamaño y el giro, que es lo que ahorra trabajo al repetir;
+    // ella se queda donde está, dibujada como una más de la página.
     const previo = pagina.sellos.filter((s) => s.rol === 'firma').slice(-1)[0];
-    fir.sello = previo
-      ? Object.assign({}, previo)
-      : { rol: 'firma', firmaId: sel.value, fx: 0.58, fy: 0.72, fw: 0.28, giro: 0, opacidad: 1 };
-    if (!previo) fir.sello.firmaId = sel.value;
-    sel.value = fir.sello.firmaId;
+    fir.sello = {
+      rol: 'firma',
+      firmaId: sel.value,
+      fx: previo ? previo.fx : 0.58,
+      fy: previo ? Math.min(0.92, previo.fy + 0.04) : 0.72,
+      fw: previo ? previo.fw : 0.28,
+      giro: previo ? previo.giro || 0 : 0,
+      opacidad: previo && previo.opacidad != null ? previo.opacidad : 1,
+    };
 
     $('#firmarAncho').value = Math.round(fir.sello.fw * 100);
     $('#firmarGiro').value = fir.sello.giro || 0;
@@ -1214,7 +1221,66 @@
       G.cargando(false);
     }
     ajustarZoomFirma('medir');
+    pintarPuestas();
     pintarSello();
+  }
+
+  /**
+   * Dibuja en el modal las firmas que ya están puestas en esta página. Antes
+   * no se veían, así que colocar una segunda era a ciegas.
+   */
+  function pintarPuestas() {
+    const capa = $('#firmarPuestas');
+    if (!capa || !fir.pagina) return;
+    capa.innerHTML = '';
+    fir.pagina.sellos.forEach((sello, i) => {
+      if (sello.rol !== 'firma') return;
+      const firma = G.firmaPorId(sello.firmaId);
+      if (!firma) return;
+      const el = document.createElement('div');
+      el.className = 'firmar-puesta';
+      el.title = 'Clic para volver a cogerla y moverla';
+      el.style.left = sello.fx * 100 + '%';
+      el.style.top = sello.fy * 100 + '%';
+      el.style.width = sello.fw * 100 + '%';
+      el.style.aspectRatio = firma.ancho + ' / ' + firma.alto;
+      el.style.opacity = sello.opacidad == null ? 1 : sello.opacidad;
+      el.style.transformOrigin = '0 100%';
+      if (sello.giro) el.style.transform = `rotate(${-sello.giro}deg)`;
+      const img = document.createElement('img');
+      img.src = firma.dataUrl;
+      img.draggable = false;
+      el.appendChild(img);
+      el.addEventListener('click', () => recogerFirma(i));
+      capa.appendChild(el);
+    });
+    // El botón existe porque la firma que se está moviendo tapa a las puestas:
+    // acertarle el clic a la de debajo no siempre se puede.
+    const btn = $('#btnFirmarRecoger');
+    if (btn) {
+      const cuantas = capa.children.length;
+      btn.disabled = !cuantas;
+      btn.textContent = cuantas
+        ? `↺ Recoger la última (hay ${cuantas})`
+        : '↺ Recoger la última puesta';
+    }
+  }
+
+  /** Saca una firma ya puesta del papel para volver a colocarla. */
+  function recogerFirma(indice) {
+    const sello = fir.pagina.sellos[indice];
+    if (!sello || sello.rol !== 'firma') return;
+    marcar();
+    fir.pagina.sellos.splice(indice, 1);
+    fir.sello = Object.assign({}, sello);
+    $('#firmarSelector').value = fir.sello.firmaId;
+    $('#firmarAncho').value = Math.round(fir.sello.fw * 100);
+    $('#firmarGiro').value = fir.sello.giro || 0;
+    $('#firmarOpacidad').value = Math.round((fir.sello.opacidad == null ? 1 : fir.sello.opacidad) * 100);
+    pintarPuestas();
+    pintarSello();
+    pintar();
+    G.aviso('Firma recogida: muévela y vuelve a colocarla.', 'ok');
   }
 
   function pintarSello() {
@@ -1322,20 +1388,33 @@
       else destino = [fir.pagina];
       if (!destino.length) return;
       marcar();
-      destino.forEach((p) => {
-        p.sellos = p.sellos.filter((s) => s.rol !== 'firma' || s.firmaId !== fir.sello.firmaId);
-        p.sellos.push(Object.assign({}, fir.sello));
-      });
-      $('#modalFirmar').hidden = true;
+      // Se añade, no se reemplaza: antes borraba la firma anterior que tuviera
+      // el mismo sello, así que la segunda se comía a la primera.
+      destino.forEach((p) => { p.sellos.push(Object.assign({}, fir.sello)); });
+      // El modal se queda abierto: la puesta pasa a verse fija y aparece otra
+      // un poco más abajo, lista para colocar sin volver a entrar.
+      fir.sello = Object.assign({}, fir.sello, { fy: Math.min(0.92, fir.sello.fy + 0.04) });
+      pintarPuestas();
+      pintarSello();
       pintar();
-      G.aviso(`Firma colocada en ${destino.length} página(s).`, 'ok');
+      G.aviso(`Firma colocada en ${destino.length} página(s). `
+        + 'Puedes poner otra o salir con «Listo».', 'ok');
     });
 
     $('#btnFirmarQuitarPagina').addEventListener('click', () => {
       marcar();
       fir.pagina.sellos = fir.pagina.sellos.filter((s) => s.rol !== 'firma');
-      $('#modalFirmar').hidden = true;
+      pintarPuestas();
       pintar();
+      G.aviso('Firmas quitadas de esta página.', 'ok');
+    });
+
+    $('#btnFirmarListo').addEventListener('click', () => { $('#modalFirmar').hidden = true; });
+
+    $('#btnFirmarRecoger').addEventListener('click', () => {
+      for (let i = fir.pagina.sellos.length - 1; i >= 0; i--) {
+        if (fir.pagina.sellos[i].rol === 'firma') { recogerFirma(i); return; }
+      }
     });
   }
 

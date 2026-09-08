@@ -588,3 +588,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* Panel lateral plegable: la parrilla se queda con todo el ancho */
 body.sin-panel .panel { display: none; }
+
+/* Firmas ya colocadas dentro del modal: se ven como quedarán, y se pueden
+   volver a coger con un clic si alguna quedó torcida. */
+.firmar-puestas{position:absolute;inset:0}
+.firmar-puesta{position:absolute;cursor:pointer;line-height:0}
+.firmar-puesta img{width:100%;height:100%;display:block;pointer-events:none}
+.firmar-puesta::after{
+  content:'';position:absolute;inset:-3px;border:1.5px dashed transparent;border-radius:3px;
+}
+.firmar-puesta:hover::after{border-color:var(--acento)}
