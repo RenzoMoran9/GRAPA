@@ -126,6 +126,9 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 ## Sacar una hoja o editar fuera
 
+- Cada hoja lleva una **casilla** arriba a la izquierda: marcar y desmarcar con
+  el ratón, sin Ctrl ni Shift, y sin perder lo que ya tenías marcado.
+- **⤓ Bajar selección** junta las hojas marcadas en un solo PDF, a **Descargas**.
 - La **⤓** de cada hoja la descarga sola, en su propio PDF. Va siempre a
   **Descargas**, aunque tengas una carpeta vinculada: la carpeta es para el
   expediente terminado, no para una hoja que se saca de paso.

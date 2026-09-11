@@ -319,7 +319,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .pag:hover .pag-origen{opacity:1}
 .pag-acciones{
-  position:absolute;top:6px;right:6px;left:6px;display:flex;gap:3px;opacity:0;
+  /* el hueco de la izquierda es el de la casilla: sin él, la casilla se le
+     monta encima al primer botón y no se puede pulsar */
+  position:absolute;top:6px;right:6px;left:34px;display:flex;gap:3px;opacity:0;
   transition:opacity .12s;flex-wrap:wrap;justify-content:flex-end;
 }
 .pag:hover .pag-acciones,.pag.sel .pag-acciones{opacity:1}
@@ -557,6 +559,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .taller-herramientas.solo-paquetes #btnSelTodo,
 .taller-herramientas.solo-paquetes #btnSelNada,
 .taller-herramientas.solo-paquetes #btnSelInvertir,
+.taller-herramientas.solo-paquetes #btnDescargarSel,
 .taller-herramientas.solo-paquetes #btnLector,
 .taller-herramientas.solo-paquetes #btnGirarIzq,
 .taller-herramientas.solo-paquetes #btnGirarDer,
@@ -614,6 +617,24 @@ body.sin-panel .panel { display: none; }
   content:'';position:absolute;inset:-3px;border:1.5px dashed transparent;border-radius:3px;
 }
 .firmar-puesta:hover::after{border-color:var(--acento)}
+
+/* Casilla de las hojas: marcar con el ratón, sin Ctrl ni Shift */
+.pag-check{
+  position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:6px;
+  border:1.5px solid rgba(0,0,0,.28);background:rgba(255,255,255,.94);
+  cursor:pointer;padding:0;display:grid;place-items:center;z-index:2;
+  opacity:0;transition:opacity .12s,background .12s,border-color .12s;
+  box-shadow:0 1px 3px rgba(0,0,0,.16);
+}
+.pag:hover .pag-check,.pag.sel .pag-check{opacity:1}
+.pag-check::after{
+  content:'✓';font-size:14px;line-height:1;color:transparent;font-weight:700;
+}
+.pag.sel .pag-check{background:var(--acento);border-color:var(--acento)}
+.pag.sel .pag-check::after{color:#fff}
+.pag-check:hover{border-color:var(--acento)}
+/* en la vista de paquetes la casilla no pinta nada */
+.pag.paquete .pag-check{display:none}
 
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
@@ -810,6 +831,7 @@ body.sin-panel .panel { display: none; }
         <button class="btn btn-mini" id="btnSelTodo">Seleccionar todo</button>
         <button class="btn btn-mini" id="btnSelNada">Ninguna</button>
         <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
+        <button class="btn btn-mini" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas">⤓ Bajar selección</button>
         <span class="separador-vertical"></span>
         <button class="btn btn-mini" id="btnLector" title="Ver las hojas en grande (V)">🔍 Ver en grande</button>
         <span class="separador-vertical"></span>
@@ -3438,6 +3460,22 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     marco.className = 'pag-marco';
     marco.style.aspectRatio = vis.w + ' / ' + vis.h;
 
+    // Casilla para marcar hojas sin teclado: suma o quita esta sola, sin tocar
+    // las demás. Antes había que saberse Ctrl+clic.
+    const casilla = document.createElement('button');
+    casilla.className = 'pag-check';
+    casilla.type = 'button';
+    casilla.title = 'Marcar o desmarcar esta hoja';
+    casilla.setAttribute('aria-label', 'Marcar esta hoja');
+    casilla.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (E.seleccion.has(pagina.uid)) E.seleccion.delete(pagina.uid);
+      else E.seleccion.add(pagina.uid);
+      E.ancla = indice;
+      refrescarSeleccion();
+    });
+    marco.appendChild(casilla);
+
     const hueco = document.createElement('div');
     hueco.className = 'pag-cargando';
     marco.appendChild(hueco);
@@ -4887,6 +4925,34 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     }
   }
 
+  /** Baja las hojas marcadas en un solo PDF, siempre a Descargas. */
+  async function descargarSeleccion() {
+    const objs = seleccionadas();
+    if (!objs.length) {
+      G.aviso('Marca primero las hojas que quieres bajar.', 'error');
+      return;
+    }
+    G.cargando(true, 'Armando el PDF…');
+    try {
+      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // a Descargas a propósito, como la hoja suelta: la carpeta vinculada es
+      // para el expediente terminado, no para un recorte que se saca de paso
+      const r = await G.guardarArchivo(
+        bytes, `${base} - seleccion (${objs.length} hojas).pdf`, 'application/pdf',
+        { aDescargas: true });
+      G.aviso(r.estado === 'cancelado'
+        ? 'Descarga cancelada.'
+        : `${objs.length} hoja(s) descargadas en un PDF (van a Descargas).`,
+        r.estado === 'cancelado' ? '' : 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo descargar la selección: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
   /* ---------------- editor externo ---------------- */
   const EDITOR_POR_DEFECTO = 'https://pdfguru.com/app/account';
   const CLAVE_EDITOR = 'grapa.editor.url';
@@ -5310,6 +5376,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       pintar();
     });
     $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
+    $('#btnDescargarSel').addEventListener('click', descargarSeleccion);
     $('#btnGirarIzq').addEventListener('click', () => girar(-90));
     $('#btnGirarDer').addEventListener('click', () => girar(90));
     $('#btnDuplicar').addEventListener('click', () => {

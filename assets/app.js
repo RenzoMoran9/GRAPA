@@ -525,6 +525,22 @@
     marco.className = 'pag-marco';
     marco.style.aspectRatio = vis.w + ' / ' + vis.h;
 
+    // Casilla para marcar hojas sin teclado: suma o quita esta sola, sin tocar
+    // las demás. Antes había que saberse Ctrl+clic.
+    const casilla = document.createElement('button');
+    casilla.className = 'pag-check';
+    casilla.type = 'button';
+    casilla.title = 'Marcar o desmarcar esta hoja';
+    casilla.setAttribute('aria-label', 'Marcar esta hoja');
+    casilla.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (E.seleccion.has(pagina.uid)) E.seleccion.delete(pagina.uid);
+      else E.seleccion.add(pagina.uid);
+      E.ancla = indice;
+      refrescarSeleccion();
+    });
+    marco.appendChild(casilla);
+
     const hueco = document.createElement('div');
     hueco.className = 'pag-cargando';
     marco.appendChild(hueco);
@@ -1974,6 +1990,34 @@
     }
   }
 
+  /** Baja las hojas marcadas en un solo PDF, siempre a Descargas. */
+  async function descargarSeleccion() {
+    const objs = seleccionadas();
+    if (!objs.length) {
+      G.aviso('Marca primero las hojas que quieres bajar.', 'error');
+      return;
+    }
+    G.cargando(true, 'Armando el PDF…');
+    try {
+      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // a Descargas a propósito, como la hoja suelta: la carpeta vinculada es
+      // para el expediente terminado, no para un recorte que se saca de paso
+      const r = await G.guardarArchivo(
+        bytes, `${base} - seleccion (${objs.length} hojas).pdf`, 'application/pdf',
+        { aDescargas: true });
+      G.aviso(r.estado === 'cancelado'
+        ? 'Descarga cancelada.'
+        : `${objs.length} hoja(s) descargadas en un PDF (van a Descargas).`,
+        r.estado === 'cancelado' ? '' : 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo descargar la selección: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
   /* ---------------- editor externo ---------------- */
   const EDITOR_POR_DEFECTO = 'https://pdfguru.com/app/account';
   const CLAVE_EDITOR = 'grapa.editor.url';
@@ -2397,6 +2441,7 @@
       pintar();
     });
     $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
+    $('#btnDescargarSel').addEventListener('click', descargarSeleccion);
     $('#btnGirarIzq').addEventListener('click', () => girar(-90));
     $('#btnGirarDer').addEventListener('click', () => girar(90));
     $('#btnDuplicar').addEventListener('click', () => {

@@ -303,7 +303,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .pag:hover .pag-origen{opacity:1}
 .pag-acciones{
-  position:absolute;top:6px;right:6px;left:6px;display:flex;gap:3px;opacity:0;
+  /* el hueco de la izquierda es el de la casilla: sin él, la casilla se le
+     monta encima al primer botón y no se puede pulsar */
+  position:absolute;top:6px;right:6px;left:34px;display:flex;gap:3px;opacity:0;
   transition:opacity .12s;flex-wrap:wrap;justify-content:flex-end;
 }
 .pag:hover .pag-acciones,.pag.sel .pag-acciones{opacity:1}
@@ -541,6 +543,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .taller-herramientas.solo-paquetes #btnSelTodo,
 .taller-herramientas.solo-paquetes #btnSelNada,
 .taller-herramientas.solo-paquetes #btnSelInvertir,
+.taller-herramientas.solo-paquetes #btnDescargarSel,
 .taller-herramientas.solo-paquetes #btnLector,
 .taller-herramientas.solo-paquetes #btnGirarIzq,
 .taller-herramientas.solo-paquetes #btnGirarDer,
@@ -598,3 +601,21 @@ body.sin-panel .panel { display: none; }
   content:'';position:absolute;inset:-3px;border:1.5px dashed transparent;border-radius:3px;
 }
 .firmar-puesta:hover::after{border-color:var(--acento)}
+
+/* Casilla de las hojas: marcar con el ratón, sin Ctrl ni Shift */
+.pag-check{
+  position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:6px;
+  border:1.5px solid rgba(0,0,0,.28);background:rgba(255,255,255,.94);
+  cursor:pointer;padding:0;display:grid;place-items:center;z-index:2;
+  opacity:0;transition:opacity .12s,background .12s,border-color .12s;
+  box-shadow:0 1px 3px rgba(0,0,0,.16);
+}
+.pag:hover .pag-check,.pag.sel .pag-check{opacity:1}
+.pag-check::after{
+  content:'✓';font-size:14px;line-height:1;color:transparent;font-weight:700;
+}
+.pag.sel .pag-check{background:var(--acento);border-color:var(--acento)}
+.pag.sel .pag-check::after{color:#fff}
+.pag-check:hover{border-color:var(--acento)}
+/* en la vista de paquetes la casilla no pinta nada */
+.pag.paquete .pag-check{display:none}
