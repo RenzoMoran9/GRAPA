@@ -966,17 +966,18 @@
     // arrastrar esta misma tarjeta. Si reconstruimos la rejilla (innerHTML),
     // el nodo original queda fuera del documento y, por especificación,
     // el navegador cancela el arrastre sin avisar: nunca llega el drop.
-    if (!E.seleccion.has(uid)) {
-      E.seleccion = new Set([uid]);
-      $$('.pag').forEach((t) => t.classList.toggle('sel', t.dataset.uid === uid));
-    }
-    arrastrando = Array.from(E.seleccion);
+    // Arrastrar una hoja que NO está marcada mueve solo esa, sin tocar lo
+    // marcado. Antes reemplazaba la selección entera, y como basta con mover
+    // el ratón un par de píxeles al pulsar para que el navegador lo tome por
+    // arrastre, marcar hojas desmarcaba las anteriores sin motivo aparente.
+    arrastrando = E.seleccion.has(uid) ? Array.from(E.seleccion) : [uid];
+    const enArrastre = new Set(arrastrando);
     mostrarTacho(true);
     ev.dataTransfer.effectAllowed = 'move';
     ev.dataTransfer.setData('text/plain', uid);
     ev.dataTransfer.setData(TIPO_HOJA, uid);
     setTimeout(() => {
-      $$('.pag').forEach((t) => { if (E.seleccion.has(t.dataset.uid)) t.classList.add('arrastrando'); });
+      $$('.pag').forEach((t) => { if (enArrastre.has(t.dataset.uid)) t.classList.add('arrastrando'); });
     }, 0);
   });
 
