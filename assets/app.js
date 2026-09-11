@@ -629,7 +629,6 @@
     }
 
     el.addEventListener('click', (ev) => clicPagina(ev, pagina, indice));
-    el.addEventListener('dblclick', () => abrirFirmar(pagina));
     observador.observe(el);
     return el;
   }
@@ -798,14 +797,12 @@
       const a = Math.min(E.ancla, indice), b = Math.max(E.ancla, indice);
       if (!ev.ctrlKey && !ev.metaKey) E.seleccion.clear();
       for (let i = a; i <= b; i++) E.seleccion.add(E.paginas[i].uid);
-    } else if (ev.ctrlKey || ev.metaKey) {
+    } else {
+      // Clic = marcar o desmarcar esa hoja, igual que su casilla, sin tocar
+      // las demás. Antes el clic reemplazaba la selección entera: con todo
+      // marcado, pulsar una lo desmarcaba todo menos esa.
       if (E.seleccion.has(pagina.uid)) E.seleccion.delete(pagina.uid);
       else E.seleccion.add(pagina.uid);
-      E.ancla = indice;
-    } else {
-      const solaYa = E.seleccion.size === 1 && E.seleccion.has(pagina.uid);
-      E.seleccion.clear();
-      if (!solaYa) E.seleccion.add(pagina.uid);
       E.ancla = indice;
     }
     refrescarSeleccion();
