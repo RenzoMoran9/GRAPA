@@ -489,7 +489,10 @@ button,input,select,textarea{font:inherit;color:inherit}
    abriendo de una en una */
 .lector-hojas.columnas{
   display:grid;grid-template-columns:repeat(var(--lector-cols,1),var(--hoja-ancho,760px));
-  justify-content:center;align-items:start;overflow:auto;
+  /* «safe»: centra mientras quepa, y en cuanto se agranda deja de centrar. Con
+     el centrado a secas lo que desborda por la izquierda queda fuera de la
+     pantalla y la barra no llega: la primera hoja no había manera de verla. */
+  justify-content:safe center;align-items:start;overflow:auto;
 }
 .lector-hojas.columnas .hoja{width:100%;max-width:none}
 .hoja{
@@ -5648,7 +5651,13 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       eliminar([p]);
       refrescarLector(Math.min(i, E.paginas.length - 1));
     });
-    $('#lectorZoom').addEventListener('input', aplicarZoomLector);
+    $('#lectorZoom').addEventListener('input', () => {
+      aplicarZoomLector();
+      // al agrandar, la hoja que se estaba mirando se iba de la pantalla:
+      // se la vuelve a traer en vez de dejar la vista donde estaba
+      const hoja = $$('.hoja', $('#lectorHojas'))[lector.actual];
+      if (hoja) hoja.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
+    });
     window.addEventListener('resize', () => { if (lector.abierto) aplicarZoomLector(); });
     seguirScrollLector();
 

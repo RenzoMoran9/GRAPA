@@ -2693,7 +2693,13 @@
       eliminar([p]);
       refrescarLector(Math.min(i, E.paginas.length - 1));
     });
-    $('#lectorZoom').addEventListener('input', aplicarZoomLector);
+    $('#lectorZoom').addEventListener('input', () => {
+      aplicarZoomLector();
+      // al agrandar, la hoja que se estaba mirando se iba de la pantalla:
+      // se la vuelve a traer en vez de dejar la vista donde estaba
+      const hoja = $$('.hoja', $('#lectorHojas'))[lector.actual];
+      if (hoja) hoja.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
+    });
     window.addEventListener('resize', () => { if (lector.abierto) aplicarZoomLector(); });
     seguirScrollLector();
 

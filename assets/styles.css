@@ -473,7 +473,10 @@ button,input,select,textarea{font:inherit;color:inherit}
    abriendo de una en una */
 .lector-hojas.columnas{
   display:grid;grid-template-columns:repeat(var(--lector-cols,1),var(--hoja-ancho,760px));
-  justify-content:center;align-items:start;overflow:auto;
+  /* «safe»: centra mientras quepa, y en cuanto se agranda deja de centrar. Con
+     el centrado a secas lo que desborda por la izquierda queda fuera de la
+     pantalla y la barra no llega: la primera hoja no había manera de verla. */
+  justify-content:safe center;align-items:start;overflow:auto;
 }
 .lector-hojas.columnas .hoja{width:100%;max-width:none}
 .hoja{
