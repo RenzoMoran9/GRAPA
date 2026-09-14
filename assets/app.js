@@ -239,6 +239,12 @@
    */
   function adoptarPaquete(movidas) {
     if (!movidas.length) return;
+    // Con un paquete abierto, lo que se mueve se queda en él: si adoptara el
+    // paquete del vecino, desaparecería de lo que se está mirando.
+    if (paqueteAbierto) {
+      movidas.forEach((p) => { p.paqueteId = paqueteAbierto; });
+      return;
+    }
     const desde = E.paginas.indexOf(movidas[0]);
     if (desde < 0) return;
     const antes = E.paginas[desde - 1];
@@ -532,13 +538,13 @@
     casilla.type = 'button';
     casilla.title = 'Marcar o desmarcar esta hoja';
     casilla.setAttribute('aria-label', 'Marcar esta hoja');
+    // Marcar es cosa de la casilla y de nadie más. Conserva Shift+clic para
+    // marcar un rango entero desde la última que se tocó.
     casilla.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      if (E.seleccion.has(pagina.uid)) E.seleccion.delete(pagina.uid);
-      else E.seleccion.add(pagina.uid);
-      E.ancla = indice;
-      refrescarSeleccion();
+      clicPagina(ev, pagina, indice);
     });
+    casilla.addEventListener('dblclick', (ev) => ev.stopPropagation());
     marco.appendChild(casilla);
 
     const hueco = document.createElement('div');
@@ -628,7 +634,12 @@
       el.appendChild(corte);
     }
 
-    el.addEventListener('click', (ev) => clicPagina(ev, pagina, indice));
+    // Doble clic = verla en grande. El clic suelto sobre la hoja no hace nada:
+    // marcar pasó a ser solo de la casilla, para no desmarcar sin querer.
+    el.addEventListener('dblclick', (ev) => {
+      if (ev.target.closest('.pag-acciones, .pag-check, .corte')) return;
+      abrirLector(pagina);
+    });
     observador.observe(el);
     return el;
   }
@@ -863,11 +874,23 @@
 
   /** Mueve la selección para que empiece justo en la posición dada (1 = primera). */
   function moverSeleccionAPosicion(numeroPos) {
-    const objs = seleccionadas();
+    const objs = hojasVisibles().filter((p) => E.seleccion.has(p.uid));
     if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
     if (!Number.isFinite(numeroPos)) { G.aviso('Escribe el número de la posición.', 'error'); return; }
     marcar();
     const mover = new Set(objs.map((p) => p.uid));
+    if (paqueteAbierto) {
+      // la posición es la del paquete, que es lo que se está viendo
+      const suyas = E.paginas.filter((p) => p.paqueteId === paqueteAbierto);
+      const resto = suyas.filter((p) => !mover.has(p.uid));
+      const destino = Math.max(0, Math.min(resto.length, Math.round(numeroPos) - 1));
+      resto.splice(destino, 0, ...objs);
+      let i = 0;
+      E.paginas = E.paginas.map((p) => (p.paqueteId === paqueteAbierto ? resto[i++] : p));
+      pintar();
+      G.aviso(`Movidas a la posición ${destino + 1} del paquete.`, 'ok');
+      return;
+    }
     const resto = E.paginas.filter((p) => !mover.has(p.uid));
     const destino = Math.max(0, Math.min(resto.length, Math.round(numeroPos) - 1));
     resto.splice(destino, 0, ...objs);
@@ -877,11 +900,26 @@
     G.aviso(`Movidas a la posición ${destino + 1}.`, 'ok');
   }
 
+  /**
+   * Manda la selección al principio o al final. Dentro de un paquete, al
+   * principio o al final DE ESE paquete; con todas las hojas a la vista, del
+   * expediente entero.
+   */
   function moverExtremo(alInicio) {
-    const objs = seleccionadas();
+    const objs = hojasVisibles().filter((p) => E.seleccion.has(p.uid));
     if (!objs.length) { G.aviso('Selecciona primero las páginas que quieres mover.', 'error'); return; }
     marcar();
     const mover = new Set(objs.map((p) => p.uid));
+    if (paqueteAbierto) {
+      const suyas = E.paginas.filter((p) => p.paqueteId === paqueteAbierto);
+      const resto = suyas.filter((p) => !mover.has(p.uid));
+      const nuevas = alInicio ? objs.concat(resto) : resto.concat(objs);
+      let i = 0;
+      // el paquete ocupa un tramo seguido: se reescribe ese tramo y ya
+      E.paginas = E.paginas.map((p) => (p.paqueteId === paqueteAbierto ? nuevas[i++] : p));
+      pintar();
+      return;
+    }
     const resto = E.paginas.filter((p) => !mover.has(p.uid));
     E.paginas = alInicio ? objs.concat(resto) : resto.concat(objs);
     adoptarPaquete(objs);
@@ -1049,6 +1087,11 @@
       const antes = ev.clientX < r.left + r.width / 2;
       const pos = resto.findIndex((p) => p.uid === uidRef);
       destino = pos < 0 ? resto.length : (antes ? pos : pos + 1);
+    } else if (paqueteAbierto) {
+      // soltar en el hueco vacío, dentro de un paquete, es «al final de este
+      // paquete»: al final del expediente saldría de lo que se está viendo
+      const suyas = resto.filter((p) => p.paqueteId === paqueteAbierto);
+      destino = suyas.length ? resto.indexOf(suyas[suyas.length - 1]) + 1 : resto.length;
     }
     resto.splice(destino, 0, ...movidas);
     E.paginas = resto;

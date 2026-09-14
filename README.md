@@ -126,9 +126,11 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 ## Sacar una hoja o editar fuera
 
-- Cada hoja lleva una **casilla** arriba a la izquierda, y **un clic sobre la
-  hoja hace lo mismo**: marca o desmarca esa sola, sin tocar lo que ya tenías
-  marcado. `Shift`+clic sigue marcando un rango entero.
+- Marcar hojas es cosa de **la casilla** de cada una, y de nada más: así no se
+  desmarca nada sin querer. `Shift`+clic en la casilla marca un rango entero.
+- **Doble clic en la hoja** la abre en grande.
+- Dentro de un paquete, mover al principio, al final o a una posición es
+  **dentro de ese paquete**. Con todas las hojas a la vista, del expediente.
 - **⤓ Bajar selección** junta las hojas marcadas en un solo PDF, a **Descargas**.
 - La **⤓** de cada hoja la descarga sola, en su propio PDF. Va siempre a
   **Descargas**, aunque tengas una carpeta vinculada: la carpeta es para el
