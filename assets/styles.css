@@ -339,7 +339,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pag.destino-der .pag-marco{box-shadow:4px 0 0 -1px var(--acento),var(--sombra)}
 
 /* ---------- modales ---------- */
-.modal{position:fixed;inset:0;background:rgba(12,16,22,.55);display:grid;place-items:center;z-index:60;padding:20px;backdrop-filter:blur(3px)}
+/* por encima del lector (75): desde el lector se firma y se borra, y el
+   diálogo quedaba detrás de la pantalla completa, fuera de alcance */
+.modal{position:fixed;inset:0;background:rgba(12,16,22,.55);display:grid;place-items:center;z-index:78;padding:20px;backdrop-filter:blur(3px)}
 .modal[hidden]{display:none}
 .modal-caja{
   background:var(--fondo-2);border:1px solid var(--borde);border-radius:14px;box-shadow:var(--sombra-fuerte);
@@ -467,6 +469,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 .lector-info span{font-size:11.5px;color:var(--texto-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}
 .lector-acciones{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-left:auto}
 .lector-hojas{flex:1;overflow-y:auto;padding:22px 16px 60px;display:flex;flex-direction:column;align-items:center;gap:26px}
+/* varias hojas a la vez, una al lado de otra: para comparar postores sin ir
+   abriendo de una en una */
+.lector-hojas.columnas{
+  display:grid;grid-template-columns:repeat(var(--lector-cols,1),var(--hoja-ancho,760px));
+  justify-content:center;align-items:start;overflow:auto;
+}
+.lector-hojas.columnas .hoja{width:100%;max-width:none}
 .hoja{
   position:relative;background:#fff;box-shadow:var(--sombra);border:1px solid var(--borde);
   width:var(--hoja-ancho,760px);max-width:100%;
@@ -544,6 +553,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .taller-herramientas.solo-paquetes #btnSelNada,
 .taller-herramientas.solo-paquetes #btnSelInvertir,
 .taller-herramientas.solo-paquetes #btnDescargarSel,
+.taller-herramientas.solo-paquetes #btnComparar,
 .taller-herramientas.solo-paquetes #btnLector,
 .taller-herramientas.solo-paquetes #btnGirarIzq,
 .taller-herramientas.solo-paquetes #btnGirarDer,

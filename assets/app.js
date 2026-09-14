@@ -2031,6 +2031,21 @@
     }
   }
 
+  /** Abre en grande, una al lado de otra, solo las hojas marcadas. */
+  function compararMarcadas() {
+    const objs = hojasVisibles().filter((p) => E.seleccion.has(p.uid));
+    if (objs.length < 2) {
+      G.aviso('Marca al menos dos hojas para compararlas una al lado de otra.', 'error');
+      return;
+    }
+    lector.columnas = Math.min(4, objs.length);
+    $('#lectorColumnas').value = String(lector.columnas);
+    // comparando, el 100 % es «que las columnas llenen el ancho»
+    $('#lectorZoom').value = '100';
+    abrirLector(objs[0], { soloMarcadas: true });
+    G.aviso(`Comparando ${objs.length} hoja(s). Cambia las columnas o el tamaño arriba.`, 'ok');
+  }
+
   /** Baja las hojas marcadas en un solo PDF, siempre a Descargas. */
   async function descargarSeleccion() {
     const objs = seleccionadas();
@@ -2141,9 +2156,19 @@
   /* =========================================================
      LECTOR · las hojas en grande, una debajo de otra
      ========================================================= */
-  const lector = { abierto: false, actual: 0, obs: null };
+  const lector = { abierto: false, actual: 0, obs: null, soloMarcadas: false, columnas: 1 };
 
-  function paginaActualLector() { return hojasVisibles()[lector.actual] || null; }
+  /**
+   * Lo que recorre el lector: normalmente lo que se está viendo en el taller,
+   * y en modo comparar solo las hojas marcadas.
+   */
+  function hojasLector() {
+    if (!lector.soloMarcadas) return hojasVisibles();
+    const marcadas = hojasVisibles().filter((p) => E.seleccion.has(p.uid));
+    return marcadas.length ? marcadas : hojasVisibles();
+  }
+
+  function paginaActualLector() { return hojasLector()[lector.actual] || null; }
 
   function construirLector() {
     const cont = $('#lectorHojas');
@@ -2187,7 +2212,7 @@
       });
     }, { root: cont, rootMargin: '1400px 0px' });
 
-    hojasVisibles().forEach((pagina, i) => {
+    hojasLector().forEach((pagina, i) => {
       const vis = visDe(pagina);
       const fuente = E.fuentes.get(pagina.fuenteId);
       const hoja = document.createElement('div');
@@ -2222,12 +2247,24 @@
 
   function aplicarZoomLector() {
     const v = Number($('#lectorZoom').value) / 100;
-    const ancho = Math.round(Math.min(window.innerWidth - 40, window.innerWidth * v));
-    $('#lectorHojas').style.setProperty('--hoja-ancho', ancho + 'px');
+    const cont = $('#lectorHojas');
+    const cols = Math.max(1, Math.min(4, lector.columnas || 1));
+    cont.classList.toggle('columnas', cols > 1);
+    cont.style.setProperty('--lector-cols', cols);
+    let ancho;
+    if (cols > 1) {
+      // el 100 % es «que quepan justo las columnas pedidas»; de ahí para
+      // arriba se desplaza a los lados, que es lo que hace falta para leer
+      const hueco = Math.max(240, (cont.clientWidth || window.innerWidth) - 32);
+      ancho = Math.round(((hueco - (cols - 1) * 26) / cols) * v);
+    } else {
+      ancho = Math.round(Math.min(window.innerWidth - 40, window.innerWidth * v));
+    }
+    cont.style.setProperty('--hoja-ancho', Math.max(160, ancho) + 'px');
   }
 
   function marcarHoja(i) {
-    const cuantas = hojasVisibles().length;
+    const cuantas = hojasLector().length;
     lector.actual = Math.max(0, Math.min(cuantas - 1, i));
     $$('.hoja', $('#lectorHojas')).forEach((h) => {
       h.classList.toggle('actual', Number(h.dataset.indice) === lector.actual);
@@ -2246,8 +2283,9 @@
   }
 
   /** Admite la página, su posición, o nada (y entonces la que esté marcada). */
-  function abrirLector(donde) {
-    const visibles = hojasVisibles();
+  function abrirLector(donde, opciones) {
+    lector.soloMarcadas = !!(opciones && opciones.soloMarcadas);
+    const visibles = hojasLector();
     if (!visibles.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
     let indice;
     if (donde && typeof donde === 'object') indice = visibles.indexOf(donde);
@@ -2267,6 +2305,9 @@
 
   function cerrarLector() {
     lector.abierto = false;
+    lector.soloMarcadas = false;
+    lector.columnas = 1;
+    $('#lectorColumnas').value = '1';
     $('#lector').hidden = true;
     if (lector.obs) lector.obs.disconnect();
     $('#lectorHojas').innerHTML = '';
@@ -2274,7 +2315,7 @@
 
   function refrescarLector(indice) {
     if (!lector.abierto) return;
-    if (!hojasVisibles().length) { cerrarLector(); return; }
+    if (!hojasLector().length) { cerrarLector(); return; }
     construirLector();
     irAHoja(indice == null ? lector.actual : indice, true);
   }
@@ -2288,7 +2329,9 @@
     const destino = idx + delta;
     if (destino < 0 || destino >= visibles.length) return;
     moverPosiciones([pagina], delta);
-    refrescarLector(destino);
+    // comparando, la hoja cambia de sitio en el expediente pero sigue siendo
+    // la misma de la comparación: el hueco que se mira no cambia
+    refrescarLector(lector.soloMarcadas ? lector.actual : destino);
   }
 
   function accionLector(fn) {
@@ -2311,8 +2354,15 @@
         const hojas = $$('.hoja', cont);
         const limite = cont.getBoundingClientRect().top + 80;
         let mejor = 0;
-        for (let i = 0; i < hojas.length; i++) {
-          if (hojas[i].getBoundingClientRect().top <= limite) mejor = i; else break;
+        if (lector.columnas > 1) {
+          // en rejilla la fila entera empieza a la misma altura: la que cuenta
+          // es la PRIMERA que todavía se ve, no la última de esa fila
+          mejor = hojas.findIndex((h) => h.getBoundingClientRect().bottom > limite);
+          if (mejor < 0) mejor = hojas.length - 1;
+        } else {
+          for (let i = 0; i < hojas.length; i++) {
+            if (hojas[i].getBoundingClientRect().top <= limite) mejor = i; else break;
+          }
         }
         if (mejor !== lector.actual) marcarHoja(mejor);
       });
@@ -2339,7 +2389,7 @@
         ev.preventDefault(); irAHoja(lector.actual - 1); return;
       }
       if (ev.key === 'Home') { ev.preventDefault(); irAHoja(0); return; }
-      if (ev.key === 'End') { ev.preventDefault(); irAHoja(hojasVisibles().length - 1); return; }
+      if (ev.key === 'End') { ev.preventDefault(); irAHoja(hojasLector().length - 1); return; }
       if (ev.key === '[') { accionLector((p) => { p.giro = G.norm(p.giro - 90); }); return; }
       if (ev.key === ']') { accionLector((p) => { p.giro = G.norm(p.giro + 90); }); return; }
     }
@@ -2483,6 +2533,12 @@
     });
     $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
     $('#btnDescargarSel').addEventListener('click', descargarSeleccion);
+    $('#btnComparar').addEventListener('click', compararMarcadas);
+    $('#lectorColumnas').addEventListener('change', (ev) => {
+      lector.columnas = Number(ev.target.value) || 1;
+      aplicarZoomLector();
+      irAHoja(lector.actual, true);
+    });
     $('#btnGirarIzq').addEventListener('click', () => girar(-90));
     $('#btnGirarDer').addEventListener('click', () => girar(90));
     $('#btnDuplicar').addEventListener('click', () => {
