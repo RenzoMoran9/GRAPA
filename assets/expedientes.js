@@ -89,6 +89,15 @@
       return leidas.filter(Boolean);
     },
 
+    /** Le cambia el nombre sin tocar nada más de lo guardado. */
+    async renombrarExpediente(id, nombre) {
+      const reg = await conTienda(['expedientes'], 'readonly', (exp) => pedir(exp.get(id)));
+      if (!reg) return null;
+      reg.nombre = nombre;
+      await conTienda(['expedientes'], 'readwrite', (exp) => { exp.put(reg); });
+      return reg;
+    },
+
     /** Borra el expediente y los PDF que ya no use ningún otro. */
     async borrarExpediente(id) {
       await conTienda(['expedientes'], 'readwrite', (exp) => { exp.delete(id); });

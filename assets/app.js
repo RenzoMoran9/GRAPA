@@ -1892,6 +1892,28 @@
         await restaurarExpediente(r);
       });
 
+      const renombrar = document.createElement('button');
+      renombrar.className = 'btn btn-mini';
+      renombrar.textContent = '✎';
+      renombrar.title = 'Cambiarle el nombre a este expediente guardado';
+      renombrar.addEventListener('click', async () => {
+        const nuevo = await G.pedirTexto({
+          titulo: 'Cambiar el nombre',
+          mensaje: 'Solo cambia cómo se llama en la lista. No se toca ninguna hoja.',
+          valor: r.nombre,
+        });
+        if (!nuevo || nuevo === r.nombre) return;
+        await G.bd.renombrarExpediente(r.id, nuevo);
+        // si es el que está abierto, el taller y el nombre de salida lo siguen
+        if (expedienteAbierto && expedienteAbierto.id === r.id) {
+          expedienteAbierto.nombre = nuevo;
+          actualizarEstadoGuardado();
+          sincronizarNombreSalida();
+        }
+        await pintarGuardados();
+        G.aviso(`Ahora se llama «${nuevo}».`, 'ok');
+      });
+
       const borrar = document.createElement('button');
       borrar.className = 'btn btn-mini btn-peligro-suave';
       borrar.textContent = '✕';
@@ -1908,7 +1930,7 @@
         pintarGuardados();
       });
 
-      li.append(datos, abrir, borrar);
+      li.append(datos, abrir, renombrar, borrar);
       lista.appendChild(li);
     });
     if (!regs.length) {
