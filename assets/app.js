@@ -100,6 +100,16 @@
   };
 
   let contadorCarga = 0;
+  /**
+   * Cambia el texto de la capa de espera sin tocar su contador. Avisar del
+   * avance con G.cargando(true, …) lo subía una vez por hoja y la capa se
+   * quedaba abierta al terminar.
+   */
+  G.progreso = function (texto) {
+    const c = $('#cargandoTexto');
+    if (c) c.textContent = texto;
+  };
+
   G.cargando = function (activo, texto) {
     const capa = $('#cargando');
     contadorCarga = Math.max(0, contadorCarga + (activo ? 1 : -1));
@@ -1560,15 +1570,50 @@
   }
 
   /* ---------------- guardar y dividir ---------------- */
+  /** Lo que informó el último armado sobre el peso, para contarlo al guardar. */
+  let ultimoInforme = null;
+
   function opcionesSalida(paginas) {
     recalcularFolios();
+    ultimoInforme = null;
     return {
       titulo: $('#metaTitulo').value.trim() || undefined,
       autor: $('#metaAutor').value.trim() || undefined,
       totalFolio: totalFolios || E.paginas.length,
       numeros: paginas.map((p) => folios.get(p.uid)),
       baseIndices: paginas.map((p) => E.paginas.indexOf(p)),
+      comprimir: G.PESOS[$('#pesoSalida').value] || null,
+      informe: (d) => { ultimoInforme = d; },
+      alProgresar: (t) => G.progreso(t),
     };
+  }
+
+  const enMb = (n) => (n < 1048576
+    ? Math.max(1, Math.round(n / 1024)) + ' KB'
+    : (n / 1048576).toFixed(1) + ' MB');
+
+  const NOTAS_PESO = {
+    original: 'Deja el PDF tal cual, con todo el detalle de los originales.',
+    ligero: 'Vuelve a dibujar a 150 ppp solo las hojas escaneadas, que son las que pesan. '
+      + 'Las que llevan texto de verdad no se tocan. No se pierde ninguna hoja, ni las firmas ni los folios.',
+    minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. Pesa lo menos posible, '
+      + 'pero el texto deja de poder seleccionarse: queda como una foto. Úsalo si «Ligero» no alcanza.',
+  };
+  function pintarNotaPeso() {
+    const v = $('#pesoSalida').value;
+    $('#pesoNota').textContent = NOTAS_PESO[v] || NOTAS_PESO.original;
+  }
+
+  /** Una línea contando cómo quedó el peso, si se pidió aligerar. */
+  function frasePeso() {
+    const d = ultimoInforme;
+    if (!d || !d.antes) return '';
+    if (d.sinMejora) {
+      return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).`;
+    }
+    if (!d.aligeradas) return '';
+    const intactas = d.intactas ? `, y ${d.intactas} con texto quedaron intactas` : '';
+    return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: se aligeraron ${d.aligeradas} hoja(s)${intactas}.`;
   }
 
   async function guardar() {
@@ -1579,8 +1624,9 @@
       const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
       const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
       G.aviso(
-        r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
-          : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.',
+        (r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
+          : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.')
+          + (r.estado === 'cancelado' ? '' : frasePeso()),
         r.estado === 'cancelado' ? '' : 'ok'
       );
     } catch (e) {
@@ -2516,6 +2562,11 @@
     });
 
     // editor externo
+    try {
+      const peso = localStorage.getItem('grapa-peso');
+      if (peso && G.PESOS[peso] !== undefined) $('#pesoSalida').value = peso;
+    } catch (e) {}
+    pintarNotaPeso();
     try { $('#editorUrl').value = localStorage.getItem(CLAVE_EDITOR) || EDITOR_POR_DEFECTO; } catch (e) {
       $('#editorUrl').value = EDITOR_POR_DEFECTO;
     }
@@ -2533,6 +2584,10 @@
     });
     $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
     $('#btnDescargarSel').addEventListener('click', descargarSeleccion);
+    $('#pesoSalida').addEventListener('change', (ev) => {
+      pintarNotaPeso();
+      try { localStorage.setItem('grapa-peso', ev.target.value); } catch (e) {}
+    });
     $('#btnComparar').addEventListener('click', compararMarcadas);
     $('#lectorColumnas').addEventListener('change', (ev) => {
       lector.columnas = Number(ev.target.value) || 1;

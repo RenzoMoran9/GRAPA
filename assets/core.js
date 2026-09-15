@@ -362,6 +362,56 @@
   }
   G.olvidarDocs = () => cacheDocsPdfLib.clear();
 
+  /* =========================================================
+     ALIGERAR · bajar el peso del PDF sin perder hojas
+     Los expedientes escaneados pesan por las imágenes, no por el texto.
+     Se vuelven a dibujar esas hojas a menos resolución; las que llevan
+     texto de verdad se copian tal cual, para no quedarse sin él.
+     ========================================================= */
+  G.PESOS = {
+    original: null,
+    ligero: { ppp: 150, calidad: 0.72, tambienConTexto: false },
+    minimo: { ppp: 100, calidad: 0.6, tambienConTexto: true },
+  };
+
+  /** ¿La hoja lleva texto de verdad, o es una foto de un papel? */
+  const cacheTexto = new Map();
+  G.tieneTexto = async function (pagina) {
+    const k = pagina.fuenteId + ':' + pagina.indice;
+    if (cacheTexto.has(k)) return cacheTexto.get(k);
+    let r = false;
+    try {
+      const fuente = G.estado.fuentes.get(pagina.fuenteId);
+      const pag = await fuente.doc.getPage(pagina.indice + 1);
+      const tc = await pag.getTextContent();
+      const letras = tc.items.reduce((n, it) => n + String(it.str || '').replace(/\s/g, '').length, 0);
+      // un par de letras sueltas puede ser basura del escáner; 20 ya es texto
+      r = letras >= 20;
+    } catch (e) { r = true; }   // ante la duda, no se toca
+    cacheTexto.set(k, r);
+    return r;
+  };
+  G.olvidarTexto = () => cacheTexto.clear();
+
+  /** Vuelve a dibujar la hoja a la resolución pedida y la devuelve en JPEG. */
+  async function hojaEnJpeg(pagina, ppp, calidad) {
+    const fuente = G.estado.fuentes.get(pagina.fuenteId);
+    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    // sin girar: el giro lo pone después setRotation, igual que en la copia
+    const base = pag.getViewport({ scale: 1, rotation: 0 });
+    const vp = pag.getViewport({ scale: ppp / 72, rotation: 0 });
+    const lienzo = document.createElement('canvas');
+    lienzo.width = Math.max(1, Math.floor(vp.width));
+    lienzo.height = Math.max(1, Math.floor(vp.height));
+    const ctx = lienzo.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    const url = lienzo.toDataURL('image/jpeg', calidad);
+    lienzo.width = lienzo.height = 0;   // suelta la memoria del lienzo
+    return { bytes: G.dataUrlABytes(url), ancho: base.width, alto: base.height };
+  }
+
   /**
    * Construye un PDF con las páginas indicadas (array del estado).
    * total/inicio permiten foliar bien aunque se exporte un trozo.
@@ -369,10 +419,23 @@
   G.construirPdf = async function (paginas, opciones) {
     opciones = opciones || {};
     const salida = await PDFDocument.create();
+    const comp = opciones.comprimir || null;
+    const avisar = opciones.alProgresar || function () {};
 
-    // 1. copiar páginas agrupando por documento de origen
+    // 1a. decidir qué hoja se copia tal cual y cuál se vuelve a dibujar más
+    //     liviana. Las que llevan texto de verdad se copian siempre en el
+    //     modo ligero: rasterizarlas dejaría el texto sin poder seleccionar.
+    const aligerar = new Set();
+    if (comp) {
+      for (let i = 0; i < paginas.length; i++) {
+        if (comp.tambienConTexto || !(await G.tieneTexto(paginas[i]))) aligerar.add(i);
+      }
+    }
+
+    // 1b. copiar del origen las que no se aligeran, agrupando por documento
     const porFuente = new Map();
     paginas.forEach((p, i) => {
+      if (aligerar.has(i)) return;
       if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
       porFuente.get(p.fuenteId).push({ indice: p.indice, destino: i });
     });
@@ -382,7 +445,19 @@
       const paginasCopiadas = await salida.copyPages(src, items.map((it) => it.indice));
       items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
     }
-    copiadas.forEach((p) => salida.addPage(p));
+
+    // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada
+    let hechas = 0;
+    for (let i = 0; i < paginas.length; i++) {
+      if (!aligerar.has(i)) { salida.addPage(copiadas[i]); continue; }
+      hechas++;
+      if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${aligerar.size}…`);
+      const jpeg = await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
+      const img = await salida.embedJpg(jpeg.bytes);
+      const hoja = salida.addPage([jpeg.ancho, jpeg.alto]);
+      hoja.drawImage(img, { x: 0, y: 0, width: jpeg.ancho, height: jpeg.alto });
+    }
+
 
     // 2. recursos compartidos
     const imgsFirma = new Map();
@@ -490,7 +565,38 @@
     if (opciones.autor) salida.setAuthor(opciones.autor);
     salida.setProducer('Grapa · taller de PDF');
     salida.setCreator('Grapa');
-    return await salida.save({ useObjectStreams: true });
+    const bytes = await salida.save({ useObjectStreams: true });
+
+    // Lo que pesaban esas hojas en los archivos que abriste, para poder decir
+    // si aligerar sirvió de algo.
+    const antes = paginas.reduce((n, p) => {
+      const f = G.estado.fuentes.get(p.fuenteId);
+      if (!f || !f.bytes || !f.paginas.length) return n;
+      return n + f.bytes.length / f.paginas.length;
+    }, 0);
+
+    // Si el archivo ya venía bien comprimido, aligerarlo puede engordarlo.
+    // En ese caso se rehace sin tocar nada: nunca se entrega algo peor.
+    if (comp && antes && bytes.length >= antes) {
+      const limpio = await G.construirPdf(paginas, Object.assign({}, opciones, {
+        comprimir: null, informe: null,
+      }));
+      if (opciones.informe) {
+        opciones.informe({
+          aligeradas: 0, intactas: paginas.length, sinMejora: true,
+          antes: Math.round(antes), despues: limpio.length,
+        });
+      }
+      return limpio;
+    }
+
+    if (opciones.informe) {
+      opciones.informe({
+        aligeradas: aligerar.size, intactas: paginas.length - aligerar.size,
+        sinMejora: false, antes: Math.round(antes), despues: bytes.length,
+      });
+    }
+    return bytes;
   };
 
   /* ---------- ayudas de binarios ---------- */
