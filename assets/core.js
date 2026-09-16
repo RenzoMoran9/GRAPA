@@ -326,7 +326,7 @@
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
     const pag = await fuente.doc.getPage(pagina.indice + 1);
     const base = pag.getViewport({ scale: 1, rotation: G.norm(pagina.giro) });
-    const escala = Math.min(anchoMax / base.width, 2400 / base.width);
+    const escala = Math.min(anchoMax / base.width, 3500 / base.width);
     const vp = pag.getViewport({ scale: escala, rotation: G.norm(pagina.giro) });
     const lienzo = document.createElement('canvas');
     lienzo.width = Math.floor(vp.width);

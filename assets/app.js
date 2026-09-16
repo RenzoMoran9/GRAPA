@@ -2238,6 +2238,56 @@
 
   function paginaActualLector() { return hojasLector()[lector.actual] || null; }
 
+  /** Píxeles de dibujo por cada píxel de pantalla. Por debajo de 1 se ve borroso. */
+  const TOPE_LIENZO = 3500;   // más allá de esto la memoria no compensa
+
+  function anchoDeseado(hoja) {
+    const css = hoja.clientWidth || 700;
+    // 1.5 dibujando por cada píxel de pantalla: con 1 clavado el texto sale
+    // correcto pero pastoso; con 1.5 se lee fino, y es lo que ya se veía bien
+    const quiere = css * (window.devicePixelRatio || 1) * 1.5;
+    return Math.max(700, Math.min(TOPE_LIENZO, Math.round(quiere)));
+  }
+
+  /** Dibuja la hoja del lector al tamaño al que se está viendo ahora mismo. */
+  function pintarHojaLector(hoja, pagina) {
+    hoja.dataset.pintada = '1';
+    const quiere = anchoDeseado(hoja);
+    hoja.dataset.ancho = String(quiere);
+    return G.renderGrande(pagina, quiere).then((lienzo) => {
+      if (hoja.dataset.pintada !== '1') return;
+      const hueco = hoja.querySelector('.hoja-hueco');
+      if (hueco) hueco.remove();
+      const previo = hoja.querySelector('canvas');
+      if (previo) previo.remove();
+      const sellosPrevios = hoja.querySelector('.pag-sellos');
+      if (sellosPrevios) sellosPrevios.remove();
+      hoja.insertBefore(lienzo, hoja.firstChild);
+      hoja.appendChild(nodoSellos(pagina, hoja.clientWidth));
+    }).catch(() => {});
+  }
+
+  /**
+   * Al mover el tamaño, la hoja se estiraba: el mismo dibujo de 700 px sobre
+   * el doble de pantalla, y por eso se veía borrosa. Aquí se vuelve a dibujar
+   * a la medida nueva, que es lo que la deja nítida de verdad.
+   */
+  let reloj = null;
+  function renitidezLector() {
+    clearTimeout(reloj);
+    reloj = setTimeout(() => {
+      if (!lector.abierto) return;
+      $$('.hoja', $('#lectorHojas')).forEach((hoja) => {
+        if (hoja.dataset.pintada !== '1') return;
+        const tiene = Number(hoja.dataset.ancho) || 0;
+        // un 2 % de margen: mover el deslizador no debe redibujar por nada
+        if (anchoDeseado(hoja) <= tiene * 1.02) return;
+        const pagina = E.paginas.find((p) => p.uid === hoja.dataset.uid);
+        if (pagina) pintarHojaLector(hoja, pagina);
+      });
+    }, 260);
+  }
+
   function construirLector() {
     const cont = $('#lectorHojas');
     cont.innerHTML = '';
@@ -2253,20 +2303,11 @@
         if (!pagina) return;
         if (en.isIntersecting) {
           if (hoja.dataset.pintada === '1') return;
-          hoja.dataset.pintada = '1';
-          const anchoPx = Math.min(2000, Math.round(hoja.clientWidth * (window.devicePixelRatio || 1)));
-          G.renderGrande(pagina, Math.max(700, anchoPx)).then((lienzo) => {
-            if (hoja.dataset.pintada !== '1') return;
-            const hueco = hoja.querySelector('.hoja-hueco');
-            if (hueco) hueco.remove();
-            const previo = hoja.querySelector('canvas');
-            if (previo) previo.remove();
-            hoja.insertBefore(lienzo, hoja.firstChild);
-            hoja.appendChild(nodoSellos(pagina, hoja.clientWidth));
-          }).catch(() => {});
+          pintarHojaLector(hoja, pagina);
         } else if (hoja.dataset.pintada === '1') {
           // se suelta la memoria de las hojas que quedaron lejos
           hoja.dataset.pintada = '0';
+          hoja.dataset.ancho = '0';
           const c = hoja.querySelector('canvas');
           const sellos = hoja.querySelector('.pag-sellos');
           if (sellos) sellos.remove();
@@ -2317,17 +2358,12 @@
     const v = Number($('#lectorZoom').value) / 100;
     const cont = $('#lectorHojas');
     const cols = Math.max(1, Math.min(4, lector.columnas || 1));
-    cont.classList.toggle('columnas', cols > 1);
+    cont.classList.add('columnas');
     cont.style.setProperty('--lector-cols', cols);
-    let ancho;
-    if (cols > 1) {
-      // el 100 % es «que quepan justo las columnas pedidas»; de ahí para
-      // arriba se desplaza a los lados, que es lo que hace falta para leer
-      const hueco = Math.max(240, (cont.clientWidth || window.innerWidth) - 32);
-      ancho = Math.round(((hueco - (cols - 1) * 26) / cols) * v);
-    } else {
-      ancho = Math.round(Math.min(window.innerWidth - 40, window.innerWidth * v));
-    }
+    // el 100 % es «que quepan justo las columnas pedidas»; de ahí para arriba
+    // se desplaza a los lados, que es lo que hace falta para leer de cerca
+    const hueco = Math.max(240, (cont.clientWidth || window.innerWidth) - 32);
+    const ancho = Math.round(((hueco - (cols - 1) * 26) / cols) * v);
     cont.style.setProperty('--hoja-ancho', Math.max(160, ancho) + 'px');
   }
 
@@ -2615,6 +2651,7 @@
       lector.columnas = Number(ev.target.value) || 1;
       aplicarZoomLector();
       irAHoja(lector.actual, true);
+      renitidezLector();
     });
     $('#btnGirarIzq').addEventListener('click', () => girar(-90));
     $('#btnGirarDer').addEventListener('click', () => girar(90));
@@ -2776,6 +2813,7 @@
       // se la vuelve a traer en vez de dejar la vista donde estaba
       const hoja = $$('.hoja', $('#lectorHojas'))[lector.actual];
       if (hoja) hoja.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
+      renitidezLector();
     });
     window.addEventListener('resize', () => { if (lector.abierto) aplicarZoomLector(); });
     seguirScrollLector();
