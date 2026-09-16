@@ -165,6 +165,12 @@
     return f ? f.paginas[p.indice] : { w: 595, h: 842, giro: 0 };
   };
   const visDe = (p) => { const m = metaDe(p); return G.cajaVisible(m.w, m.h, p.giro); };
+  /** Pone uno de los iconos del juego dentro de un elemento. */
+  function icono(nombre, clase) {
+    return `<svg class="${clase || 'ico'}" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${nombre}"/></svg>`;
+  }
+  G.icono = icono;
+
   const seleccionadas = () => E.paginas.filter((p) => E.seleccion.has(p.uid));
   const objetivo = () => (E.seleccion.size ? seleccionadas() : hojasVisibles());
 
@@ -398,11 +404,13 @@
     if (!btnVista || !btnVolver) return;
     const hay = E.paginas.length > 0;
     btnVista.hidden = !hay || !!paqueteAbierto;
-    btnVista.textContent = vista === 'paquetes' ? '☰ Ver todas las hojas' : '📦 Ver por paquetes';
+    btnVista.innerHTML = vista === 'paquetes'
+      ? icono('hojas') + ' Ver todas las hojas'
+      : icono('paquete') + ' Ver por paquetes';
     if (paqueteAbierto) {
       const paq = E.paquetes.get(paqueteAbierto);
       btnVolver.hidden = false;
-      btnVolver.textContent = '◀ Paquetes · ' + (paq ? paq.nombre : '');
+      btnVolver.innerHTML = icono('volver') + ' Paquetes · ' + G.escapaHtml(paq ? paq.nombre : '');
     } else {
       btnVolver.hidden = true;
     }
@@ -462,9 +470,9 @@
     acciones.className = 'paquete-acciones';
     [
       ['Ver', 'Abrir este paquete y trabajar sus hojas', () => abrirPaquete(paquete.id)],
-      ['✎', 'Cambiar el nombre', () => renombrarPaquete(paquete.id)],
-      ['＋', 'Añadir más archivos a este paquete', () => anadirAPaquete(paquete.id)],
-      ['✕', 'Quitar el paquete entero del taller', async () => {
+      [icono('editar'), 'Cambiar el nombre', () => renombrarPaquete(paquete.id)],
+      [icono('mas'), 'Añadir más archivos a este paquete', () => anadirAPaquete(paquete.id)],
+      [icono('cerrar'), 'Quitar el paquete entero del taller', async () => {
         const sigue = await G.confirmar({
           titulo: 'Quitar el paquete',
           mensaje: `Se quitan del taller las ${paginas.length} hoja(s) de «${paquete.nombre}».`,
@@ -477,8 +485,9 @@
     ].forEach(([txt, tit, fn]) => {
       const b = document.createElement('button');
       b.className = 'btn btn-mini' + (txt === 'Ver' ? ' btn-primario' : '');
-      b.textContent = txt;
+      b.innerHTML = txt;
       b.title = tit;
+      if (!b.textContent.trim()) b.setAttribute('aria-label', tit);
       b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
       acciones.appendChild(b);
     });
@@ -601,19 +610,22 @@
     const acciones = document.createElement('div');
     acciones.className = 'pag-acciones';
     [
-      ['↺', 'Girar a la izquierda', () => { marcar(); pagina.giro = G.norm(pagina.giro - 90); pintar(); }],
-      ['↻', 'Girar a la derecha', () => { marcar(); pagina.giro = G.norm(pagina.giro + 90); pintar(); }],
+      [icono('girar-izq'), 'Girar a la izquierda', () => { marcar(); pagina.giro = G.norm(pagina.giro - 90); pintar(); }],
+      [icono('girar-der'), 'Girar a la derecha', () => { marcar(); pagina.giro = G.norm(pagina.giro + 90); pintar(); }],
       // se pasa la página misma: cualquier posición que se calcule aquí puede
       // no corresponder con la lista que el lector acabe recorriendo
-      ['🔍', 'Ver esta hoja en grande', () => abrirLector(pagina)],
-      ['✍', 'Colocar firma o sello', () => abrirFirmar(pagina)],
-      ['⤓', 'Descargar solo esta hoja', () => descargarHoja(pagina)],
-      ['⧉', 'Duplicar', () => { marcar(); duplicar([pagina]); }],
-      ['🗑', 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
+      [icono('lupa'), 'Ver esta hoja en grande', () => abrirLector(pagina)],
+      [icono('firma'), 'Colocar firma o sello', () => abrirFirmar(pagina)],
+      [icono('guardar'), 'Descargar solo esta hoja', () => descargarHoja(pagina)],
+      [icono('duplicar'), 'Duplicar', () => { marcar(); duplicar([pagina]); }],
+      [icono('borrar'), 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
     ].forEach(([txt, titulo, fn, clase]) => {
       const b = document.createElement('button');
-      b.textContent = txt;
+      b.innerHTML = txt;
       b.title = titulo;
+      // Solo si no hay texto visible: un aria-label sobre un botón que ya se
+      // lee lo renombra, y entonces lo que se ve y lo que se anuncia difieren.
+      if (!b.textContent.trim()) b.setAttribute('aria-label', titulo);
       if (clase) b.className = clase;
       b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
       acciones.appendChild(b);
@@ -632,7 +644,7 @@
       const corte = document.createElement('div');
       corte.className = 'corte' + (pagina.corte ? ' activo' : '');
       const b = document.createElement('button');
-      b.textContent = '✂';
+      b.innerHTML = icono('dividir');
       b.title = pagina.corte ? 'Quitar la marca de corte' : 'Cortar después de esta página';
       b.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -757,7 +769,8 @@
       meta.textContent = cuenta + (cuenta === 1 ? ' pág.' : ' págs.');
       const sel = document.createElement('button');
       sel.className = 'btn btn-mini';
-      sel.textContent = '◎';
+      sel.innerHTML = icono('diana');
+      sel.setAttribute('aria-label', 'Seleccionar sus páginas');
       sel.title = 'Seleccionar sus páginas';
       sel.addEventListener('click', () => {
         E.seleccion = new Set(E.paginas.filter((p) => p.fuenteId === f.id).map((p) => p.uid));
@@ -765,7 +778,8 @@
       });
       const quitar = document.createElement('button');
       quitar.className = 'btn btn-mini btn-peligro-suave';
-      quitar.textContent = '✕';
+      quitar.innerHTML = icono('cerrar');
+      quitar.setAttribute('aria-label', 'Quitar este documento del taller');
       quitar.title = 'Quitar este documento del taller';
       quitar.addEventListener('click', () => {
         marcar();
@@ -796,7 +810,8 @@
       nom.title = f.nombre;
       const borrar = document.createElement('button');
       borrar.className = 'btn btn-mini btn-peligro-suave';
-      borrar.textContent = '✕';
+      borrar.innerHTML = icono('cerrar');
+      borrar.setAttribute('aria-label', 'Borrar');
       borrar.title = 'Borrar esta firma';
       borrar.addEventListener('click', async (ev) => {
         ev.stopPropagation();
@@ -1343,9 +1358,9 @@
     if (btn) {
       const cuantas = capa.children.length;
       btn.disabled = !cuantas;
-      btn.textContent = cuantas
-        ? `↺ Recoger la última (hay ${cuantas})`
-        : '↺ Recoger la última puesta';
+      btn.innerHTML = cuantas
+        ? icono('recoger') + ` Recoger la última (hay ${cuantas})`
+        : icono('recoger') + ' Recoger la última puesta';
     }
   }
 
@@ -1945,7 +1960,8 @@
 
       const renombrar = document.createElement('button');
       renombrar.className = 'btn btn-mini';
-      renombrar.textContent = '✎';
+      renombrar.innerHTML = icono('editar');
+      renombrar.setAttribute('aria-label', 'Cambiar el nombre');
       renombrar.title = 'Cambiarle el nombre a este expediente guardado';
       renombrar.addEventListener('click', async () => {
         const nuevo = await G.pedirTexto({
@@ -1967,7 +1983,8 @@
 
       const borrar = document.createElement('button');
       borrar.className = 'btn btn-mini btn-peligro-suave';
-      borrar.textContent = '✕';
+      borrar.innerHTML = icono('cerrar');
+      borrar.setAttribute('aria-label', 'Borrar');
       borrar.title = 'Borrar este expediente guardado';
       borrar.addEventListener('click', async () => {
         const sigue = await G.confirmar({
@@ -2217,7 +2234,7 @@
     if (!btn) return;
     let donde = '';
     try { donde = new URL(urlEditor()).hostname.replace(/^www\./, ''); } catch (e) {}
-    btn.textContent = donde ? '✎ Editar en ' + donde : '✎ Editar fuera';
+    btn.innerHTML = icono('externo') + (donde ? ' Editar en ' + G.escapaHtml(donde) : ' Editar fuera');
     btn.title = donde
       ? `Guarda el PDF y abre ${donde} en otra pestaña para que lo subas ahí`
       : 'Escribe primero la dirección del editor en «Archivo de salida»';
@@ -2615,16 +2632,22 @@
     seccion.classList.remove('destacada');
     void seccion.offsetWidth;
     seccion.classList.add('destacada');
+    seccionActual = cual;
     marcarRiel();
     try { localStorage.setItem(CLAVE_RIEL, cual); } catch (e) {}
   }
 
-  /** El riel enciende las secciones que están abiertas. */
+  /**
+   * Marca SOLO la sección donde estás, no todas las abiertas: con varias
+   * abiertas se encendía medio riel y dejaba de señalar nada.
+   */
+  let seccionActual = null;
   function marcarRiel() {
     $$('.riel-btn').forEach((b) => {
       const s = $$('.bloque').find((x) => x.dataset.bloque === b.dataset.va);
       const abierta = !!(s && s.classList.contains('abierto'));
-      b.classList.toggle('activo', abierta);
+      b.classList.toggle('activo', b.dataset.va === seccionActual && abierta);
+      b.classList.toggle('abierta', abierta);
       b.setAttribute('aria-expanded', String(abierta));
     });
   }
@@ -2644,7 +2667,10 @@
     // acordeón: la cabecera sigue plegando su sección
     $$('.bloque-cabecera').forEach((cab) => {
       cab.addEventListener('click', () => {
-        cab.parentElement.classList.toggle('abierto');
+        const sec = cab.parentElement;
+        const abierta = sec.classList.toggle('abierto');
+        if (!abierta && seccionActual === sec.dataset.bloque) seccionActual = null;
+        if (abierta) seccionActual = sec.dataset.bloque;
         marcarRiel();
       });
     });
@@ -2708,7 +2734,7 @@
     function pintarPanel(oculto) {
       document.body.classList.toggle('sin-panel', oculto);
       const b = $('#btnPanel');
-      b.textContent = oculto ? '▶' : '◀';
+      b.innerHTML = icono('panel');
       b.title = (oculto ? 'Mostrar' : 'Ocultar') + ' el panel lateral (P)';
       b.setAttribute('aria-expanded', String(!oculto));
       refrescarNivel();

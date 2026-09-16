@@ -146,6 +146,21 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .panel-vistas{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden}
 
+/* ---------- iconos ---------- */
+/* Un solo juego, mismo grosor y mismo tamaño en todas partes: es lo que hace
+   que un panel se vea hecho a propósito y no juntado a pedazos. */
+.ico,.ico-riel{
+  width:17px;height:17px;flex:none;display:inline-block;vertical-align:-3px;
+  fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+.ico-riel{width:20px;height:20px;vertical-align:0}
+.ico-linea{width:15px;height:15px;vertical-align:-3px;color:var(--acento)}
+.ico-tacho{width:34px;height:34px;stroke-width:1.6}
+.btn .ico{margin-right:-1px}
+.btn-mini .ico{width:15px;height:15px;vertical-align:-3px}
+.bloque-cabecera .ico{width:17px;height:17px}
+.riel-ico{display:flex;align-items:center;justify-content:center;line-height:0}
+
 /* Aviso de alcance: sin marcar nada, girar o borrar va a TODAS las hojas. */
 #infoSeleccion.alcance-todo{
   color:var(--acento);font-weight:700;
@@ -173,12 +188,18 @@ button,input,select,textarea{font:inherit;color:inherit}
   transition:background .12s,color .12s;
 }
 .riel-btn:hover{background:var(--fondo-2);color:var(--texto)}
+/* «abierta» apenas se insinúa; el recuadro fuerte es solo para donde estás. */
+.riel-btn.abierta{color:var(--texto)}
+.riel-btn.abierta::before{
+  content:"";position:absolute;left:3px;top:50%;transform:translateY(-50%);
+  width:3px;height:14px;border-radius:2px;background:var(--borde);
+}
 .riel-btn.activo{
   background:var(--acento-tenue);border-color:var(--acento);color:var(--acento);font-weight:700;
 }
+.riel-btn.activo::before{background:var(--acento)}
 @keyframes riel-llega{from{background:var(--acento-tenue)}to{background:transparent}}
 .bloque.destacada{animation:riel-llega 1.1s ease-out}
-.riel-ico{font-size:17px;line-height:1;filter:grayscale(.1)}
 .riel-txt{font-size:9.5px;font-weight:650;letter-spacing:.01em}
 .riel-marca{
   position:absolute;top:2px;right:4px;font-style:normal;font-size:9px;font-weight:800;
@@ -197,7 +218,6 @@ button,input,select,textarea{font:inherit;color:inherit}
   background:none;border:0;cursor:pointer;text-align:left;font-weight:650;font-size:13.2px;
 }
 .bloque-cabecera:hover{background:var(--fondo-3)}
-.bloque-cabecera .ico{font-size:15px;filter:grayscale(.15)}
 .bloque-cabecera em{
   margin-left:auto;font-style:normal;font-size:11px;font-weight:700;color:var(--texto-3);
   background:var(--fondo-3);border-radius:20px;padding:2px 8px;min-width:22px;text-align:center;
@@ -656,7 +676,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   /* que no se coma el arrastre cuando el puntero solo pasa por encima */
   transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
-.tacho-icono { font-size: 30px; line-height: 1; }
+.tacho-icono { font-size: 30px; line-height: 0; display: flex; align-items: center; justify-content: center; }
 .tacho.encima {
   transform: scale(1.08);
   border-color: var(--peligro, #d33b28);

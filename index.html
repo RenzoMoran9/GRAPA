@@ -10,6 +10,53 @@
 </head>
 <body>
 
+<!-- ============ ICONOS ============
+     Juego propio, dibujado con las mismas reglas para todos: lienzo 24×24,
+     2 px de aire alrededor, trazo de 2 px centrado, extremos y uniones
+     redondeados, sin relleno. Así ninguno pesa más que otro puesto al lado,
+     que es lo que hacía que los emoji se vieran de juguete: cada uno venía
+     de una fuente distinta, con su color y su grosor.
+     Heredan color con currentColor, así valen en tema claro y oscuro. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <g id="i-docs"><rect x="7" y="3" width="12" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h9"/></g>
+  <g id="i-exped"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></g>
+  <g id="i-firma"><path d="M3 16.5c2 0 2.2-11 5-11 2.6 0 1.3 8 3.7 8 1.9 0 1.6-3.5 3.6-3.5 1.5 0 1.7 2 3.7 2"/><path d="M3 21h18"/></g>
+  <g id="i-sello"><path d="M12 3s6 6.3 6 10a6 6 0 0 1-12 0c0-3.7 6-10 6-10Z"/></g>
+  <g id="i-folios"><path d="M9 4 7 20"/><path d="M17 4l-2 16"/><path d="M4.5 9h16"/><path d="M3.5 15h16"/></g>
+  <g id="i-dividir"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88"/><path d="M14.47 14.48 20 20"/><path d="M8.12 8.12 12 12"/></g>
+  <g id="i-salida"><rect x="2.5" y="4" width="19" height="4" rx="1"/><path d="M20.5 8v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V8"/><path d="M12 11v5"/><path d="m9.5 13.5 2.5 2.5 2.5-2.5"/></g>
+  <g id="i-deshacer"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></g>
+  <g id="i-rehacer"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></g>
+  <g id="i-panel"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></g>
+  <g id="i-tema"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></g>
+  <g id="i-ayuda"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a3 3 0 0 1 5.7 1c0 2-2.9 2.7-2.9 4"/><path d="M12 17.6h.01"/></g>
+  <g id="i-nuevo"><path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z"/><path d="M14 3v4h4"/><path d="M12 11v6"/><path d="M9 14h6"/></g>
+  <g id="i-abrir"><path d="M4 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4.5l2 3H18a2 2 0 0 1 2 2v1"/><path d="m3.4 20 2.3-7.2a1 1 0 0 1 1-.8H22l-2.3 7.2a1 1 0 0 1-1 .8Z"/></g>
+  <g id="i-externo"><path d="M15 3h6v6"/><path d="M10.5 13.5 21 3"/><path d="M18 13.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5.5"/></g>
+  <g id="i-guardar"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M3.5 17v2a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2"/></g>
+  <g id="i-comparar"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></g>
+  <g id="i-lupa"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></g>
+  <g id="i-girar-izq"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3.5v5h5"/></g>
+  <g id="i-girar-der"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3.5v5h-5"/></g>
+  <g id="i-duplicar"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></g>
+  <g id="i-inicio"><path d="M4 4.5v15"/><path d="M20 12H8.5"/><path d="m13.5 7-5 5 5 5"/></g>
+  <g id="i-fin"><path d="M20 4.5v15"/><path d="M4 12h11.5"/><path d="m10.5 7 5 5-5 5"/></g>
+  <g id="i-borrar"><path d="M3.5 6h17"/><path d="M8 6V4.2A1.2 1.2 0 0 1 9.2 3h5.6A1.2 1.2 0 0 1 16 4.2V6"/><path d="M18.5 6v13.5a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></g>
+  <g id="i-cerrar"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>
+  <g id="i-check"><path d="m5 13 4.5 4.5L19 8"/></g>
+  <g id="i-paquete"><path d="M20.5 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 2.5 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 20.5 16Z"/><path d="m3 7 9 5 9-5"/><path d="M12 12v9.5"/></g>
+  <g id="i-volver"><path d="m15 18-6-6 6-6"/></g>
+  <g id="i-mas"><path d="M12 5v14"/><path d="M5 12h14"/></g>
+  <g id="i-arriba"><path d="m6 15 6-6 6 6"/></g>
+  <g id="i-abajo"><path d="m6 9 6 6 6-6"/></g>
+  <g id="i-hojas"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></g>
+  <g id="i-recoger"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3.5v5h5"/></g>
+  <g id="i-editar"><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.2 18.8 3 20l1.2-4.2Z"/><path d="m14.4 5.6 3 3"/></g>
+  <g id="i-diana"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></g>
+  <g id="i-editando"><path d="M4 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4.5l2 3H18a2 2 0 0 1 2 2v1"/><path d="m3.4 20 2.3-7.2a1 1 0 0 1 1-.8H22l-2.3 7.2a1 1 0 0 1-1 .8Z"/></g>
+</defs></svg>
+
+
 <header class="barra-superior">
   <div class="marca">
     <div class="marca-logo" aria-hidden="true">
@@ -22,16 +69,16 @@
   </div>
 
   <div class="barra-acciones">
-    <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" disabled>↶</button>
-    <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" disabled>↷</button>
+    <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-deshacer"/></svg></button>
+    <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rehacer"/></svg></button>
     <span class="separador-vertical"></span>
-    <button class="btn btn-fantasma" id="btnPanel" title="Ocultar el panel lateral (P)" aria-expanded="true">◀</button>
-    <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema">◐</button>
-    <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos">?</button>
+    <button class="btn btn-fantasma" id="btnPanel" title="Ocultar el panel lateral (P)" aria-expanded="true" aria-label="Ocultar el panel lateral"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-panel"/></svg></button>
+    <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema" aria-label="Cambiar tema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg></button>
+    <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos" aria-label="Ayuda y atajos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg></button>
     <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
-    <button class="btn btn-secundario" id="btnAbrir">＋ Abrir archivos</button>
-    <button class="btn btn-secundario" id="btnEditorExterno" title="Guarda el PDF y abre el editor externo en otra pestaña">✎ Editar fuera</button>
-    <button class="btn btn-primario" id="btnGuardar">⤓ Guardar PDF</button>
+    <button class="btn btn-secundario" id="btnAbrir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir archivos</button>
+    <button class="btn btn-secundario" id="btnEditorExterno" title="Guarda el PDF y abre el editor externo en otra pestaña"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Editar fuera</button>
+    <button class="btn btn-primario" id="btnGuardar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Guardar PDF</button>
   </div>
 </header>
 
@@ -45,33 +92,33 @@
     <nav class="riel" id="riel" aria-label="Herramientas">
       <span class="riel-etapa">Entrada</span>
       <button class="riel-btn" data-va="docs" type="button" title="Documentos · los PDF que abres">
-        <span class="riel-ico">🗂️</span><span class="riel-txt">Docs</span><em class="riel-marca" id="marcaDocs" hidden>0</em>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-docs"/></svg></span><span class="riel-txt">Docs</span><em class="riel-marca" id="marcaDocs" hidden>0</em>
       </button>
       <button class="riel-btn" data-va="guardados" type="button" title="Expedientes guardados · retoma un trabajo">
-        <span class="riel-ico">💾</span><span class="riel-txt">Exped.</span><em class="riel-marca" id="marcaGuardados" hidden>0</em>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg></span><span class="riel-txt">Exped.</span><em class="riel-marca" id="marcaGuardados" hidden>0</em>
       </button>
       <span class="riel-etapa">Trabajo</span>
       <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
-        <span class="riel-ico">✍️</span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
       </button>
       <button class="riel-btn" data-va="marca" type="button" title="Sello de texto o marca de agua">
-        <span class="riel-ico">💧</span><span class="riel-txt">Sello</span>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg></span><span class="riel-txt">Sello</span>
       </button>
       <button class="riel-btn" data-va="foliar" type="button" title="Foliación y numeración">
-        <span class="riel-ico">🔢</span><span class="riel-txt">Folios</span>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folios"/></svg></span><span class="riel-txt">Folios</span>
       </button>
       <span class="riel-etapa">Salida</span>
       <button class="riel-btn" data-va="dividir" type="button" title="Dividir y extraer">
-        <span class="riel-ico">✂️</span><span class="riel-txt">Dividir</span>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span><span class="riel-txt">Dividir</span>
       </button>
       <button class="riel-btn" data-va="salida" type="button" title="Archivo de salida · nombre, peso y carpeta">
-        <span class="riel-ico">📦</span><span class="riel-txt">Salida</span>
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg></span><span class="riel-txt">Salida</span>
       </button>
     </nav>
 
     <div class="panel-vistas" id="panelVistas">
     <section class="bloque abierto" data-bloque="docs">
-      <button class="bloque-cabecera" type="button"><span class="ico">🗂️</span> Documentos <em id="contDocs">0</em></button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-docs"/></svg> Documentos <em id="contDocs">0</em></button>
       <div class="bloque-cuerpo">
         <div class="zona-soltar" id="zonaSoltar">
           <strong>Arrastra tus PDF aquí</strong>
@@ -84,12 +131,12 @@
     </section>
 
     <section class="bloque" data-bloque="guardados">
-      <button class="bloque-cabecera" type="button"><span class="ico">💾</span> Expedientes guardados <em id="contGuardados">0</em></button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Expedientes guardados <em id="contGuardados">0</em></button>
       <div class="bloque-cuerpo">
         <p class="nota">Guarda el expediente a medio armar y retómalo otro día. Se queda en este navegador, no se sube a ningún lado.</p>
         <div class="expediente-actual" id="expedienteActual" hidden>
-          <span>📂 Editando <strong id="expedienteActualNombre"></strong></span>
-          <button class="btn btn-mini" id="btnDejarDeEditar" title="El próximo guardado creará uno nuevo en vez de actualizar este">✕</button>
+          <span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-editando"/></svg> Editando <strong id="expedienteActualNombre"></strong></span>
+          <button class="btn btn-mini" id="btnDejarDeEditar" title="El próximo guardado creará uno nuevo en vez de actualizar este" aria-label="Dejar de editar este expediente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
         </div>
         <button class="btn btn-primario ancho" id="btnActualizarTrabajo" hidden>Actualizar</button>
         <label class="campo">Nombre <input type="text" id="guardarNombre" placeholder="Ej. Expediente de contratación menor" autocomplete="off"></label>
@@ -102,9 +149,9 @@
     </section>
 
     <section class="bloque abierto" data-bloque="firmas">
-      <button class="bloque-cabecera" type="button"><span class="ico">✍️</span> Firmas y sellos <em id="contFirmas">0</em></button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg> Firmas y sellos <em id="contFirmas">0</em></button>
       <div class="bloque-cuerpo">
-        <p class="nota">Crea tu firma una sola vez. Para colocarla, usa el botón <strong>✍</strong> de la página.</p>
+        <p class="nota">Crea tu firma una sola vez. Para colocarla, usa el botón <svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg> de la página.</p>
         <ul class="lista-firmas" id="listaFirmas"></ul>
         <div class="rejilla-botones">
           <button class="btn btn-suave" id="btnNuevaFirmaEscaneo">Desde escaneo</button>
@@ -116,7 +163,7 @@
     </section>
 
     <section class="bloque" data-bloque="foliar">
-      <button class="bloque-cabecera" type="button"><span class="ico">🔢</span> Foliación y numeración</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folios"/></svg> Foliación y numeración</button>
       <div class="bloque-cuerpo">
         <label class="campo">Formato
           <select id="folioFormato">
@@ -158,7 +205,7 @@
     </section>
 
     <section class="bloque" data-bloque="marca">
-      <button class="bloque-cabecera" type="button"><span class="ico">💧</span> Sello de texto / marca de agua</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg> Sello de texto / marca de agua</button>
       <div class="bloque-cuerpo">
         <label class="campo">Texto <input type="text" id="marcaTexto" value="COPIA FIEL DEL ORIGINAL"></label>
         <div class="rejilla-2">
@@ -180,9 +227,9 @@
     </section>
 
     <section class="bloque" data-bloque="dividir">
-      <button class="bloque-cabecera" type="button"><span class="ico">✂️</span> Dividir y extraer</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg> Dividir y extraer</button>
       <div class="bloque-cuerpo">
-        <p class="nota">Usa las tijeras <span class="tijera-demo">✂</span> entre páginas para marcar dónde cortar.</p>
+        <p class="nota">Usa las tijeras <span class="tijera-demo"><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span> entre páginas para marcar dónde cortar.</p>
         <button class="btn btn-suave ancho" id="btnDividirMarcas">Dividir por las marcas de corte</button>
         <button class="btn btn-suave ancho" id="btnExtraerSel">Extraer selección a un PDF nuevo</button>
         <button class="btn btn-suave ancho" id="btnDividirUna">Un archivo por cada página</button>
@@ -195,7 +242,7 @@
     </section>
 
     <section class="bloque" data-bloque="salida">
-      <button class="bloque-cabecera" type="button"><span class="ico">📦</span> Archivo de salida</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg> Archivo de salida</button>
       <div class="bloque-cuerpo">
         <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido" autocomplete="off"></label>
         <p class="nota nombre-nota">
@@ -222,7 +269,7 @@
         <label class="campo">Editor externo
           <input type="url" id="editorUrl" placeholder="https://pdfguru.com/app/account" autocomplete="off">
         </label>
-        <p class="nota">El botón <strong>✎ Editar fuera</strong> guarda el PDF y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
+        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Editar fuera</strong> guarda el PDF y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
       </div>
     </section>
     </div>
@@ -236,28 +283,28 @@
         <span id="infoSeleccion">nada seleccionado</span>
       </div>
       <div class="taller-herramientas">
-        <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas">📦 Ver por paquetes</button>
-        <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes">◀ Paquetes</button>
+        <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paquete"/></svg> Ver por paquetes</button>
+        <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-volver"/></svg> Paquetes</button>
         <span class="separador-vertical"></span>
         <button class="btn btn-mini" id="btnSelTodo">Seleccionar todo</button>
         <button class="btn btn-mini" id="btnSelNada">Ninguna</button>
         <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
-        <button class="btn btn-mini" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas">⤓ Bajar selección</button>
-        <button class="btn btn-mini" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas">⊞ Comparar marcadas</button>
+        <button class="btn btn-mini" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Bajar selección</button>
+        <button class="btn btn-mini" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-comparar"/></svg> Comparar marcadas</button>
         <span class="separador-vertical"></span>
-        <button class="btn btn-mini" id="btnLector" title="Ver las hojas en grande (V)">🔍 Ver en grande</button>
+        <button class="btn btn-mini" id="btnLector" title="Ver las hojas en grande (V)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Ver en grande</button>
         <span class="separador-vertical"></span>
-        <button class="btn btn-mini" id="btnGirarIzq" title="Girar 90° izquierda ( [ )">↺</button>
-        <button class="btn btn-mini" id="btnGirarDer" title="Girar 90° derecha ( ] )">↻</button>
-        <button class="btn btn-mini" id="btnDuplicar" title="Duplicar (Ctrl+D)">⧉</button>
-        <button class="btn btn-mini" id="btnMoverInicio" title="Mover al inicio">⇤</button>
-        <button class="btn btn-mini" id="btnMoverFin" title="Mover al final">⇥</button>
+        <button class="btn btn-mini" id="btnGirarIzq" title="Girar 90° izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
+        <button class="btn btn-mini" id="btnGirarDer" title="Girar 90° derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
+        <button class="btn btn-mini" id="btnDuplicar" title="Duplicar (Ctrl+D)" aria-label="Duplicar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-duplicar"/></svg></button>
+        <button class="btn btn-mini" id="btnMoverInicio" title="Mover al inicio" aria-label="Mover al inicio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inicio"/></svg></button>
+        <button class="btn btn-mini" id="btnMoverFin" title="Mover al final" aria-label="Mover al final"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-fin"/></svg></button>
         <label class="salto-pos" title="Mueve la selección a esa posición (o Alt+↑ / Alt+↓ de a una)">
           Ir a
           <input type="number" id="saltoPos" min="1" placeholder="Nº">
         </label>
         <button class="btn btn-mini" id="btnSaltoPos">Mover</button>
-        <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)">🗑</button>
+        <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)" aria-label="Eliminar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
         <span class="separador-vertical"></span>
         <label class="zoom">Zoom
           <input type="range" id="zoom" min="110" max="2400" value="180" title="Amplía las hojas hasta poder leerlas">
@@ -292,15 +339,15 @@
       <span id="lectorOrigen"></span>
     </div>
     <div class="lector-acciones">
-      <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)">↑</button>
-      <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)">↓</button>
+      <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)" aria-label="Hoja anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+      <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)" aria-label="Hoja siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
       <span class="separador-vertical"></span>
-      <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )">↺</button>
-      <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )">↻</button>
+      <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
+      <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
       <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
       <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
-      <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja">✍</button>
-      <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja">🗑</button>
+      <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
+      <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
       <span class="separador-vertical"></span>
       <label class="zoom">Columnas
         <select id="lectorColumnas">
@@ -331,7 +378,7 @@
   <div class="modal-caja modal-ancha">
     <header class="modal-cabecera">
       <h3>Colocar firma o sello</h3>
-      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+      <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </header>
     <div class="modal-cuerpo firmar-cuerpo">
       <div class="firmar-escenario" id="firmarEscenario">
@@ -370,9 +417,9 @@
           <button class="btn btn-primario ancho" id="btnFirmarAplicar">Colocar firma</button>
         </div>
         <div class="fila-botones">
-          <button class="btn btn-suave ancho" id="btnFirmarListo">✓ Listo, cerrar</button>
+          <button class="btn btn-suave ancho" id="btnFirmarListo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg> Listo, cerrar</button>
         </div>
-        <button class="btn btn-suave ancho" id="btnFirmarRecoger" disabled>↺ Recoger la última puesta</button>
+        <button class="btn btn-suave ancho" id="btnFirmarRecoger" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recoger"/></svg> Recoger la última puesta</button>
         <button class="btn btn-suave ancho btn-peligro-suave" id="btnFirmarQuitarPagina">Quitar firmas de esta página</button>
         <p class="nota">Arrastra la firma sobre la página para moverla y usa la esquina para cambiar el tamaño. Al colocarla se queda fija y aparece otra: puedes poner las que necesites y salir con <strong>Listo</strong>.</p>
         <p class="nota">¿Una firma ya puesta quedó torcida? Haz clic sobre ella para volver a cogerla.</p>
@@ -386,7 +433,7 @@
   <div class="modal-caja modal-ancha">
     <header class="modal-cabecera">
       <h3>Recortar firma desde un escaneo</h3>
-      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+      <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </header>
     <div class="modal-cuerpo recorte-cuerpo">
       <div class="recorte-escenario" id="recorteEscenario">
@@ -429,7 +476,7 @@
   <div class="modal-caja">
     <header class="modal-cabecera">
       <h3>Dibujar firma</h3>
-      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+      <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </header>
     <div class="modal-cuerpo">
       <canvas id="dibujoLienzo" class="dibujo-lienzo" width="900" height="320"></canvas>
@@ -448,7 +495,7 @@
 
 <!-- ============ CONFIRMACIÓN ============ -->
 <div class="tacho" id="tacho" hidden>
-  <span class="tacho-icono" aria-hidden="true">🗑</span>
+  <span class="tacho-icono" aria-hidden="true"><svg class="ico ico-tacho" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></span>
   <span class="tacho-texto">Suelta aquí<br>para quitar</span>
 </div>
 
@@ -486,7 +533,7 @@
   <div class="modal-caja">
     <header class="modal-cabecera">
       <h3>Cómo se usa Grapa</h3>
-      <button class="btn btn-fantasma cerrar" data-cerrar>✕</button>
+      <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </header>
     <div class="modal-cuerpo ayuda">
       <ol>
