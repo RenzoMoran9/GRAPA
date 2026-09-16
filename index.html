@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260916b">
+<link rel="stylesheet" href="assets/styles.css?v=20260916c">
 </head>
 <body>
 
@@ -39,6 +39,37 @@
 
   <!-- ============ PANEL LATERAL ============ -->
   <aside class="panel" id="panel">
+    <!-- Riel: acceso directo a cada herramienta, agrupado por el momento en
+         que se usa. Antes eran siete acordeones que había que ir abriendo a
+         ciegas, y nunca se veía cuál estaba abierto. -->
+    <nav class="riel" id="riel" aria-label="Herramientas">
+      <span class="riel-etapa">Entrada</span>
+      <button class="riel-btn" data-va="docs" type="button" title="Documentos · los PDF que abres">
+        <span class="riel-ico">🗂️</span><span class="riel-txt">Docs</span><em class="riel-marca" id="marcaDocs" hidden>0</em>
+      </button>
+      <button class="riel-btn" data-va="guardados" type="button" title="Expedientes guardados · retoma un trabajo">
+        <span class="riel-ico">💾</span><span class="riel-txt">Exped.</span><em class="riel-marca" id="marcaGuardados" hidden>0</em>
+      </button>
+      <span class="riel-etapa">Trabajo</span>
+      <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
+        <span class="riel-ico">✍️</span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
+      </button>
+      <button class="riel-btn" data-va="marca" type="button" title="Sello de texto o marca de agua">
+        <span class="riel-ico">💧</span><span class="riel-txt">Sello</span>
+      </button>
+      <button class="riel-btn" data-va="foliar" type="button" title="Foliación y numeración">
+        <span class="riel-ico">🔢</span><span class="riel-txt">Folios</span>
+      </button>
+      <span class="riel-etapa">Salida</span>
+      <button class="riel-btn" data-va="dividir" type="button" title="Dividir y extraer">
+        <span class="riel-ico">✂️</span><span class="riel-txt">Dividir</span>
+      </button>
+      <button class="riel-btn" data-va="salida" type="button" title="Archivo de salida · nombre, peso y carpeta">
+        <span class="riel-ico">📦</span><span class="riel-txt">Salida</span>
+      </button>
+    </nav>
+
+    <div class="panel-vistas" id="panelVistas">
     <section class="bloque abierto" data-bloque="docs">
       <button class="bloque-cabecera" type="button"><span class="ico">🗂️</span> Documentos <em id="contDocs">0</em></button>
       <div class="bloque-cuerpo">
@@ -194,6 +225,7 @@
         <p class="nota">El botón <strong>✎ Editar fuera</strong> guarda el PDF y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
       </div>
     </section>
+    </div>
   </aside>
 
   <!-- ============ ÁREA DE TRABAJO ============ -->
@@ -493,10 +525,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260916b"></script>
-<script src="assets/office.js?v=20260916b"></script>
-<script src="assets/expedientes.js?v=20260916b"></script>
-<script src="assets/firmas.js?v=20260916b"></script>
-<script src="assets/app.js?v=20260916b"></script>
+<script src="assets/core.js?v=20260916c"></script>
+<script src="assets/office.js?v=20260916c"></script>
+<script src="assets/expedientes.js?v=20260916c"></script>
+<script src="assets/firmas.js?v=20260916c"></script>
+<script src="assets/app.js?v=20260916c"></script>
 </body>
 </html>

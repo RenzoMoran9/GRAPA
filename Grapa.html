@@ -37,7 +37,7 @@
   --sombra-fuerte:0 18px 50px rgba(18,22,30,.22);
   --radio:10px;
   --radio-s:7px;
-  --panel-ancho:302px;
+  --panel-ancho:358px;
   --barra-alto:56px;
 }
 
@@ -158,12 +158,56 @@ button,input,select,textarea{font:inherit;color:inherit}
 .cuerpo{display:flex;height:calc(100% - var(--barra-alto));overflow:hidden}
 .panel{
   width:var(--panel-ancho);flex:none;background:var(--fondo-2);
-  border-right:1px solid var(--borde);overflow-y:auto;overflow-x:hidden;
+  border-right:1px solid var(--borde);display:flex;min-height:0;
+}
+.panel-vistas{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden}
+
+/* Aviso de alcance: sin marcar nada, girar o borrar va a TODAS las hojas. */
+#infoSeleccion.alcance-todo{
+  color:var(--acento);font-weight:700;
+  background:var(--acento-tenue);border-radius:20px;padding:1px 9px;
+}
+
+/* ---------- riel de herramientas ---------- */
+/* Siete acordeones eran demasiados: había que abrirlos a ciegas para saber
+   qué había dentro y nunca se veía cuál estaba abierto. El riel los pone
+   todos a un clic, agrupados por el momento en que se usan. */
+.riel{
+  width:60px;flex:none;background:var(--fondo-3);border-right:1px solid var(--borde);
+  display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:8px 5px;
+  overflow-y:auto;
+}
+.riel-etapa{
+  font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--texto-3);text-align:center;margin:7px 0 2px;
+}
+.riel-etapa:first-child{margin-top:0}
+.riel-btn{
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:7px 2px;border:1px solid transparent;border-radius:var(--radio-s);
+  background:none;cursor:pointer;color:var(--texto-2);font:inherit;
+  transition:background .12s,color .12s;
+}
+.riel-btn:hover{background:var(--fondo-2);color:var(--texto)}
+.riel-btn.activo{
+  background:var(--acento-tenue);border-color:var(--acento);color:var(--acento);font-weight:700;
+}
+@keyframes riel-llega{from{background:var(--acento-tenue)}to{background:transparent}}
+.bloque.destacada{animation:riel-llega 1.1s ease-out}
+.riel-ico{font-size:17px;line-height:1;filter:grayscale(.1)}
+.riel-txt{font-size:9.5px;font-weight:650;letter-spacing:.01em}
+.riel-marca{
+  position:absolute;top:2px;right:4px;font-style:normal;font-size:9px;font-weight:800;
+  min-width:15px;padding:1px 4px;border-radius:20px;text-align:center;
+  background:var(--acento);color:#fff;line-height:1.35;
 }
 .taller{flex:1;display:flex;flex-direction:column;min-width:0}
 
 /* ---------- bloques del panel ---------- */
-.bloque{border-bottom:1px solid var(--borde-suave)}
+/* Las secciones siguen pudiendo estar abiertas a la vez: el riel las alcanza
+   de un clic, pero no obliga a cerrar la que estabas mirando. */
+.bloque{border-bottom:1px solid var(--borde-suave);scroll-margin-top:0}
+.bloque.destacada{background:var(--acento-tenue)}
 .bloque-cabecera{
   width:100%;display:flex;align-items:center;gap:9px;padding:13px 14px;
   background:none;border:0;cursor:pointer;text-align:left;font-weight:650;font-size:13.2px;
@@ -704,6 +748,37 @@ body.sin-panel .panel { display: none; }
 
   <!-- ============ PANEL LATERAL ============ -->
   <aside class="panel" id="panel">
+    <!-- Riel: acceso directo a cada herramienta, agrupado por el momento en
+         que se usa. Antes eran siete acordeones que había que ir abriendo a
+         ciegas, y nunca se veía cuál estaba abierto. -->
+    <nav class="riel" id="riel" aria-label="Herramientas">
+      <span class="riel-etapa">Entrada</span>
+      <button class="riel-btn" data-va="docs" type="button" title="Documentos · los PDF que abres">
+        <span class="riel-ico">🗂️</span><span class="riel-txt">Docs</span><em class="riel-marca" id="marcaDocs" hidden>0</em>
+      </button>
+      <button class="riel-btn" data-va="guardados" type="button" title="Expedientes guardados · retoma un trabajo">
+        <span class="riel-ico">💾</span><span class="riel-txt">Exped.</span><em class="riel-marca" id="marcaGuardados" hidden>0</em>
+      </button>
+      <span class="riel-etapa">Trabajo</span>
+      <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
+        <span class="riel-ico">✍️</span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
+      </button>
+      <button class="riel-btn" data-va="marca" type="button" title="Sello de texto o marca de agua">
+        <span class="riel-ico">💧</span><span class="riel-txt">Sello</span>
+      </button>
+      <button class="riel-btn" data-va="foliar" type="button" title="Foliación y numeración">
+        <span class="riel-ico">🔢</span><span class="riel-txt">Folios</span>
+      </button>
+      <span class="riel-etapa">Salida</span>
+      <button class="riel-btn" data-va="dividir" type="button" title="Dividir y extraer">
+        <span class="riel-ico">✂️</span><span class="riel-txt">Dividir</span>
+      </button>
+      <button class="riel-btn" data-va="salida" type="button" title="Archivo de salida · nombre, peso y carpeta">
+        <span class="riel-ico">📦</span><span class="riel-txt">Salida</span>
+      </button>
+    </nav>
+
+    <div class="panel-vistas" id="panelVistas">
     <section class="bloque abierto" data-bloque="docs">
       <button class="bloque-cabecera" type="button"><span class="ico">🗂️</span> Documentos <em id="contDocs">0</em></button>
       <div class="bloque-cuerpo">
@@ -859,6 +934,7 @@ body.sin-panel .panel { display: none; }
         <p class="nota">El botón <strong>✎ Editar fuera</strong> guarda el PDF y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
       </div>
     </section>
+    </div>
   </aside>
 
   <!-- ============ ÁREA DE TRABAJO ============ -->
@@ -3762,12 +3838,31 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    * con mover las clases: reconstruir toda la rejilla en cada clic hacía
    * parpadear las miniaturas y costaba cada vez más con expedientes largos.
    */
+  /** Sobre qué van a actuar los botones. Sin nada marcado actúan sobre TODO,
+   *  y eso conviene que se vea, no que se descubra después de girar 80 hojas. */
+  function textoAlcance(enPaquetes) {
+    if (enPaquetes) {
+      return E.paginas.length
+        ? { txt: 'arrastra un paquete para cambiarlo de orden · «Ver» para entrar', alerta: false }
+        : { txt: 'sin documentos', alerta: false };
+    }
+    if (!E.paginas.length) return { txt: 'sin documentos', alerta: false };
+    const n = E.seleccion.size;
+    if (n) return { txt: n === 1 ? '1 hoja marcada' : n + ' hojas marcadas', alerta: false };
+    const cuantas = hojasVisibles().length;
+    return { txt: `sin marcar · las acciones van a las ${cuantas}`, alerta: true };
+  }
+
+  function pintarAlcance(enPaquetes) {
+    const el = $('#infoSeleccion');
+    const a = textoAlcance(enPaquetes);
+    el.textContent = a.txt;
+    el.classList.toggle('alcance-todo', a.alerta);
+  }
+
   function refrescarSeleccion() {
     $$('.pag').forEach((el) => el.classList.toggle('sel', E.seleccion.has(el.dataset.uid)));
-    const n = E.seleccion.size;
-    $('#infoSeleccion').textContent = n
-      ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
-      : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos');
+    pintarAlcance(vista === 'paquetes' && !paqueteAbierto);
   }
 
   function pintar() {
@@ -3795,12 +3890,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       : (paqueteAbierto
         ? `${visibles} de ${E.paginas.length} páginas`
         : (E.paginas.length === 1 ? '1 página' : E.paginas.length + ' páginas'));
-    const n = E.seleccion.size;
-    $('#infoSeleccion').textContent = enPaquetes
-      ? (E.paginas.length ? 'arrastra un paquete para cambiarlo de orden · «Ver» para entrar' : 'sin documentos')
-      : (n
-        ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
-        : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos'));
+    pintarAlcance(enPaquetes);
     // En la vista de paquetes no se enseñan herramientas de hoja suelta:
     // actuarían sobre una selección que no se está viendo.
     $('.taller-herramientas').classList.toggle('solo-paquetes', enPaquetes);
@@ -3864,6 +3954,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       lista.appendChild(li);
     });
     $('#contDocs').textContent = vivos;
+    pintarMarcaRiel('#marcaDocs', vivos);
   }
 
   function pintarFirmas() {
@@ -3907,6 +3998,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       lista.appendChild(p);
     }
     $('#contFirmas').textContent = E.firmas.length;
+    pintarMarcaRiel('#marcaFirmas', E.firmas.length);
   }
 
   G.alCambiarFirmas = function (guardado) {
@@ -4991,6 +5083,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       return;
     }
     $('#contGuardados').textContent = regs.length;
+    pintarMarcaRiel('#marcaGuardados', regs.length);
 
     // el buscador solo asoma cuando ya hay unos cuantos y estorba buscarlos a ojo
     const buscador = $('#buscarGuardados');
@@ -5684,11 +5777,57 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   });
 
   /* ---------------- arranque ---------------- */
-  function conectar() {
-    // acordeón
-    $$('.bloque-cabecera').forEach((cab) => {
-      cab.addEventListener('click', () => cab.parentElement.classList.toggle('abierto'));
+  /* ---------------- riel de herramientas ---------------- */
+  const CLAVE_RIEL = 'grapa.riel';
+
+  /**
+   * Abre esa sección y la trae a la vista. No cierra las demás: dejarlas
+   * abiertas a la vez es útil (ver los documentos mientras se ajusta la
+   * salida), y el riel ya sirve para llegar a cualquiera de un clic.
+   */
+  function irASeccion(cual) {
+    const seccion = $$('.bloque').find((b) => b.dataset.bloque === cual);
+    if (!seccion) return;
+    seccion.classList.add('abierto');
+    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // un destello para no perder de vista a dónde acaba de saltar
+    seccion.classList.remove('destacada');
+    void seccion.offsetWidth;
+    seccion.classList.add('destacada');
+    marcarRiel();
+    try { localStorage.setItem(CLAVE_RIEL, cual); } catch (e) {}
+  }
+
+  /** El riel enciende las secciones que están abiertas. */
+  function marcarRiel() {
+    $$('.riel-btn').forEach((b) => {
+      const s = $$('.bloque').find((x) => x.dataset.bloque === b.dataset.va);
+      const abierta = !!(s && s.classList.contains('abierto'));
+      b.classList.toggle('activo', abierta);
+      b.setAttribute('aria-expanded', String(abierta));
     });
+  }
+
+  /** Los contadores viven en el riel, para verlos sin abrir ninguna sección. */
+  function pintarMarcaRiel(id, n) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = n;
+    el.hidden = !n;
+  }
+
+  function conectar() {
+    $$('.riel-btn').forEach((b) => {
+      b.addEventListener('click', () => irASeccion(b.dataset.va));
+    });
+    // acordeón: la cabecera sigue plegando su sección
+    $$('.bloque-cabecera').forEach((cab) => {
+      cab.addEventListener('click', () => {
+        cab.parentElement.classList.toggle('abierto');
+        marcarRiel();
+      });
+    });
+    marcarRiel();
 
     // tema
     const temaGuardado = (() => { try { return localStorage.getItem('grapa.tema'); } catch (e) { return null; } })();

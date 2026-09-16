@@ -21,7 +21,7 @@
   --sombra-fuerte:0 18px 50px rgba(18,22,30,.22);
   --radio:10px;
   --radio-s:7px;
-  --panel-ancho:302px;
+  --panel-ancho:358px;
   --barra-alto:56px;
 }
 
@@ -142,12 +142,56 @@ button,input,select,textarea{font:inherit;color:inherit}
 .cuerpo{display:flex;height:calc(100% - var(--barra-alto));overflow:hidden}
 .panel{
   width:var(--panel-ancho);flex:none;background:var(--fondo-2);
-  border-right:1px solid var(--borde);overflow-y:auto;overflow-x:hidden;
+  border-right:1px solid var(--borde);display:flex;min-height:0;
+}
+.panel-vistas{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden}
+
+/* Aviso de alcance: sin marcar nada, girar o borrar va a TODAS las hojas. */
+#infoSeleccion.alcance-todo{
+  color:var(--acento);font-weight:700;
+  background:var(--acento-tenue);border-radius:20px;padding:1px 9px;
+}
+
+/* ---------- riel de herramientas ---------- */
+/* Siete acordeones eran demasiados: había que abrirlos a ciegas para saber
+   qué había dentro y nunca se veía cuál estaba abierto. El riel los pone
+   todos a un clic, agrupados por el momento en que se usan. */
+.riel{
+  width:60px;flex:none;background:var(--fondo-3);border-right:1px solid var(--borde);
+  display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:8px 5px;
+  overflow-y:auto;
+}
+.riel-etapa{
+  font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--texto-3);text-align:center;margin:7px 0 2px;
+}
+.riel-etapa:first-child{margin-top:0}
+.riel-btn{
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:7px 2px;border:1px solid transparent;border-radius:var(--radio-s);
+  background:none;cursor:pointer;color:var(--texto-2);font:inherit;
+  transition:background .12s,color .12s;
+}
+.riel-btn:hover{background:var(--fondo-2);color:var(--texto)}
+.riel-btn.activo{
+  background:var(--acento-tenue);border-color:var(--acento);color:var(--acento);font-weight:700;
+}
+@keyframes riel-llega{from{background:var(--acento-tenue)}to{background:transparent}}
+.bloque.destacada{animation:riel-llega 1.1s ease-out}
+.riel-ico{font-size:17px;line-height:1;filter:grayscale(.1)}
+.riel-txt{font-size:9.5px;font-weight:650;letter-spacing:.01em}
+.riel-marca{
+  position:absolute;top:2px;right:4px;font-style:normal;font-size:9px;font-weight:800;
+  min-width:15px;padding:1px 4px;border-radius:20px;text-align:center;
+  background:var(--acento);color:#fff;line-height:1.35;
 }
 .taller{flex:1;display:flex;flex-direction:column;min-width:0}
 
 /* ---------- bloques del panel ---------- */
-.bloque{border-bottom:1px solid var(--borde-suave)}
+/* Las secciones siguen pudiendo estar abiertas a la vez: el riel las alcanza
+   de un clic, pero no obliga a cerrar la que estabas mirando. */
+.bloque{border-bottom:1px solid var(--borde-suave);scroll-margin-top:0}
+.bloque.destacada{background:var(--acento-tenue)}
 .bloque-cabecera{
   width:100%;display:flex;align-items:center;gap:9px;padding:13px 14px;
   background:none;border:0;cursor:pointer;text-align:left;font-weight:650;font-size:13.2px;

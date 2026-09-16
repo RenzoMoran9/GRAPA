@@ -659,12 +659,31 @@
    * con mover las clases: reconstruir toda la rejilla en cada clic hacía
    * parpadear las miniaturas y costaba cada vez más con expedientes largos.
    */
+  /** Sobre qué van a actuar los botones. Sin nada marcado actúan sobre TODO,
+   *  y eso conviene que se vea, no que se descubra después de girar 80 hojas. */
+  function textoAlcance(enPaquetes) {
+    if (enPaquetes) {
+      return E.paginas.length
+        ? { txt: 'arrastra un paquete para cambiarlo de orden · «Ver» para entrar', alerta: false }
+        : { txt: 'sin documentos', alerta: false };
+    }
+    if (!E.paginas.length) return { txt: 'sin documentos', alerta: false };
+    const n = E.seleccion.size;
+    if (n) return { txt: n === 1 ? '1 hoja marcada' : n + ' hojas marcadas', alerta: false };
+    const cuantas = hojasVisibles().length;
+    return { txt: `sin marcar · las acciones van a las ${cuantas}`, alerta: true };
+  }
+
+  function pintarAlcance(enPaquetes) {
+    const el = $('#infoSeleccion');
+    const a = textoAlcance(enPaquetes);
+    el.textContent = a.txt;
+    el.classList.toggle('alcance-todo', a.alerta);
+  }
+
   function refrescarSeleccion() {
     $$('.pag').forEach((el) => el.classList.toggle('sel', E.seleccion.has(el.dataset.uid)));
-    const n = E.seleccion.size;
-    $('#infoSeleccion').textContent = n
-      ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
-      : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos');
+    pintarAlcance(vista === 'paquetes' && !paqueteAbierto);
   }
 
   function pintar() {
@@ -692,12 +711,7 @@
       : (paqueteAbierto
         ? `${visibles} de ${E.paginas.length} páginas`
         : (E.paginas.length === 1 ? '1 página' : E.paginas.length + ' páginas'));
-    const n = E.seleccion.size;
-    $('#infoSeleccion').textContent = enPaquetes
-      ? (E.paginas.length ? 'arrastra un paquete para cambiarlo de orden · «Ver» para entrar' : 'sin documentos')
-      : (n
-        ? (n === 1 ? '1 seleccionada' : n + ' seleccionadas')
-        : (E.paginas.length ? 'nada seleccionado · las acciones se aplican a todo' : 'sin documentos'));
+    pintarAlcance(enPaquetes);
     // En la vista de paquetes no se enseñan herramientas de hoja suelta:
     // actuarían sobre una selección que no se está viendo.
     $('.taller-herramientas').classList.toggle('solo-paquetes', enPaquetes);
@@ -761,6 +775,7 @@
       lista.appendChild(li);
     });
     $('#contDocs').textContent = vivos;
+    pintarMarcaRiel('#marcaDocs', vivos);
   }
 
   function pintarFirmas() {
@@ -804,6 +819,7 @@
       lista.appendChild(p);
     }
     $('#contFirmas').textContent = E.firmas.length;
+    pintarMarcaRiel('#marcaFirmas', E.firmas.length);
   }
 
   G.alCambiarFirmas = function (guardado) {
@@ -1888,6 +1904,7 @@
       return;
     }
     $('#contGuardados').textContent = regs.length;
+    pintarMarcaRiel('#marcaGuardados', regs.length);
 
     // el buscador solo asoma cuando ya hay unos cuantos y estorba buscarlos a ojo
     const buscador = $('#buscarGuardados');
@@ -2581,11 +2598,57 @@
   });
 
   /* ---------------- arranque ---------------- */
-  function conectar() {
-    // acordeón
-    $$('.bloque-cabecera').forEach((cab) => {
-      cab.addEventListener('click', () => cab.parentElement.classList.toggle('abierto'));
+  /* ---------------- riel de herramientas ---------------- */
+  const CLAVE_RIEL = 'grapa.riel';
+
+  /**
+   * Abre esa sección y la trae a la vista. No cierra las demás: dejarlas
+   * abiertas a la vez es útil (ver los documentos mientras se ajusta la
+   * salida), y el riel ya sirve para llegar a cualquiera de un clic.
+   */
+  function irASeccion(cual) {
+    const seccion = $$('.bloque').find((b) => b.dataset.bloque === cual);
+    if (!seccion) return;
+    seccion.classList.add('abierto');
+    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // un destello para no perder de vista a dónde acaba de saltar
+    seccion.classList.remove('destacada');
+    void seccion.offsetWidth;
+    seccion.classList.add('destacada');
+    marcarRiel();
+    try { localStorage.setItem(CLAVE_RIEL, cual); } catch (e) {}
+  }
+
+  /** El riel enciende las secciones que están abiertas. */
+  function marcarRiel() {
+    $$('.riel-btn').forEach((b) => {
+      const s = $$('.bloque').find((x) => x.dataset.bloque === b.dataset.va);
+      const abierta = !!(s && s.classList.contains('abierto'));
+      b.classList.toggle('activo', abierta);
+      b.setAttribute('aria-expanded', String(abierta));
     });
+  }
+
+  /** Los contadores viven en el riel, para verlos sin abrir ninguna sección. */
+  function pintarMarcaRiel(id, n) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = n;
+    el.hidden = !n;
+  }
+
+  function conectar() {
+    $$('.riel-btn').forEach((b) => {
+      b.addEventListener('click', () => irASeccion(b.dataset.va));
+    });
+    // acordeón: la cabecera sigue plegando su sección
+    $$('.bloque-cabecera').forEach((cab) => {
+      cab.addEventListener('click', () => {
+        cab.parentElement.classList.toggle('abierto');
+        marcarRiel();
+      });
+    });
+    marcarRiel();
 
     // tema
     const temaGuardado = (() => { try { return localStorage.getItem('grapa.tema'); } catch (e) { return null; } })();
