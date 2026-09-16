@@ -430,18 +430,38 @@ button,input,select,textarea{font:inherit;color:inherit}
   padding:7px 10px;border-radius:var(--radio-s);background:var(--acento-tenue);
   border:1px solid var(--acento);font-size:12px;color:var(--texto);
 }
-.expediente-actual strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+/* El nombre iba en un <strong> suelto, y en un elemento «inline» el navegador
+   NO hace caso ni a max-width ni a text-overflow: por eso un expediente de
+   nombre largo se salía del recuadro. Con display:block sí obedece. */
+.expediente-actual{flex-wrap:wrap}
+.expediente-actual > span{flex:1;min-width:0;display:block}
+.expediente-actual strong{
+  display:block;min-width:0;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
 
+.buscar-guardados{
+  width:100%;padding:6px 9px;border-radius:var(--radio-s);font-size:12px;
+  background:var(--fondo);border:1px solid var(--borde-suave);color:var(--texto);
+}
+.buscar-guardados:focus{outline:none;border-color:var(--acento)}
 .lista-guardados{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+/* Una fila por expediente: el nombre manda y ocupa todo el ancho en dos
+   líneas. Con las acciones al costado le quedaban 125 px de 300 y dos
+   expedientes que empiezan igual («EXP. 10488-2026 …») se leían idénticos. */
 .lista-guardados li{
-  display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:var(--radio-s);
+  display:flex;flex-direction:column;gap:5px;padding:9px 10px;border-radius:var(--radio-s);
   background:var(--fondo);border:1px solid var(--borde-suave);
 }
 .lista-guardados li.actual{border-color:var(--acento);background:var(--acento-tenue)}
-.guardado-datos{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
-.guardado-datos strong{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.guardado-datos{min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.3}
+.guardado-datos strong{
+  font-size:12.5px;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
 .guardado-datos span{font-size:11px;color:var(--texto-3);font-variant-numeric:tabular-nums}
-.lista-guardados .btn-mini{padding:3px 7px}
+.guardado-acciones{display:flex;align-items:center;justify-content:flex-end;gap:5px}
+.lista-guardados .btn-mini{padding:3px 8px}
 
 /* ---------- carpeta de destino ---------- */
 .carpeta-estado{

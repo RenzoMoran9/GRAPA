@@ -1834,6 +1834,30 @@
       ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
   };
 
+  /**
+   * Corta por el MEDIO, no por el final. Los expedientes empiezan igual
+   * («EXP. 10488-2026 ADQUISICION DE…») y lo que los distingue está al final,
+   * así que cortando por detrás se leían todos iguales.
+   */
+  function nombreCorto(texto, tope) {
+    const t = String(texto || '');
+    const max = tope || 62;
+    if (t.length <= max) return t;
+    const cola = Math.min(22, Math.floor(max / 3));
+    return t.slice(0, max - cola - 1).trimEnd() + '…' + t.slice(-cola).trimStart();
+  }
+
+  /** Para la lista: «hoy», «ayer» o la fecha. La hora solo si es de hoy. */
+  const fechaLista = (ms) => {
+    const d = new Date(ms || Date.now());
+    const hoy = new Date();
+    const dia = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const dias = Math.round((dia(hoy) - dia(d)) / 86400000);
+    if (dias === 0) return 'hoy ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+    if (dias === 1) return 'ayer';
+    return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' });
+  };
+
   async function comprobarAutoguardado() {
     try {
       const reg = await G.bd.leerExpediente('__auto');
@@ -1864,17 +1888,27 @@
       return;
     }
     $('#contGuardados').textContent = regs.length;
+
+    // el buscador solo asoma cuando ya hay unos cuantos y estorba buscarlos a ojo
+    const buscador = $('#buscarGuardados');
+    if (buscador) buscador.hidden = regs.length < 5;
+    const filtro = (buscador && !buscador.hidden ? buscador.value : '').trim().toLowerCase();
+    const visibles = filtro
+      ? regs.filter((r) => String(r.nombre || '').toLowerCase().includes(filtro))
+      : regs;
+
     lista.innerHTML = '';
-    regs.forEach((r) => {
+    visibles.forEach((r) => {
       const li = document.createElement('li');
       if (expedienteAbierto && expedienteAbierto.id === r.id) li.classList.add('actual');
       const datos = document.createElement('div');
       datos.className = 'guardado-datos';
       const nom = document.createElement('strong');
-      nom.textContent = r.nombre;
+      nom.textContent = nombreCorto(r.nombre);
       nom.title = r.nombre;
       const meta = document.createElement('span');
-      meta.textContent = `${r.numPaginas} pág. · ${fechaCorta(r.fecha)}`;
+      meta.textContent = `${r.numPaginas} pág. · ${fechaLista(r.fecha)}`;
+      meta.title = fechaCorta(r.fecha);
       datos.append(nom, meta);
 
       const abrir = document.createElement('button');
@@ -1930,13 +1964,20 @@
         pintarGuardados();
       });
 
-      li.append(datos, abrir, renombrar, borrar);
+      // Las acciones van en su propia línea: apretadas al lado del nombre le
+      // dejaban 125 px de 300, y dos expedientes distintos se leían igual.
+      const acciones = document.createElement('div');
+      acciones.className = 'guardado-acciones';
+      acciones.append(abrir, renombrar, borrar);
+      li.append(datos, acciones);
       lista.appendChild(li);
     });
-    if (!regs.length) {
+    if (!visibles.length) {
       const p = document.createElement('p');
       p.className = 'nota';
-      p.textContent = 'Todavía no has guardado ningún expediente.';
+      p.textContent = regs.length
+        ? `Ninguno de los ${regs.length} guardados dice «${filtro}».`
+        : 'Todavía no has guardado ningún expediente.';
       lista.appendChild(p);
     }
     const esp = await G.bd.espacio();
@@ -2642,6 +2683,7 @@
     });
     $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
     $('#btnDescargarSel').addEventListener('click', descargarSeleccion);
+    $('#buscarGuardados').addEventListener('input', () => pintarGuardados());
     $('#pesoSalida').addEventListener('change', (ev) => {
       pintarNotaPeso();
       try { localStorage.setItem('grapa-peso', ev.target.value); } catch (e) {}
