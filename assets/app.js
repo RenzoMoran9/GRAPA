@@ -2623,15 +2623,23 @@
    * abiertas a la vez es útil (ver los documentos mientras se ajusta la
    * salida), y el riel ya sirve para llegar a cualquiera de un clic.
    */
-  function irASeccion(cual) {
+  function irASeccion(cual, opciones) {
+    const o = opciones || {};
     const seccion = $$('.bloque').find((b) => b.dataset.bloque === cual);
     if (!seccion) return;
-    seccion.classList.add('abierto');
-    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // un destello para no perder de vista a dónde acaba de saltar
-    seccion.classList.remove('destacada');
-    void seccion.offsetWidth;
-    seccion.classList.add('destacada');
+    // Al elegir en el riel se queda esa y las demás se pliegan: el panel no
+    // se convierte en una tira larga de todo abierto a la vez.
+    $$('.bloque').forEach((b) => b.classList.toggle('abierto', b === seccion));
+    // si el panel estaba recogido, el riel lo vuelve a abrir. Al arrancar no:
+    // ahí se respeta cómo lo dejó el usuario la última vez.
+    if (o.desplegar !== false) {
+      abrirPanel();
+      seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // un destello para no perder de vista a dónde acaba de saltar
+      seccion.classList.remove('destacada');
+      void seccion.offsetWidth;
+      seccion.classList.add('destacada');
+    }
     seccionActual = cual;
     marcarRiel();
     try { localStorage.setItem(CLAVE_RIEL, cual); } catch (e) {}
@@ -2642,6 +2650,8 @@
    * abiertas se encendía medio riel y dejaba de señalar nada.
    */
   let seccionActual = null;
+  /** Lo rellena conectar(); el riel lo usa para desplegar el panel recogido. */
+  let abrirPanel = () => {};
   function marcarRiel() {
     $$('.riel-btn').forEach((b) => {
       const s = $$('.bloque').find((x) => x.dataset.bloque === b.dataset.va);
@@ -2674,7 +2684,10 @@
         marcarRiel();
       });
     });
-    marcarRiel();
+    // arranca en la sección donde se quedó, y solo en esa
+    let inicial = 'docs';
+    try { inicial = localStorage.getItem(CLAVE_RIEL) || 'docs'; } catch (e) {}
+    irASeccion(inicial, { desplegar: false });
 
     // tema
     const temaGuardado = (() => { try { return localStorage.getItem('grapa.tema'); } catch (e) { return null; } })();
@@ -2742,10 +2755,21 @@
     }
     let panelOculto = false;
     try { panelOculto = localStorage.getItem(CLAVE_PANEL) === '1'; } catch (e) {}
+    const recordarPanel = () => {
+      try { localStorage.setItem(CLAVE_PANEL, panelOculto ? '1' : '0'); } catch (e) {}
+    };
     pintarPanel(panelOculto);
+    // Recogido queda el riel: desde ahí se abre cualquier sección y el panel
+    // se despliega solo, sin tener que devolverlo a mano primero.
+    abrirPanel = () => {
+      if (!panelOculto) return;
+      panelOculto = false;
+      recordarPanel();
+      pintarPanel(panelOculto);
+    };
     $('#btnPanel').addEventListener('click', () => {
       panelOculto = !panelOculto;
-      try { localStorage.setItem(CLAVE_PANEL, panelOculto ? '1' : '0'); } catch (e) {}
+      recordarPanel();
       pintarPanel(panelOculto);
     });
 
