@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260916c">
+<link rel="stylesheet" href="assets/styles.css?v=20260917a">
 </head>
 <body>
 
@@ -59,6 +59,7 @@
 
 <header class="barra-superior">
   <div class="marca">
+    <button class="btn btn-fantasma" id="btnPanel" title="Ocultar el panel lateral (P)" aria-expanded="true" aria-label="Ocultar el panel lateral"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-panel"/></svg></button>
     <div class="marca-logo" aria-hidden="true">
       <svg viewBox="0 0 32 32"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7" /></svg>
     </div>
@@ -71,8 +72,6 @@
   <div class="barra-acciones">
     <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rehacer"/></svg></button>
-    <span class="separador-vertical"></span>
-    <button class="btn btn-fantasma" id="btnPanel" title="Ocultar el panel lateral (P)" aria-expanded="true" aria-label="Ocultar el panel lateral"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-panel"/></svg></button>
     <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema" aria-label="Cambiar tema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg></button>
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos" aria-label="Ayuda y atajos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg></button>
     <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
@@ -572,10 +571,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260916c"></script>
-<script src="assets/office.js?v=20260916c"></script>
-<script src="assets/expedientes.js?v=20260916c"></script>
-<script src="assets/firmas.js?v=20260916c"></script>
-<script src="assets/app.js?v=20260916c"></script>
+<script src="assets/core.js?v=20260917a"></script>
+<script src="assets/office.js?v=20260917a"></script>
+<script src="assets/expedientes.js?v=20260917a"></script>
+<script src="assets/firmas.js?v=20260917a"></script>
+<script src="assets/app.js?v=20260917a"></script>
 </body>
 </html>

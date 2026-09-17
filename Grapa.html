@@ -120,6 +120,10 @@ button,input,select,textarea{font:inherit;color:inherit}
   border-bottom:1px solid var(--borde); position:relative; z-index:30;
 }
 .marca{display:flex;align-items:center;gap:11px;min-width:0}
+/* El botón de plegar va a la izquierda, justo encima del riel que pliega:
+   el mando queda sobre lo que manda, y se alcanza sin cruzar la pantalla. */
+.marca #btnPanel{padding:7px 8px;margin-right:1px}
+body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acento)}
 .marca-logo{
   width:34px;height:34px;border-radius:9px;flex:none;
   background:linear-gradient(145deg,var(--acento),var(--acento-oscuro));
@@ -791,6 +795,7 @@ body.sin-panel .panel-vistas { display: none; }
 
 <header class="barra-superior">
   <div class="marca">
+    <button class="btn btn-fantasma" id="btnPanel" title="Ocultar el panel lateral (P)" aria-expanded="true" aria-label="Ocultar el panel lateral"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-panel"/></svg></button>
     <div class="marca-logo" aria-hidden="true">
       <svg viewBox="0 0 32 32"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7" /></svg>
     </div>
@@ -803,8 +808,6 @@ body.sin-panel .panel-vistas { display: none; }
   <div class="barra-acciones">
     <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rehacer"/></svg></button>
-    <span class="separador-vertical"></span>
-    <button class="btn btn-fantasma" id="btnPanel" title="Ocultar el panel lateral (P)" aria-expanded="true" aria-label="Ocultar el panel lateral"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-panel"/></svg></button>
     <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema" aria-label="Cambiar tema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg></button>
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos" aria-label="Ayuda y atajos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg></button>
     <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
