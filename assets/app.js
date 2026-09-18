@@ -616,6 +616,7 @@
       // no corresponder con la lista que el lector acabe recorriendo
       [icono('lupa'), 'Ver esta hoja en grande', () => abrirLector(pagina)],
       [icono('firma'), 'Colocar firma o sello', () => abrirFirmar(pagina)],
+      [icono('texto'), 'Corregir el texto de esta hoja', () => editarTexto([pagina])],
       [icono('guardar'), 'Descargar solo esta hoja', () => descargarHoja(pagina)],
       [icono('duplicar'), 'Duplicar', () => { marcar(); duplicar([pagina]); }],
       [icono('borrar'), 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
@@ -2315,7 +2316,8 @@
     return EDITOR_PUBLICADO;
   }
 
-  const puente = { ventana: null, listo: false, arrancando: false, pendiente: null, reloj: null };
+  const puente = { ventana: null, listo: false, arrancando: false, pendiente: null,
+                   enviadas: null, reloj: null };
 
   function mandarAlEditor() {
     if (!puente.pendiente || !puente.listo) return;
@@ -2333,8 +2335,23 @@
    * del propio clic: si se abriera al terminar de armar el PDF, el navegador la
    * tomaría por una ventana emergente no pedida y la bloquearía.
    */
-  async function editarTexto() {
-    const objs = E.seleccion.size ? seleccionadas() : hojasVisibles();
+  /**
+   * Lo que viaja al editor va SIN comprimir y SIN sellos.
+   *
+   * Comprimir vuelve cada hoja una foto —con «Mínimo», también las de
+   * texto—, y entonces al editor no le llega ni una letra que corregir;
+   * además rasterizar un expediente entero tarda minutos con la pantalla
+   * bloqueada. Y los folios y las firmas los vuelve a poner Grapa al
+   * guardar, así que si viajaran pegados a la hoja saldrían por duplicado:
+   * se quedan aquí y se le devuelven a la hoja corregida cuando vuelve.
+   */
+  function paraElEditor(objs) {
+    return objs.map((p) => Object.assign({}, p, { sellos: [] }));
+  }
+
+  async function editarTexto(cuales) {
+    const objs = (cuales && cuales.length) ? cuales
+      : (E.seleccion.size ? seleccionadas() : hojasVisibles());
     if (!objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
 
     // La ventana se abre en blanco dentro del propio clic y se la manda a su
@@ -2365,10 +2382,14 @@
         + 'en «Archivo de salida» → «Editor de texto».', 'error');
     }, 12000);
 
-    G.cargando(true, 'Armando el PDF para editarlo…');
+    G.cargando(true, objs.length > 1
+      ? `Preparando ${objs.length} hojas para el editor…`
+      : 'Preparando la hoja para el editor…');
     try {
-      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
+      const bytes = await G.construirPdf(paraElEditor(objs), { alProgresar: (t) => G.progreso(t) });
       const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      // para poder devolver la corrección a su sitio exacto
+      puente.enviadas = objs.map((x) => x.uid);
       puente.pendiente = { nombre: base + '.pdf', bytes };
       mandarAlEditor();
     } catch (e) {
@@ -2398,14 +2419,71 @@
       const bytes = d.bytes instanceof Uint8Array ? d.bytes : new Uint8Array(d.bytes || []);
       if (!bytes.length) { G.aviso('El editor devolvió un documento vacío.', 'error'); return; }
       const base = G.nombreSeguro(String(d.nombre || 'documento'), 'documento').replace(/\.pdf$/i, '');
-      const cuantos = Number(d.cambios) || 0;
-      // entra como un archivo más, para poder ordenarlo, foliarlo y firmarlo
-      anadir([new File([bytes], base + ' (texto editado).pdf', { type: 'application/pdf' })]);
-      G.aviso(cuantos
-        ? `Volvió del editor con ${cuantos} cambio(s), como documento nuevo.`
-        : 'Volvió del editor como documento nuevo.', 'ok');
+      recibirDelEditor(bytes, base, Number(d.cambios) || 0);
     }
   });
+
+  /**
+   * Lo corregido vuelve a su sitio. Si vuelven tantas hojas como se
+   * mandaron, cada una sustituye a la suya: misma posición, mismo paquete y
+   * con los folios y las firmas que llevaba, que se habían quedado aquí
+   * para no viajar pegados. Si el número no cuadra —porque en el editor se
+   * hizo otra cosa— entra como documento aparte y no se toca nada.
+   */
+  async function recibirDelEditor(bytes, base, cuantos) {
+    const enviadas = (puente.enviadas || [])
+      .map((u) => E.paginas.find((x) => x.uid === u))
+      .filter(Boolean);
+    puente.enviadas = null;
+
+    G.cargando(true, 'Recogiendo lo corregido…');
+    try {
+      await G.prepararMotor();
+      const archivo = new File([bytes], base + ' (texto editado).pdf', { type: 'application/pdf' });
+      const r = await G.cargarArchivos([archivo], (t) => G.progreso(t));
+      if (!r.paginas.length) {
+        (r.errores || []).forEach((e) => G.aviso(e, 'error'));
+        G.aviso('No se pudo leer lo que devolvió el editor.', 'error');
+        return;
+      }
+      marcar();
+      r.fuentes.forEach((f) => E.fuentes.set(f.id, f));
+
+      if (enviadas.length && enviadas.length === r.paginas.length) {
+        enviadas.forEach((vieja, i) => {
+          const nueva = r.paginas[i];
+          nueva.paqueteId = vieja.paqueteId;
+          nueva.giro = vieja.giro;
+          nueva.sellos = vieja.sellos;     // los folios y firmas vuelven a la hoja
+          nueva.corte = vieja.corte;
+          const donde = E.paginas.indexOf(vieja);
+          if (donde >= 0) E.paginas[donde] = nueva;
+        });
+        E.seleccion = new Set(r.paginas.map((x) => x.uid));
+        pintar();
+        G.aviso(cuantos
+          ? `${cuantos} corrección(es) puesta(s) en su sitio.`
+          : `${r.paginas.length} hoja(s) actualizada(s) en su sitio.`, 'ok');
+        return;
+      }
+
+      const paq = nuevoPaquete(base + ' (texto editado)');
+      r.paginas.forEach((x) => { x.paqueteId = paq.id; });
+      E.paginas = r.paginas.concat(E.paginas);
+      E.seleccion = new Set(r.paginas.map((x) => x.uid));
+      if (!paqueteAbierto && paquetesEnOrden().length > 1) vista = 'paquetes';
+      pintar();
+      G.aviso(enviadas.length
+        ? `Volvieron ${r.paginas.length} hoja(s) y se habían mandado ${enviadas.length}: `
+          + 'entra como documento aparte para no descuadrar el expediente.'
+        : 'Volvió del editor como documento nuevo.', 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo recoger lo corregido: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
 
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
@@ -3091,6 +3169,10 @@
     $('#lectorFirmar').addEventListener('click', () => {
       const p = paginaActualLector();
       if (p) abrirFirmar(p);
+    });
+    $('#lectorEditarTexto').addEventListener('click', () => {
+      const p = paginaActualLector();
+      if (p) editarTexto([p]);
     });
     $('#lectorEliminar').addEventListener('click', () => {
       const p = paginaActualLector();

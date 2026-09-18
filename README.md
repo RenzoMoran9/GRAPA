@@ -151,9 +151,23 @@ Grapa arma el expediente; para **corregir una palabra dentro de un PDF** está
 <https://github.com/RenzoMoran9/HERRAMIENTA-PDF>
 
 Descarga su `GrapaEditor.html` y guárdalo **en la misma carpeta que
-`Grapa.html`**. Entonces el botón **T Editar texto** lo abre en otra pestaña y
-le pasa el documento; al terminar, **Devolver a Grapa** lo trae de vuelta
-corregido y entra como un documento más, listo para ordenar, foliar y firmar.
+`Grapa.html`**. Con Grapa abierta desde la web, si el editor no está al lado se
+usa el publicado.
+
+**Para corregir una hoja suelta** —que es lo normal— usa la **T** de esa hoja,
+o ábrela en grande y pulsa la **T** de la barra del lector. El botón **T Editar
+texto** de arriba manda las hojas marcadas, o el expediente entero si no hay
+ninguna marcada.
+
+Al terminar, **Devolver a Grapa** trae lo corregido **a su sitio**: cada hoja
+sustituye a la suya, en la misma posición y el mismo paquete, y **recupera sus
+folios y firmas**. Si vuelven más o menos hojas de las que se mandaron, entra
+como documento aparte y no se toca el expediente.
+
+Lo que viaja al editor va **sin comprimir y sin sellos**. Comprimir volvería la
+hoja una foto —con «Mínimo», también las de texto— y entonces no habría ni una
+letra que corregir; y los folios y firmas los vuelve a poner Grapa al guardar,
+así que si viajaran pegados saldrían por duplicado.
 
 **El documento viaja de una pestaña a otra en memoria**: no se guarda en disco,
 no pasa por ninguna red y no hace falta internet. Si el editor no está al lado,

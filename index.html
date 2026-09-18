@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260918a">
+<link rel="stylesheet" href="assets/styles.css?v=20260918b">
 </head>
 <body>
 
@@ -77,7 +77,7 @@
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos" aria-label="Ayuda y atajos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg></button>
     <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
     <button class="btn btn-secundario" id="btnAbrir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir archivos</button>
-    <button class="btn btn-secundario" id="btnEditarTexto" title="Abre el editor de texto en otra pestaña y le pasa este PDF"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
+    <button class="btn btn-secundario" id="btnEditarTexto" title="Abre el editor de texto y le pasa las hojas marcadas (o todas, si no hay ninguna marcada)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
     <button class="btn btn-secundario" id="btnEditorExterno" title="Guarda el PDF en Descargas y abre otra web para que lo subas ahí"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a otra web</button>
     <button class="btn btn-primario" id="btnGuardar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Guardar PDF</button>
   </div>
@@ -351,6 +351,7 @@
       <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
       <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
       <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
+      <button class="btn btn-mini" id="lectorEditarTexto" title="Corregir el texto de esta hoja" aria-label="Corregir el texto de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg></button>
       <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
       <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
       <span class="separador-vertical"></span>
@@ -577,10 +578,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260918a"></script>
-<script src="assets/office.js?v=20260918a"></script>
-<script src="assets/expedientes.js?v=20260918a"></script>
-<script src="assets/firmas.js?v=20260918a"></script>
-<script src="assets/app.js?v=20260918a"></script>
+<script src="assets/core.js?v=20260918b"></script>
+<script src="assets/office.js?v=20260918b"></script>
+<script src="assets/expedientes.js?v=20260918b"></script>
+<script src="assets/firmas.js?v=20260918b"></script>
+<script src="assets/app.js?v=20260918b"></script>
 </body>
 </html>
