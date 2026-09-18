@@ -124,7 +124,7 @@ hojas sueltas.
 Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 
-## Sacar una hoja o editar fuera
+## Sacar una hoja o subirla a otra web
 
 - Marcar hojas es cosa de **la casilla** de cada una, y de nada más: así no se
   desmarca nada sin querer. `Shift`+clic en la casilla marca un rango entero.
@@ -135,7 +135,7 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 - La **⤓** de cada hoja la descarga sola, en su propio PDF. Va siempre a
   **Descargas**, aunque tengas una carpeta vinculada: la carpeta es para el
   expediente terminado, no para una hoja que se saca de paso.
-- **✎ Editar en…** guarda lo que tengas (o la selección, o el paquete abierto)
+- **↗ Subir a…** guarda lo que tengas (o la selección, o el paquete abierto)
   como «… - para editar.pdf» en Descargas y abre en otra pestaña el editor que
   configures en *Archivo de salida*. Viene puesto PDF Guru, pero se cambia por
   el que quieras y el botón se renombra solo.

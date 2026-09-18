@@ -2234,10 +2234,14 @@
     if (!btn) return;
     let donde = '';
     try { donde = new URL(urlEditor()).hostname.replace(/^www\./, ''); } catch (e) {}
-    btn.innerHTML = icono('externo') + (donde ? ' Editar en ' + G.escapaHtml(donde) : ' Editar fuera');
+    // No puede llamarse «Editar…»: al lado está «Editar texto», que es otra
+    // cosa y no saca el documento del equipo. Confundirlos sale caro, porque
+    // este sí lo descarga para que lo subas a una web ajena.
+    btn.innerHTML = icono('externo') + (donde ? ' Subir a ' + G.escapaHtml(donde) : ' Subir a otra web');
     btn.title = donde
-      ? `Guarda el PDF y abre ${donde} en otra pestaña para que lo subas ahí`
-      : 'Escribe primero la dirección del editor en «Archivo de salida»';
+      ? `Guarda el PDF en Descargas y abre ${donde} en otra pestaña para que lo subas ahí. `
+        + 'Lo que subas sale de tu computadora.'
+      : 'Escribe primero la dirección de esa web en «Archivo de salida»';
   }
 
   /**
