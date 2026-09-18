@@ -148,7 +148,7 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 Grapa arma el expediente; para **corregir una palabra dentro de un PDF** está
 **Grapa Editor**, un programa aparte:
-<https://github.com/RenzoMoran9/grapa-editor>
+<https://github.com/RenzoMoran9/HERRAMIENTA-PDF>
 
 Descarga su `GrapaEditor.html` y guárdalo **en la misma carpeta que
 `Grapa.html`**. Entonces el botón **T Editar texto** lo abre en otra pestaña y
