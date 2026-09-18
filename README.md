@@ -144,6 +144,29 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
   abre la pestaña, y tú lo arrastras ahí. Y ten presente que **lo que subas a un
   editor en línea sale de tu computadora**; eso ya depende de esa web.
 
+## Corregir el texto de un PDF
+
+Grapa arma el expediente; para **corregir una palabra dentro de un PDF** está
+**Grapa Editor**, un programa aparte:
+<https://github.com/RenzoMoran9/grapa-editor>
+
+Descarga su `GrapaEditor.html` y guárdalo **en la misma carpeta que
+`Grapa.html`**. Entonces el botón **T Editar texto** lo abre en otra pestaña y
+le pasa el documento; al terminar, **Devolver a Grapa** lo trae de vuelta
+corregido y entra como un documento más, listo para ordenar, foliar y firmar.
+
+**El documento viaja de una pestaña a otra en memoria**: no se guarda en disco,
+no pasa por ninguna red y no hace falta internet. Si el editor no está al lado,
+Grapa lo dice y no pasa nada más.
+
+No corrige texto de escaneos: ahí no hay letras, hay una foto.
+
+> **Por qué son dos programas y no uno.** Grapa Editor usa MuPDF, que es libre
+> pero con licencia AGPL: todo programa que lo lleve *dentro* queda sujeto a esa
+> licencia. Grapa no lo lleva dentro, solo lo abre en otra pestaña, así que
+> sigue siendo un programa independiente. Por eso el editor vive en su propio
+> repositorio.
+
 ## Atajos
 
 | Atajo | Qué hace |

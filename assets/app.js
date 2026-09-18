@@ -2276,6 +2276,97 @@
     }
   }
 
+  /* ---------------- editor de texto (Grapa Editor) ----------------
+     Grapa no lleva el motor de edición dentro: abre Grapa Editor en otra
+     pestaña y le pasa el documento en memoria. Por eso siguen siendo dos
+     programas independientes, y Grapa no hereda su licencia.            */
+  const EDITOR_TEXTO_POR_DEFECTO = 'GrapaEditor.html';
+  const CLAVE_EDITOR_TEXTO = 'grapa.editor.texto';
+
+  function urlEditorTexto() {
+    const campo = $('#editorTextoUrl');
+    const escrita = ((campo && campo.value) || '').trim();
+    if (escrita) return escrita;
+    try { return localStorage.getItem(CLAVE_EDITOR_TEXTO) || EDITOR_TEXTO_POR_DEFECTO; } catch (e) {}
+    return EDITOR_TEXTO_POR_DEFECTO;
+  }
+
+  const puente = { ventana: null, listo: false, pendiente: null, reloj: null };
+
+  function mandarAlEditor() {
+    if (!puente.pendiente || !puente.listo) return;
+    if (!puente.ventana || puente.ventana.closed) return;
+    const carga = puente.pendiente;
+    puente.pendiente = null;
+    clearTimeout(puente.reloj);
+    puente.ventana.postMessage(
+      { grapa: 'documento', nombre: carga.nombre, bytes: carga.bytes }, '*');
+    G.aviso('Documento enviado al editor de texto.', 'ok');
+  }
+
+  /**
+   * Abre el editor y le manda lo que se está viendo. La ventana se abre dentro
+   * del propio clic: si se abriera al terminar de armar el PDF, el navegador la
+   * tomaría por una ventana emergente no pedida y la bloquearía.
+   */
+  async function editarTexto() {
+    const objs = E.seleccion.size ? seleccionadas() : hojasVisibles();
+    if (!objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+
+    const v = window.open(urlEditorTexto(), 'grapa-editor');
+    if (!v) {
+      G.aviso('El navegador bloqueó la ventana del editor. Permite las ventanas '
+        + 'emergentes para Grapa y vuelve a intentarlo.', 'error');
+      return;
+    }
+    puente.ventana = v;
+    puente.listo = false;
+    puente.pendiente = null;
+    clearTimeout(puente.reloj);
+    puente.reloj = setTimeout(() => {
+      if (puente.listo) return;
+      G.aviso('No contestó ningún editor. Guarda «GrapaEditor.html» en la misma '
+        + 'carpeta que Grapa, o escribe dónde está en «Archivo de salida».', 'error');
+    }, 15000);
+
+    G.cargando(true, 'Armando el PDF para editarlo…');
+    try {
+      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      puente.pendiente = { nombre: base + '.pdf', bytes };
+      mandarAlEditor();
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo armar el PDF: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
+  /* Lo que llega de la otra pestaña. Solo se atiende a la ventana que abrimos
+     nosotros: cualquier otra pestaña que mande mensajes se ignora. Comparar el
+     origen no serviría, porque abriendo Grapa desde el disco el origen es
+     «null» para todos. */
+  window.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || typeof d !== 'object' || !d.grapa) return;
+    if (!puente.ventana || ev.source !== puente.ventana) return;
+
+    if (d.grapa === 'editor-listo') { puente.listo = true; mandarAlEditor(); return; }
+
+    if (d.grapa === 'documento-editado') {
+      const bytes = d.bytes instanceof Uint8Array ? d.bytes : new Uint8Array(d.bytes || []);
+      if (!bytes.length) { G.aviso('El editor devolvió un documento vacío.', 'error'); return; }
+      const base = G.nombreSeguro(String(d.nombre || 'documento'), 'documento').replace(/\.pdf$/i, '');
+      const cuantos = Number(d.cambios) || 0;
+      // entra como un archivo más, para poder ordenarlo, foliarlo y firmarlo
+      anadir([new File([bytes], base + ' (texto editado).pdf', { type: 'application/pdf' })]);
+      G.aviso(cuantos
+        ? `Volvió del editor con ${cuantos} cambio(s), como documento nuevo.`
+        : 'Volvió del editor como documento nuevo.', 'ok');
+    }
+  });
+
   /* ---------------- carpeta de destino ---------------- */
   function pintarCarpeta() {
     const est = $('#carpetaEstado'), nota = $('#carpetaNota');
@@ -2788,6 +2879,13 @@
       pintarEditorExterno();
     });
     $('#btnEditorExterno').addEventListener('click', editarFuera);
+
+    // editor de texto
+    try { $('#editorTextoUrl').value = localStorage.getItem(CLAVE_EDITOR_TEXTO) || ''; } catch (e) {}
+    $('#editorTextoUrl').addEventListener('input', () => {
+      try { localStorage.setItem(CLAVE_EDITOR_TEXTO, $('#editorTextoUrl').value.trim()); } catch (e) {}
+    });
+    $('#btnEditarTexto').addEventListener('click', editarTexto);
 
     $('#btnVista').addEventListener('click', () => {
       vista = vista === 'paquetes' ? 'hojas' : 'paquetes';
