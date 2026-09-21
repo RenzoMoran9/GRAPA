@@ -2281,6 +2281,188 @@
     }
   }
 
+  /* ---------------- capturas ----------------
+     Marcar un trozo de una hoja y llevárselo como imagen, para pegarlo en
+     un correo, un informe o donde haga falta. La captura NO se saca del
+     lienzo que se está viendo —que está al tamaño de la pantalla y saldría
+     borroso al pegarlo— sino de un dibujo nuevo a alta resolución, y encima
+     se le pintan los sellos que lleve la hoja, para que salga tal como se
+     ve.                                                                   */
+  const ANCHO_CAPTURA = 2400;
+  let capturando = false;
+  let arrastreCaptura = null;
+
+  function pintarBotonCaptura() {
+    const b = $('#lectorCapturar');
+    if (b) b.classList.toggle('activo', capturando);
+    document.body.classList.toggle('capturando', capturando);
+  }
+
+  function alternarCaptura(si) {
+    capturando = si == null ? !capturando : si;
+    quitarMarcoCaptura();
+    pintarBotonCaptura();
+    if (capturando) G.aviso('Arrastra sobre la hoja para marcar el trozo que quieres.', '');
+  }
+
+  function quitarMarcoCaptura() {
+    $$('.captura-marco').forEach((m) => m.remove());
+    arrastreCaptura = null;
+  }
+
+  /** Dibuja los sellos de la hoja sobre la captura, como se ven en pantalla. */
+  function dibujarSellosEn(ctx, pagina, W, H) {
+    const vis = visDe(pagina);
+    const k = W / vis.w;
+    const pendientes = [];
+    pagina.sellos.forEach((s) => {
+      ctx.save();
+      ctx.globalAlpha = s.opacidad == null ? 1 : s.opacidad;
+      if (s.rol === 'firma') {
+        const firma = G.firmaPorId(s.firmaId);
+        if (!firma) { ctx.restore(); return; }
+        const an = s.fw * W, al = an * (firma.alto / firma.ancho);
+        const x = s.fx * W, y = s.fy * H;
+        const img = new window.Image();
+        pendientes.push(new Promise((listo) => {
+          img.onload = () => {
+            ctx.save();
+            ctx.globalAlpha = s.opacidad == null ? 1 : s.opacidad;
+            ctx.translate(x, y + al);
+            if (s.giro) ctx.rotate((-s.giro * Math.PI) / 180);
+            ctx.drawImage(img, 0, -al, an, al);
+            ctx.restore();
+            listo();
+          };
+          img.onerror = () => listo();
+          img.src = firma.dataUrl;
+        }));
+      } else {
+        const texto = s.rol === 'folio'
+          ? String(s.plantilla || '{n}')
+              .replace(/\{n\}/g, String(folios.get(pagina.uid) != null ? folios.get(pagina.uid) : ''))
+              .replace(/\{t\}/g, String(totalFolios))
+          : String(s.texto || '');
+        const margen = G.mm(s.margen == null ? 12 : s.margen);
+        const pt = G.puntoPorCodigo(s.pos || 'ad', vis, margen);
+        const tam = Math.max(4, (s.tam || 11) * k);
+        ctx.font = tam + 'px Helvetica, Arial, sans-serif';
+        ctx.fillStyle = s.color || '#111';
+        ctx.textAlign = pt.alineaH === 'c' ? 'center' : pt.alineaH === 'd' ? 'right' : 'left';
+        ctx.textBaseline = pt.alineaV === 'c' ? 'middle' : pt.alineaV === 'b' ? 'bottom' : 'top';
+        ctx.translate((pt.x / vis.w) * W, (pt.y / vis.h) * H);
+        if (s.giro) ctx.rotate((-s.giro * Math.PI) / 180);
+        ctx.fillText(texto, 0, 0);
+      }
+      ctx.restore();
+    });
+    return Promise.all(pendientes);
+  }
+
+  /** Saca el trozo marcado, en fracciones de la hoja, como un lienzo aparte. */
+  async function sacarCaptura(pagina, f) {
+    const grande = await G.renderGrande(pagina, ANCHO_CAPTURA);
+    const ctx0 = grande.getContext('2d');
+    await dibujarSellosEn(ctx0, pagina, grande.width, grande.height);
+    const x = Math.round(f.x * grande.width), y = Math.round(f.y * grande.height);
+    const an = Math.max(1, Math.round(f.an * grande.width));
+    const al = Math.max(1, Math.round(f.al * grande.height));
+    const trozo = document.createElement('canvas');
+    trozo.width = an; trozo.height = al;
+    trozo.getContext('2d').drawImage(grande, x, y, an, al, 0, 0, an, al);
+    return trozo;
+  }
+
+  async function terminarCaptura(pagina, f) {
+    if (f.an < 0.004 || f.al < 0.004) { quitarMarcoCaptura(); return; }
+    G.cargando(true, 'Preparando la captura…');
+    try {
+      const trozo = await sacarCaptura(pagina, f);
+      const blob = await new Promise((r) => trozo.toBlob(r, 'image/png'));
+      quitarMarcoCaptura();
+      alternarCaptura(false);
+      abrirCaptura(blob, trozo.width, trozo.height);
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo hacer la captura: ' + e.message, 'error');
+    } finally {
+      G.cargando(false);
+    }
+  }
+
+  function abrirCaptura(blob, an, al) {
+    const url = URL.createObjectURL(blob);
+    $('#capturaPrevia').src = url;
+    $('#capturaMedidas').textContent = an + ' × ' + al + ' px · ' + enMb(blob.size);
+    $('#modalCaptura').hidden = false;
+    $('#modalCaptura').dataset.url = url;
+    $('#btnCapturaCopiar').onclick = async () => {
+      try {
+        await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
+        G.aviso('Copiado. Pégalo donde quieras con Ctrl+V.', 'ok');
+        cerrarCaptura();
+      } catch (e) {
+        // sin permiso de portapapeles: queda la descarga, que siempre funciona
+        G.aviso('El navegador no dejó copiar. Usa «Descargar».', 'error');
+      }
+    };
+    $('#btnCapturaDescargar').onclick = async () => {
+      const base = G.nombreSeguro($('#nombreSalida').value, 'recorte');
+      await G.guardarArchivo(new Uint8Array(await blob.arrayBuffer()),
+        base + ' - captura.png', 'image/png', { aDescargas: true });
+      G.aviso('La captura está en Descargas.', 'ok');
+      cerrarCaptura();
+    };
+  }
+
+  function cerrarCaptura() {
+    const m = $('#modalCaptura');
+    if (m.dataset.url) { URL.revokeObjectURL(m.dataset.url); delete m.dataset.url; }
+    m.hidden = true;
+  }
+
+  function conectarCaptura() {
+    const zona = $('#lectorHojas');
+    zona.addEventListener('mousedown', (ev) => {
+      if (!capturando || ev.button !== 0) return;
+      const hoja = ev.target.closest('.hoja');
+      if (!hoja) return;
+      ev.preventDefault();
+      const caja = hoja.getBoundingClientRect();
+      const marco = document.createElement('div');
+      marco.className = 'captura-marco';
+      hoja.appendChild(marco);
+      arrastreCaptura = { hoja, caja, x0: ev.clientX, y0: ev.clientY, marco };
+    });
+    window.addEventListener('mousemove', (ev) => {
+      const a = arrastreCaptura;
+      if (!a) return;
+      const x = Math.min(Math.max(ev.clientX, a.caja.left), a.caja.right);
+      const y = Math.min(Math.max(ev.clientY, a.caja.top), a.caja.bottom);
+      const izq = Math.min(a.x0, x) - a.caja.left, arr = Math.min(a.y0, y) - a.caja.top;
+      a.marco.style.left = izq + 'px';
+      a.marco.style.top = arr + 'px';
+      a.marco.style.width = Math.abs(x - a.x0) + 'px';
+      a.marco.style.height = Math.abs(y - a.y0) + 'px';
+    });
+    window.addEventListener('mouseup', (ev) => {
+      const a = arrastreCaptura;
+      if (!a) return;
+      arrastreCaptura = null;
+      const x = Math.min(Math.max(ev.clientX, a.caja.left), a.caja.right);
+      const y = Math.min(Math.max(ev.clientY, a.caja.top), a.caja.bottom);
+      const f = {
+        x: (Math.min(a.x0, x) - a.caja.left) / a.caja.width,
+        y: (Math.min(a.y0, y) - a.caja.top) / a.caja.height,
+        an: Math.abs(x - a.x0) / a.caja.width,
+        al: Math.abs(y - a.y0) / a.caja.height,
+      };
+      const pagina = hojasLector()[Number(a.hoja.dataset.indice)];
+      if (pagina) terminarCaptura(pagina, f);
+      else quitarMarcoCaptura();
+    });
+  }
+
   /* ---------------- editor de texto (Grapa Editor) ----------------
      Grapa no lleva el motor de edición dentro: abre Grapa Editor en otra
      pestaña y le pasa el documento en memoria. Por eso siguen siendo dos
@@ -2692,6 +2874,7 @@
   }
 
   function cerrarLector() {
+    if (capturando) alternarCaptura(false);
     lector.abierto = false;
     lector.soloMarcadas = false;
     lector.columnas = 1;
@@ -2763,7 +2946,10 @@
     const ctrl = ev.ctrlKey || ev.metaKey;
 
     if (ev.key === 'Escape') {
+      // estando a media captura, Esc cancela la captura y no cierra el lector
+      if (capturando && $$('.modal:not([hidden])').length === 0) { alternarCaptura(false); return; }
       if (lector.abierto && $$('.modal:not([hidden])').length === 0) { cerrarLector(); return; }
+      if (!$('#modalCaptura').hidden) cerrarCaptura();
       $$('.modal').forEach((m) => { m.hidden = true; });
       return;
     }
@@ -3120,7 +3306,10 @@
     $$('.modal').forEach((m) => {
       if (m.id === 'modalConfirmar') return;   // se cierra por su propia promesa
       m.addEventListener('click', (ev) => { if (ev.target === m) m.hidden = true; });
-      $$('[data-cerrar]', m).forEach((b) => b.addEventListener('click', () => { m.hidden = true; }));
+      $$('[data-cerrar]', m).forEach((b) => b.addEventListener('click', () => {
+        if (m.id === 'modalCaptura') { cerrarCaptura(); return; }
+        m.hidden = true;
+      }));
     });
 
     // empezar otro expediente
@@ -3174,6 +3363,8 @@
       const p = paginaActualLector();
       if (p) editarTexto([p]);
     });
+    $('#lectorCapturar').addEventListener('click', () => alternarCaptura());
+    conectarCaptura();
     $('#lectorEliminar').addEventListener('click', () => {
       const p = paginaActualLector();
       if (!p) return;

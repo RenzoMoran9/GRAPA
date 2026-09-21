@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260918b">
+<link rel="stylesheet" href="assets/styles.css?v=20260921a">
 </head>
 <body>
 
@@ -51,6 +51,7 @@
   <g id="i-abajo"><path d="m6 9 6 6 6-6"/></g>
   <g id="i-hojas"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></g>
   <g id="i-recoger"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3.5v5h5"/></g>
+  <g id="i-captura"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><rect x="8" y="8" width="8" height="8" rx="1"/></g>
   <g id="i-texto"><path d="M5 6.5V5h14v1.5"/><path d="M12 5v14"/><path d="M9 19h6"/></g>
   <g id="i-editar"><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.2 18.8 3 20l1.2-4.2Z"/><path d="m14.4 5.6 3 3"/></g>
   <g id="i-diana"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></g>
@@ -351,6 +352,7 @@
       <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
       <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
       <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
+      <button class="btn btn-mini" id="lectorCapturar" title="Capturar un trozo de esta hoja como imagen" aria-label="Capturar un trozo de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg></button>
       <button class="btn btn-mini" id="lectorEditarTexto" title="Corregir el texto de esta hoja" aria-label="Corregir el texto de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg></button>
       <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
       <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
@@ -435,6 +437,24 @@
 </div>
 
 <!-- ============ RECORTE DE FIRMA DESDE ESCANEO ============ -->
+<div class="modal" id="modalCaptura" hidden>
+  <div class="modal-caja">
+    <header class="modal-cabecera">
+      <h3>Captura</h3>
+      <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
+    </header>
+    <div class="modal-cuerpo captura-cuerpo">
+      <img id="capturaPrevia" alt="Trozo capturado de la hoja">
+      <p class="nota" id="capturaMedidas"></p>
+    </div>
+    <footer class="modal-pie">
+      <button class="btn btn-primario" id="btnCapturaCopiar">Copiar</button>
+      <button class="btn btn-secundario" id="btnCapturaDescargar">Descargar</button>
+      <button class="btn btn-suave" data-cerrar>Cerrar</button>
+    </footer>
+  </div>
+</div>
+
 <div class="modal" id="modalRecorte" hidden>
   <div class="modal-caja modal-ancha">
     <header class="modal-cabecera">
@@ -578,10 +598,10 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260918b"></script>
-<script src="assets/office.js?v=20260918b"></script>
-<script src="assets/expedientes.js?v=20260918b"></script>
-<script src="assets/firmas.js?v=20260918b"></script>
-<script src="assets/app.js?v=20260918b"></script>
+<script src="assets/core.js?v=20260921a"></script>
+<script src="assets/office.js?v=20260921a"></script>
+<script src="assets/expedientes.js?v=20260921a"></script>
+<script src="assets/firmas.js?v=20260921a"></script>
+<script src="assets/app.js?v=20260921a"></script>
 </body>
 </html>

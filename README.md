@@ -181,6 +181,22 @@ No corrige texto de escaneos: ahí no hay letras, hay una foto.
 > sigue siendo un programa independiente. Por eso el editor vive en su propio
 > repositorio.
 
+## Capturas
+
+En el lector, el botón **⬚ Capturar** deja marcar con el ratón cualquier trozo
+de la hoja y llevárselo como imagen: **Copiar** para pegarlo con `Ctrl+V` donde
+quieras —un correo, un Word, un chat— o **Descargar** para tenerlo como PNG.
+
+No es el recorte de firmas: eso sigue en **Firmas**, y sirve para otra cosa.
+
+El trozo no se saca de lo que hay en pantalla, que está al tamaño de la
+ventana y saldría borroso al pegarlo, sino de un dibujo nuevo a alta
+resolución. Marcando un renglón de una A4 salen del orden de 1500 píxeles de
+ancho. Y lleva pintados los folios y las firmas que tenga la hoja, para que
+salga tal como se ve.
+
+`Esc` cancela.
+
 ## Atajos
 
 | Atajo | Qué hace |

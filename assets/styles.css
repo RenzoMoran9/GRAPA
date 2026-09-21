@@ -724,3 +724,22 @@ body.sin-panel .panel-vistas { display: none; }
 .pag-check:hover{border-color:var(--acento)}
 /* en la vista de paquetes la casilla no pinta nada */
 .pag.paquete .pag-check{display:none}
+
+/* ---------- capturas ----------
+   Marcar un trozo de una hoja del lector y llevárselo como imagen. */
+body.capturando .lector-hojas,
+body.capturando .lector-hojas .hoja{ cursor:crosshair; }
+body.capturando .lector-hojas .hoja *{ pointer-events:none; }
+.hoja{ position:relative; }
+.captura-marco{
+  position:absolute; z-index:6; pointer-events:none;
+  border:2px dashed var(--acento);
+  background:rgba(224,83,47,.14);
+  box-shadow:0 0 0 9999px rgba(12,16,22,.30);
+}
+#lectorCapturar.activo{ background:var(--acento); border-color:var(--acento); color:#fff; }
+.captura-cuerpo{ text-align:center; }
+.captura-cuerpo img{
+  max-width:100%; max-height:58vh; display:block; margin:0 auto 10px;
+  border:1px solid var(--borde); border-radius:var(--radio-s); background:#fff;
+}
