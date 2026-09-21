@@ -3065,6 +3065,91 @@
     el.hidden = !n;
   }
 
+  /* ---------- deslizadores con botones ----------
+     Arrastrar el tirador pide pulso fino y basta un roce para pasarse de
+     largo. Cada deslizador lleva ahora un «−» y un «+»: una pulsación mueve
+     un paso, y si se mantiene pulsado sigue moviéndose solo. */
+
+  /** Los deslizadores que llevan botones, con el tamaño de su paso.
+   *  «factor» multiplica —los acercamientos suben mejor a saltos
+   *  proporcionales: cortos abajo y largos arriba— y «paso» suma. */
+  const DESLIZADORES = [
+    ['#zoom', 'zoom', { factor: 1.12 }],
+    ['#lectorZoom', 'tamaño', { factor: 1.12 }],
+    ['#firmarZoom', 'acercamiento', { factor: 1.12 }],
+    ['#firmarOpacidad', 'opacidad', { paso: 5 }],
+    ['#marcaOpacidad', 'opacidad', { paso: 5 }],
+    ['#recorteLimpieza', 'limpieza', { paso: 5 }],
+    ['#recorteIntensidad', 'intensidad', { paso: 5 }],
+    ['#dibujoGrosor', 'grosor', { paso: 1 }],
+  ];
+
+  /**
+   * Mueve un deslizador un paso y avisa a quien lo escuchaba, igual que si
+   * lo hubieran arrastrado. Devuelve false cuando ya estaba en el tope, que
+   * es como la repetición sabe que tiene que parar.
+   */
+  function moverDeslizador(ent, dir, como) {
+    const min = Number(ent.min || 0);
+    const max = Number(ent.max === '' || ent.max == null ? 100 : ent.max);
+    const antes = Number(ent.value);
+    let v;
+    if (como.factor) {
+      v = dir > 0 ? antes * como.factor : antes / como.factor;
+      // con valores pequeños el redondeo se comía el paso entero
+      v = dir > 0 ? Math.max(Math.ceil(v), antes + 1) : Math.min(Math.floor(v), antes - 1);
+    } else {
+      v = antes + dir * como.paso;
+    }
+    v = Math.max(min, Math.min(max, Math.round(v)));
+    if (v === antes) return false;
+    ent.value = String(v);
+    ent.dispatchEvent(new Event('input', { bubbles: true }));
+    ent.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  function botonDePaso(ent, dir, como, nombre) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn paso';
+    b.textContent = dir > 0 ? '+' : '−';
+    b.title = (dir > 0 ? 'Más ' : 'Menos ') + nombre + ' (mantén pulsado para seguir)';
+    b.setAttribute('aria-label', (dir > 0 ? 'Más ' : 'Menos ') + nombre);
+    let tempo = 0;
+    const parar = () => { clearTimeout(tempo); tempo = 0; };
+    const seguir = (espera) => {
+      tempo = setTimeout(() => {
+        if (moverDeslizador(ent, dir, como)) seguir(110); else parar();
+      }, espera);
+    };
+    b.addEventListener('pointerdown', (ev) => {
+      if (ev.button > 0) return;
+      ev.preventDefault();                       // ni arrastra la página ni roba el foco
+      try { b.setPointerCapture(ev.pointerId); } catch (e) {}
+      moverDeslizador(ent, dir, como);
+      seguir(420);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave', 'blur'].forEach((t) => b.addEventListener(t, parar));
+    // con el teclado no hay pointerdown y el clic llega con detail 0
+    b.addEventListener('click', (ev) => { if (!ev.detail) moverDeslizador(ent, dir, como); });
+    return b;
+  }
+
+  function ponerBotonesDePaso() {
+    DESLIZADORES.forEach(([sel, nombre, como]) => {
+      const ent = $(sel);
+      if (!ent || ent.dataset.conPasos) return;
+      ent.dataset.conPasos = '1';
+      const caja = document.createElement('span');
+      caja.className = 'deslizador';
+      ent.parentNode.insertBefore(caja, ent);
+      caja.appendChild(botonDePaso(ent, -1, como, nombre));
+      caja.appendChild(ent);
+      caja.appendChild(botonDePaso(ent, 1, como, nombre));
+    });
+  }
+
   function conectar() {
     $$('.riel-btn').forEach((b) => {
       b.addEventListener('click', () => irASeccion(b.dataset.va));
@@ -3383,6 +3468,8 @@
     });
     window.addEventListener('resize', () => { if (lector.abierto) aplicarZoomLector(); });
     seguirScrollLector();
+
+    ponerBotonesDePaso();
 
     iniciarEditorFirma();
     G.iniciarFirmasUI();
