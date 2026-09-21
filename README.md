@@ -81,6 +81,34 @@ dividir el expediente.
 una debajo de otra, con sus firmas y folios ya puestos. Desde ahí puedes girar,
 firmar o eliminar la hoja que estás mirando.
 
+### Bajarle el peso al PDF
+
+En **Archivo de salida · Peso del archivo**, cuatro maneras:
+
+| | Qué hace | Una cotización escaneada de 1,2 MB |
+|---|---|---|
+| **Original** | No toca nada | 1216 KB |
+| **Ligero** | Redibuja a 150 ppp solo las hojas escaneadas | 131 KB |
+| **Mínimo** | Baja a 100 ppp **todas** las hojas, en color | 65 KB |
+| **Blanco y negro** | Las escaneadas a un bit, a 200 ppp | **30 KB** |
+
+**Blanco y negro** es el más chico y, a la vez, el que menos pierde:
+
+- Pesa **la mitad que «Mínimo» y va al doble de resolución**, así que se lee
+  mejor, no peor. Una hoja de papel escrito es casi todo blanco con unas pocas
+  letras negras: guardarla a un bit —cada píxel es tinta o papel— y comprimirla
+  sin pérdida es lo que hace cualquier escáner en modo «documento».
+- Las hojas que llevan **texto de verdad no se tocan**, así que conservan su
+  texto. «Mínimo» las rasteriza y lo pierde.
+- Lo que se pierde es el **color**. Y si una hoja es una **fotografía** de
+  verdad —no un papel escaneado— se guarda a color igual, porque a un bit se
+  destrozaría.
+
+Para decidir qué es tinta no vale un umbral único: los escaneos traen sombras y
+una cabecera de color saldría entera negra. El papel se mide **por zonas**, y se
+exige **contraste**: en una zona lisa no hay letra por mucho que sea más oscura
+que el papel.
+
 ### Guardar el trabajo a medio hacer
 Grapa **autoguarda** lo que estás armando: si cierras el navegador por error, al
 volver te ofrece continuar. Y puedes guardar expedientes con nombre para

@@ -1026,7 +1026,8 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
           <select id="pesoSalida">
             <option value="original">Original · no toca nada</option>
             <option value="ligero">Ligero · para el SGD</option>
-            <option value="minimo">Mínimo · lo más chico</option>
+            <option value="minimo">Mínimo · en color</option>
+            <option value="bn">Blanco y negro · el más chico</option>
           </select>
         </label>
         <p class="nota" id="pesoNota">Deja el PDF tal cual, con todo el detalle de los originales.</p>
@@ -1520,7 +1521,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   'use strict';
 
   const G = (window.Grapa = window.Grapa || {});
-  const { PDFDocument, StandardFonts, degrees, rgb } = PDFLib;
+  const { PDFDocument, StandardFonts, degrees, rgb, PDFRawStream,
+          pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
   const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
@@ -1886,6 +1888,11 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     original: null,
     ligero: { ppp: 150, calidad: 0.72, tambienConTexto: false },
     minimo: { ppp: 100, calidad: 0.6, tambienConTexto: true },
+    // Blanco y negro: las hojas escaneadas a un bit. Las que llevan texto
+    // de verdad NO se tocan —pesan poco y rasterizarlas sería perder el
+    // texto—, así que este modo es a la vez el más chico y el que menos
+    // pierde de los tres.
+    bn: { ppp: 200, bn: true, tambienConTexto: false },
   };
 
   /** ¿La hoja lleva texto de verdad, o es una foto de un papel? */
@@ -1906,6 +1913,162 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     return r;
   };
   G.olvidarTexto = () => cacheTexto.clear();
+
+
+  /* ---------- blanco y negro: lo más chico sin volver la hoja ilegible ----
+
+     Un expediente escaneado pesa por las fotos de sus hojas, y una foto a
+     color de un papel con letras negras es casi todo información que no
+     hace falta. Guardada a UN BIT —cada píxel es tinta o papel— y
+     comprimida sin pérdida, una hoja A4 a 200 ppp ocupa unos 30 KB: la
+     mitad que la misma hoja a 100 ppp en color, y al doble de resolución,
+     así que además se lee mejor.
+
+     Lo delicado es decidir qué es tinta. Un umbral único no vale: las
+     hojas escaneadas tienen sombras, y una cabecera de color saldría
+     entera negra. Se hacen dos cosas:
+
+       · el papel se mide POR ZONAS, en bloques, y se interpola entre
+         ellos, de modo que cada trozo de hoja se compara con el papel que
+         tiene al lado y no con el de la esquina opuesta;
+       · y se exige CONTRASTE: en una zona lisa —una banda de color, un
+         sombreado— no hay letra por mucho que sea más oscura que el papel.
+
+     Las hojas que son una FOTO de verdad no pasan por aquí: a un bit se
+     destrozan, así que se guardan como las demás.                        */
+
+  /** Media y desviación de cualquier ventana, en tiempo constante. */
+  function integrales(gris, W, H) {
+    const W1 = W + 1;
+    const S = new Float64Array(W1 * (H + 1));
+    const S2 = new Float64Array(W1 * (H + 1));
+    for (let y = 0; y < H; y++) {
+      let f = 0, f2 = 0;
+      for (let x = 0; x < W; x++) {
+        const v = gris[y * W + x];
+        f += v; f2 += v * v;
+        S[(y + 1) * W1 + x + 1] = S[y * W1 + x + 1] + f;
+        S2[(y + 1) * W1 + x + 1] = S2[y * W1 + x + 1] + f2;
+      }
+    }
+    return (x0, y0, x1, y1) => {
+      const n = (x1 - x0 + 1) * (y1 - y0 + 1);
+      const su = S[(y1 + 1) * W1 + x1 + 1] - S[y0 * W1 + x1 + 1] - S[(y1 + 1) * W1 + x0] + S[y0 * W1 + x0];
+      const su2 = S2[(y1 + 1) * W1 + x1 + 1] - S2[y0 * W1 + x1 + 1] - S2[(y1 + 1) * W1 + x0] + S2[y0 * W1 + x0];
+      const m = su / n;
+      return { media: m, desv: Math.sqrt(Math.max(0, su2 / n - m * m)) };
+    };
+  }
+
+  const BN = { umbral: 0.78, desvMinima: 10, medioTono: 0.38 };
+
+  /**
+   * Pasa la hoja a un bit. Devuelve null si la hoja parece una fotografía,
+   * para que se guarde por el camino de siempre.
+   */
+  function aBlancoYNegro(img, W, H, ppp) {
+    const gris = new Uint8Array(W * H);
+    let medios = 0;
+    for (let i = 0, j = 0; i < gris.length; i++, j += 4) {
+      const v = (img[j] * 299 + img[j + 1] * 587 + img[j + 2] * 114) / 1000;
+      gris[i] = v;
+      if (v > 60 && v < 200) medios++;
+    }
+    // una hoja de papel escrito es casi todo blanco con unas pocas letras;
+    // si más de un tercio son medios tonos, esto es una foto
+    if (medios > gris.length * BN.medioTono) return null;
+
+    // el papel de cada zona
+    const B = Math.max(16, Math.round(ppp / 6));
+    const bx = Math.ceil(W / B), by = Math.ceil(H / B);
+    const fondo = new Float32Array(bx * by);
+    for (let cy = 0; cy < by; cy++) {
+      for (let cx = 0; cx < bx; cx++) {
+        const m = [];
+        for (let y = cy * B; y < Math.min(H, (cy + 1) * B); y += 2) {
+          for (let x = cx * B; x < Math.min(W, (cx + 1) * B); x += 2) m.push(gris[y * W + x]);
+        }
+        m.sort((a, b) => a - b);
+        fondo[cy * bx + cx] = m.length ? m[Math.floor(m.length * 0.85)] : 255;
+      }
+    }
+    const orden = Array.from(fondo).sort((a, b) => a - b);
+    const papel = orden[Math.floor(orden.length * 0.75)] || 255;
+    const fondoEn = (x, y) => {
+      const fx = x / B - 0.5, fy = y / B - 0.5;
+      const x0 = Math.max(0, Math.min(bx - 1, Math.floor(fx)));
+      const y0 = Math.max(0, Math.min(by - 1, Math.floor(fy)));
+      const x1 = Math.min(bx - 1, x0 + 1), y1 = Math.min(by - 1, y0 + 1);
+      const tx = Math.max(0, Math.min(1, fx - x0)), ty = Math.max(0, Math.min(1, fy - y0));
+      const a = fondo[y0 * bx + x0] * (1 - tx) + fondo[y0 * bx + x1] * tx;
+      const b = fondo[y1 * bx + x0] * (1 - tx) + fondo[y1 * bx + x1] * tx;
+      return a * (1 - ty) + b * ty;
+    };
+
+    const ventana = integrales(gris, W, H);
+    const rad = Math.max(4, Math.round(ppp / 24));
+    const anchoBytes = Math.ceil(W / 8);
+    const bits = new Uint8Array(anchoBytes * H).fill(0xFF);   // todo papel
+    for (let y = 0; y < H; y++) {
+      const y0 = Math.max(0, y - rad), y1 = Math.min(H - 1, y + rad);
+      for (let x = 0; x < W; x++) {
+        const f = Math.max(papel * 0.45, fondoEn(x, y));
+        if (gris[y * W + x] > f * BN.umbral) continue;        // claro: papel
+        const x0 = Math.max(0, x - rad), x1 = Math.min(W - 1, x + rad);
+        if (ventana(x0, y0, x1, y1).desv <= BN.desvMinima) continue;   // zona lisa
+        bits[y * anchoBytes + (x >> 3)] &= ~(0x80 >> (x & 7));         // tinta
+      }
+    }
+    return bits;
+  }
+
+  /** Comprime sin pérdida, como manda el formato para una imagen a un bit. */
+  async function desinflar(bytes) {
+    const cs = new CompressionStream('deflate');
+    const w = cs.writable.getWriter();
+    w.write(bytes); w.close();
+    return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  }
+
+  /** La hoja a un bit, lista para meter en el PDF; null si es una foto. */
+  async function hojaEnUnBit(pagina, ppp) {
+    if (typeof CompressionStream !== 'function') return null;
+    const fuente = G.estado.fuentes.get(pagina.fuenteId);
+    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    const base = pag.getViewport({ scale: 1, rotation: 0 });
+    const vp = pag.getViewport({ scale: ppp / 72, rotation: 0 });
+    const lienzo = document.createElement('canvas');
+    lienzo.width = Math.max(1, Math.floor(vp.width));
+    lienzo.height = Math.max(1, Math.floor(vp.height));
+    const ctx = lienzo.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    const W = lienzo.width, H = lienzo.height;
+    const img = ctx.getImageData(0, 0, W, H).data;
+    lienzo.width = lienzo.height = 0;
+    const bits = aBlancoYNegro(img, W, H, ppp);
+    if (!bits) return null;
+    return { datos: await desinflar(bits), W, H, ancho: base.width, alto: base.height };
+  }
+
+  /** Mete la imagen de un bit en la hoja, a pelo: pdf-lib solo sabe de
+   *  JPEG y PNG, y lo que hace falta aquí es un flujo con su diccionario. */
+  function dibujarUnBit(salida, hoja, bn) {
+    const dic = salida.context.obj({
+      Type: 'XObject', Subtype: 'Image', Width: bn.W, Height: bn.H,
+      ColorSpace: 'DeviceGray', BitsPerComponent: 1,
+      Filter: 'FlateDecode', Length: bn.datos.length,
+    });
+    const ref = salida.context.register(PDFRawStream.of(dic, bn.datos));
+    const nombre = hoja.node.newXObject('Image', ref);
+    hoja.pushOperators(
+      pushGraphicsState(),
+      concatTransformationMatrix(bn.ancho, 0, 0, bn.alto, 0, 0),
+      drawObject(nombre),
+      popGraphicsState(),
+    );
+  }
 
   /** Vuelve a dibujar la hoja a la resolución pedida y la devuelve en JPEG. */
   async function hojaEnJpeg(pagina, ppp, calidad) {
@@ -1966,7 +2129,22 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       if (!aligerar.has(i)) { salida.addPage(copiadas[i]); continue; }
       hechas++;
       if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${aligerar.size}…`);
-      const jpeg = await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
+      let bn = null;
+      if (comp.bn) {
+        try { bn = await hojaEnUnBit(paginas[i], comp.ppp); }
+        catch (e) { bn = null; }
+      }
+      if (bn) {
+        const hoja = salida.addPage([bn.ancho, bn.alto]);
+        dibujarUnBit(salida, hoja, bn);
+        continue;
+      }
+      // Sin blanco y negro, o con él pero siendo la hoja una foto de verdad:
+      // por el camino de siempre. A un bit una foto se destroza, así que se
+      // guarda en JPEG, a algo menos de resolución para que no se dispare.
+      const jpeg = comp.bn
+        ? await hojaEnJpeg(paginas[i], 150, 0.7)
+        : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
       const img = await salida.embedJpg(jpeg.bytes);
       const hoja = salida.addPage([jpeg.ancho, jpeg.alto]);
       hoja.drawImage(img, { x: 0, y: 0, width: jpeg.ancho, height: jpeg.alto });
@@ -4942,8 +5120,12 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     original: 'Deja el PDF tal cual, con todo el detalle de los originales.',
     ligero: 'Vuelve a dibujar a 150 ppp solo las hojas escaneadas, que son las que pesan. '
       + 'Las que llevan texto de verdad no se tocan. No se pierde ninguna hoja, ni las firmas ni los folios.',
-    minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. Pesa lo menos posible, '
-      + 'pero el texto deja de poder seleccionarse: queda como una foto. Úsalo si «Ligero» no alcanza.',
+    minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. '
+      + 'El texto deja de poder seleccionarse: queda como una foto. Conserva el color.',
+    bn: 'Las hojas escaneadas pasan a blanco y negro, a 200 ppp: pesan la mitad que en «Mínimo» '
+      + 'y se leen mejor, porque van al doble de resolución. Las hojas con texto de verdad no se '
+      + 'tocan, así que conservan su texto. Se pierde el color, y una hoja que sea una fotografía '
+      + 'se guarda a color igual, para no estropearla.',
   };
   function pintarNotaPeso() {
     const v = $('#pesoSalida').value;

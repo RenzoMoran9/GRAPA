@@ -1628,8 +1628,12 @@
     original: 'Deja el PDF tal cual, con todo el detalle de los originales.',
     ligero: 'Vuelve a dibujar a 150 ppp solo las hojas escaneadas, que son las que pesan. '
       + 'Las que llevan texto de verdad no se tocan. No se pierde ninguna hoja, ni las firmas ni los folios.',
-    minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. Pesa lo menos posible, '
-      + 'pero el texto deja de poder seleccionarse: queda como una foto. Úsalo si «Ligero» no alcanza.',
+    minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. '
+      + 'El texto deja de poder seleccionarse: queda como una foto. Conserva el color.',
+    bn: 'Las hojas escaneadas pasan a blanco y negro, a 200 ppp: pesan la mitad que en «Mínimo» '
+      + 'y se leen mejor, porque van al doble de resolución. Las hojas con texto de verdad no se '
+      + 'tocan, así que conservan su texto. Se pierde el color, y una hoja que sea una fotografía '
+      + 'se guarda a color igual, para no estropearla.',
   };
   function pintarNotaPeso() {
     const v = $('#pesoSalida').value;
