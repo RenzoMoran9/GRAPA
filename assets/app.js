@@ -2661,7 +2661,7 @@
   }
 
   const puente = { ventana: null, listo: false, arrancando: false, pendiente: null,
-                   enviadas: null, reloj: null };
+                   enviadas: null, reloj: null, tarea: null };
 
   function mandarAlEditor() {
     if (!puente.pendiente || !puente.listo) return;
@@ -2670,8 +2670,10 @@
     puente.pendiente = null;
     clearTimeout(puente.reloj);
     puente.ventana.postMessage(
-      { grapa: 'documento', nombre: carga.nombre, bytes: carga.bytes }, '*');
-    G.aviso('Documento enviado al editor de texto.', 'ok');
+      { grapa: 'documento', nombre: carga.nombre, bytes: carga.bytes, tarea: carga.tarea || null }, '*');
+    G.aviso(carga.tarea === 'buscable'
+      ? 'El editor está leyendo las hojas escaneadas. Al terminar vuelven solas aquí.'
+      : 'Documento enviado al editor de texto.', 'ok');
   }
 
   /**
@@ -2693,7 +2695,8 @@
     return objs.map((p) => Object.assign({}, p, { sellos: [] }));
   }
 
-  async function editarTexto(cuales) {
+  async function editarTexto(cuales, opciones) {
+    const tarea = (opciones && opciones.tarea) || null;
     const objs = (cuales && cuales.length) ? cuales
       : (E.seleccion.size ? seleccionadas() : hojasVisibles());
     if (!objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
@@ -2734,7 +2737,8 @@
       const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
       // para poder devolver la corrección a su sitio exacto
       puente.enviadas = objs.map((x) => x.uid);
-      puente.pendiente = { nombre: base + '.pdf', bytes };
+      puente.tarea = tarea;
+      puente.pendiente = { nombre: base + '.pdf', bytes, tarea };
       mandarAlEditor();
     } catch (e) {
       console.error(e);
@@ -2763,9 +2767,49 @@
       const bytes = d.bytes instanceof Uint8Array ? d.bytes : new Uint8Array(d.bytes || []);
       if (!bytes.length) { G.aviso('El editor devolvió un documento vacío.', 'error'); return; }
       const base = G.nombreSeguro(String(d.nombre || 'documento'), 'documento').replace(/\.pdf$/i, '');
-      recibirDelEditor(bytes, base, Number(d.cambios) || 0);
+      recibirDelEditor(bytes, base, Number(d.cambios) || 0, d.tarea === 'buscable' ? d : null);
     }
   });
+
+  /* ---------------- hacer buscable lo escaneado ----------------
+     Una hoja escaneada es una foto: el buscador no tiene letras en las que
+     buscar. El editor, que es el que sabe leer fotos, lee todas de una vez
+     y les pone el texto invisible encima; vuelven cada una a su sitio, con
+     sus folios y firmas, y se ven igual que antes. */
+  function pintarEscaneadas() {
+    const caja = $('#buscarEscaneadas');
+    const sin = E.paginas.length ? G.hojasSinTexto(E.paginas) : [];
+    caja.hidden = !sin.length || !!busqueda.leyendo;
+    if (caja.hidden) return;
+    const n = sin.length;
+    $('#buscarEscaneadasTexto').textContent = (n === 1
+      ? 'Una hoja es escaneada: es una foto del papel y el buscador no puede leerla.'
+      : `${n} hojas son escaneadas: son fotos del papel y el buscador no puede leerlas.`)
+      + ' El editor puede leerlas y dejarlas buscables, sin cambiar cómo se ven.';
+    $('#btnHacerBuscables').textContent = n === 1 ? 'Hacerla buscable' : `Hacer buscables las ${n} hojas`;
+  }
+
+  function hacerBuscables() {
+    const sin = G.hojasSinTexto(E.paginas);
+    if (!sin.length) { G.aviso('No hay hojas escaneadas por leer.', 'ok'); return; }
+    editarTexto(sin, { tarea: 'buscable' });
+  }
+
+  function avisarBuscables(d) {
+    const leidas = Number(d.leidas) || 0, vacias = Number(d.vacias) || 0;
+    let t = leidas === 1 ? 'Listo: 1 hoja escaneada ya se puede buscar.'
+      : `Listo: ${leidas} hojas escaneadas ya se pueden buscar.`;
+    if (vacias) t += vacias === 1 ? ' En 1 no se reconoció ninguna palabra.' : ` En ${vacias} no se reconoció ninguna palabra.`;
+    G.aviso(t, 'ok');
+    // se vuelve a buscar lo que estuviera escrito, ahora también en esas hojas
+    leerTextoQueFalta().then(() => {
+      busqueda.turno++;
+      recalcularBusqueda();
+      ponerCapasHallazgos();
+      pintarPanelBusqueda();
+      if (lector.abierto) pintarLectorBusqueda();
+    });
+  }
 
   /**
    * Lo corregido vuelve a su sitio. Si vuelven tantas hojas como se
@@ -2774,7 +2818,7 @@
    * para no viajar pegados. Si el número no cuadra —porque en el editor se
    * hizo otra cosa— entra como documento aparte y no se toca nada.
    */
-  async function recibirDelEditor(bytes, base, cuantos) {
+  async function recibirDelEditor(bytes, base, cuantos, buscable) {
     const enviadas = (puente.enviadas || [])
       .map((u) => E.paginas.find((x) => x.uid === u))
       .filter(Boolean);
@@ -2805,6 +2849,7 @@
         });
         E.seleccion = new Set(r.paginas.map((x) => x.uid));
         pintar();
+        if (buscable) { avisarBuscables(buscable); return; }
         G.aviso(cuantos
           ? `${cuantos} corrección(es) puesta(s) en su sitio.`
           : `${r.paginas.length} hoja(s) actualizada(s) en su sitio.`, 'ok');
@@ -3368,6 +3413,7 @@
           : porHoja.size === 1 ? 'en 1 hoja' : porHoja.size ? `en ${porHoja.size} hojas` : 'en ninguna');
     }
     pintarLectorBusqueda();
+    pintarEscaneadas();
   }
 
   /** Lee el texto de las hojas que falten, una sola lectura a la vez. */
@@ -3387,6 +3433,7 @@
       } finally {
         busqueda.leyendo = null;
         lecturaBusqueda = null;
+        pintarEscaneadas();
       }
     })();
     return lecturaBusqueda;
@@ -3549,6 +3596,7 @@
     $('#chipBusqueda').addEventListener('click', limpiarBusqueda);
     $('#lectorBuscarSiguiente').addEventListener('click', () => saltarHallazgoLector(1));
     $('#lectorBuscarAnterior').addEventListener('click', () => saltarHallazgoLector(-1));
+    $('#btnHacerBuscables').addEventListener('click', hacerBuscables);
     $('#buscarMarcar').addEventListener('click', () => {
       const uids = new Set(hojasConHallazgos().keys());
       if (!uids.size) return;
@@ -3881,6 +3929,9 @@
     seccionActual = cual;
     marcarRiel();
     try { localStorage.setItem(CLAVE_RIEL, cual); } catch (e) {}
+    // al abrir Buscar se lee ya el texto, para saber de entrada qué hojas
+    // son escaneadas y ofrecer hacerlas buscables sin esperar a escribir
+    if (cual === 'buscar' && E.paginas.length) leerTextoQueFalta();
   }
 
   /**

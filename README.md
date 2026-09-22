@@ -105,9 +105,25 @@ hojas donde no está, para que las otras salten a la vista.
   expediente de 90 hojas tarda menos de un segundo, y las búsquedas que
   siguen son al instante.
 
-Solo se puede buscar en las hojas que **tienen texto**. Las escaneadas son
-una foto del papel: Grapa dice cuáles son para que sepas dónde no ha podido
-mirar.
+### Hacer buscables las hojas escaneadas
+Las hojas escaneadas son una foto del papel: por dentro no tienen letras, y
+el buscador no puede mirar ahí. Al abrir **Buscar**, Grapa dice cuántas son y
+ofrece **Hacer buscables las N hojas**:
+
+1. Se abre el editor en otra pestaña y lee todas las escaneadas seguidas, con
+   su avance («Hoja 3 de 12»). Tarda unos segundos por hoja; **Detener** para
+   y devuelve lo ya leído.
+2. Al terminar, las devuelve solo y la pestaña se cierra. Cada hoja vuelve a
+   su sitio, con sus folios, firmas y giro, y **se ve igual**: lo leído va
+   como texto invisible encima de la foto.
+3. Desde ahí el buscador las encuentra, y el PDF que guardes también se puede
+   buscar y copiar en cualquier otro programa.
+
+Las hojas que ya tienen texto no viajan. Todo pasa en tu computadora, como
+**Editar texto**: en la página pública el editor se abre solo, y con Grapa
+guardada en tu equipo hace falta `GrapaEditor.html` en la misma carpeta. El
+reconocimiento puede equivocarse en alguna letra, sobre todo en escaneos
+borrosos: lo que no lea bien, no se encontrará.
 
 ### Hojas en blanco, de lado, de cabeza o torcidas
 **Revisar** en el panel mira todas las hojas de una vez y dice cuáles son

@@ -285,4 +285,10 @@
   };
 
   G.olvidarBusqueda = () => { indice.clear(); enCurso.clear(); };
+
+  /** De las hojas ya leídas, las que son solo foto: sin texto en el que buscar. */
+  G.hojasSinTexto = (paginas) => paginas.filter((p) => {
+    const hoja = indice.get(claveDe(p));
+    return !!hoja && !hoja.conTexto && !hoja.fallo;
+  });
 })();
