@@ -226,7 +226,7 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
   min-width:15px;padding:1px 4px;border-radius:20px;text-align:center;
   background:var(--acento);color:#fff;line-height:1.35;
 }
-.taller{flex:1;display:flex;flex-direction:column;min-width:0}
+.taller{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
 
 /* ---------- bloques del panel ---------- */
 /* Las secciones siguen pudiendo estar abiertas a la vez: el riel las alcanza
@@ -578,8 +578,10 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
   background:var(--fondo-2);border:1px solid var(--borde);box-shadow:var(--sombra-fuerte);font-size:13px;
 }
 
-/* ---------- lector a pantalla completa ---------- */
-.lector{position:fixed;inset:0;z-index:75;background:var(--fondo);display:flex;flex-direction:column}
+/* ---------- lector: las hojas en grande ---------- */
+/* Ocupa solo el sitio de las hojas. Antes tapaba la pantalla entera y parecía
+   otro programa: para firmar, foliar o buscar había que cerrarlo primero. */
+.lector{position:absolute;inset:0;z-index:6;background:var(--fondo);display:flex;flex-direction:column}
 .lector-barra{
   display:flex;align-items:center;gap:14px;padding:9px 16px;background:var(--fondo-2);
   border-bottom:1px solid var(--borde);flex-wrap:wrap;flex:none;
@@ -1281,48 +1283,50 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
       </div>
       <div class="rejilla-paginas" id="rejilla"></div>
     </div>
-  </main>
-</div>
 
-<!-- ============ LECTOR: LAS HOJAS EN GRANDE ============ -->
-<div class="lector" id="lector" hidden>
-  <header class="lector-barra">
-    <div class="lector-info">
-      <strong id="lectorTitulo">Página 1</strong>
-      <span id="lectorOrigen"></span>
+    <!-- ============ LECTOR: LAS HOJAS EN GRANDE ============
+             Va dentro del taller y no encima de todo: el panel, el riel y los
+             botones de arriba siguen a mano mientras se mira en grande. -->
+    <div class="lector" id="lector" hidden>
+      <header class="lector-barra">
+        <div class="lector-info">
+          <strong id="lectorTitulo">Página 1</strong>
+          <span id="lectorOrigen"></span>
+        </div>
+        <div class="lector-acciones">
+          <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)" aria-label="Hoja anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+          <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)" aria-label="Hoja siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+          <span class="lector-busqueda" id="lectorBusqueda" hidden>
+            <span class="separador-vertical"></span>
+            <button class="btn btn-mini" id="lectorBuscarAnterior" title="Coincidencia anterior" aria-label="Coincidencia anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+            <span class="lector-busqueda-cuenta" id="lectorBuscarCuenta"></span>
+            <button class="btn btn-mini" id="lectorBuscarSiguiente" title="Coincidencia siguiente" aria-label="Coincidencia siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+          </span>
+          <span class="separador-vertical"></span>
+          <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
+          <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
+          <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
+          <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
+          <button class="btn btn-mini" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
+          <button class="btn btn-mini" id="lectorEditarTexto" title="Corregir el texto de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Texto</button>
+          <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
+          <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
+          <span class="separador-vertical"></span>
+          <label class="zoom">Columnas
+            <select id="lectorColumnas">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <label class="zoom">Tamaño <input type="range" id="lectorZoom" min="45" max="400" value="85"></label>
+          <button class="btn btn-secundario" id="lectorCerrar" title="Cerrar (Esc)">Cerrar</button>
+        </div>
+      </header>
+      <div class="lector-hojas" id="lectorHojas"></div>
     </div>
-    <div class="lector-acciones">
-      <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)" aria-label="Hoja anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
-      <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)" aria-label="Hoja siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
-      <span class="lector-busqueda" id="lectorBusqueda" hidden>
-        <span class="separador-vertical"></span>
-        <button class="btn btn-mini" id="lectorBuscarAnterior" title="Coincidencia anterior" aria-label="Coincidencia anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
-        <span class="lector-busqueda-cuenta" id="lectorBuscarCuenta"></span>
-        <button class="btn btn-mini" id="lectorBuscarSiguiente" title="Coincidencia siguiente" aria-label="Coincidencia siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
-      </span>
-      <span class="separador-vertical"></span>
-      <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
-      <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
-      <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
-      <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
-      <button class="btn btn-mini" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
-      <button class="btn btn-mini" id="lectorEditarTexto" title="Corregir el texto de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Texto</button>
-      <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
-      <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
-      <span class="separador-vertical"></span>
-      <label class="zoom">Columnas
-        <select id="lectorColumnas">
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-        </select>
-      </label>
-      <label class="zoom">Tamaño <input type="range" id="lectorZoom" min="45" max="400" value="85"></label>
-      <button class="btn btn-secundario" id="lectorCerrar" title="Cerrar (Esc)">Cerrar</button>
-    </div>
-  </header>
-  <div class="lector-hojas" id="lectorHojas"></div>
+  </main>
 </div>
 
 <div class="restaurar" id="restaurar" hidden>
@@ -5090,6 +5094,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     seguirBusquedaTrasPintar();
     pintarRevision();
     pintarPesos();
+    seguirLectorTrasPintar();
   }
   G.pintar = pintar;
 
@@ -7185,7 +7190,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   /* =========================================================
      LECTOR · las hojas en grande, una debajo de otra
      ========================================================= */
-  const lector = { abierto: false, actual: 0, obs: null, soloMarcadas: false, columnas: 1 };
+  const lector = { abierto: false, actual: 0, obs: null, soloMarcadas: false, columnas: 1, huella: '' };
 
   /**
    * Lo que recorre el lector: normalmente lo que se está viendo en el taller,
@@ -7198,6 +7203,28 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   function paginaActualLector() { return hojasLector()[lector.actual] || null; }
+
+  /**
+   * Lo que se ve en el lector: qué hojas, en qué orden, giradas cómo y con
+   * qué firmas, sellos y folios. Si cambia, hay que volver a dibujarlo.
+   */
+  function huellaLector() {
+    return hojasLector().map((p) => [p.uid, p.fuenteId, p.indice, p.giro, p.enderezo || 0,
+      folios.get(p.uid), JSON.stringify(p.sellos)].join('|')).join('/') + '#' + totalFolios;
+  }
+
+  /**
+   * El lector ya no tapa el panel: lo que se haga desde ahí (firmar, foliar,
+   * sellar, girar, borrar las blancas…) tiene que verse en él enseguida,
+   * sin cerrarlo y volverlo a abrir. Sigue en la misma hoja que se miraba.
+   */
+  function seguirLectorTrasPintar() {
+    if (!lector.abierto || huellaLector() === lector.huella) return;
+    const antes = $$('.hoja', $('#lectorHojas'))[lector.actual];
+    const uid = antes && antes.dataset.uid;
+    const i = hojasLector().findIndex((p) => p.uid === uid);
+    refrescarLector(i >= 0 ? i : Math.min(lector.actual, hojasLector().length - 1));
+  }
 
   /** Píxeles de dibujo por cada píxel de pantalla. Por debajo de 1 se ve borroso. */
   const TOPE_LIENZO = 3500;   // más allá de esto la memoria no compensa
@@ -7253,6 +7280,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const cont = $('#lectorHojas');
     cont.innerHTML = '';
     if (lector.obs) lector.obs.disconnect();
+    lector.huella = huellaLector();
 
     lector.obs = new IntersectionObserver((entradas) => {
       entradas.forEach((en) => {
@@ -7313,7 +7341,16 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       const capa = nodoHallazgos(pagina);
       if (capa) hoja.appendChild(capa);
 
-      hoja.addEventListener('click', () => marcarHoja(i));
+      hoja.addEventListener('click', () => {
+        marcarHoja(i);
+        // la hoja que se mira queda seleccionada: así lo que se haga desde
+        // el panel o la barra de arriba va a ESA hoja. Comparando no, que ahí
+        // lo marcado es justamente lo que se está comparando.
+        if (!lector.soloMarcadas && !capturando) {
+          E.seleccion = new Set([pagina.uid]);
+          refrescarSeleccion();
+        }
+      });
       cont.appendChild(hoja);
       lector.obs.observe(hoja);
     });
@@ -7381,6 +7418,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     lector.columnas = 1;
     $('#lectorColumnas').value = '1';
     $('#lector').hidden = true;
+    lector.huella = '';
     if (lector.obs) lector.obs.disconnect();
     $('#lectorHojas').innerHTML = '';
     pintarLectorBusqueda();
@@ -7389,7 +7427,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   function refrescarLector(indice) {
     if (!lector.abierto) return;
     if (!hojasLector().length) { cerrarLector(); return; }
-    construirLector();
+    // si ya se había redibujado al pintar el taller, no se hace dos veces
+    if (huellaLector() !== lector.huella) construirLector();
     irAHoja(indice == null ? lector.actual : indice, true);
   }
 
@@ -7805,7 +7844,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   function abrirBuscador() {
-    if (lector.abierto) cerrarLector();
+    // el lector se queda abierto: la búsqueda salta dentro de él
     irASeccion('buscar');
     const campo = $('#buscarTexto');
     campo.focus();
@@ -8082,7 +8121,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     if (ev.key === 'Escape') {
       // estando a media captura, Esc cancela la captura y no cierra el lector
       if (capturando && $$('.modal:not([hidden])').length === 0) { alternarCaptura(false); return; }
-      if (lector.abierto && $$('.modal:not([hidden])').length === 0) { cerrarLector(); return; }
+      // Esc en un campo del panel (el buscador, por ejemplo) es para ese
+      // campo, no para cerrar las hojas en grande
+      const enPanel = enCampo && !ev.target.closest('#lector');
+      if (lector.abierto && !enPanel && $$('.modal:not([hidden])').length === 0) { cerrarLector(); return; }
       if (!$('#modalCaptura').hidden) cerrarCaptura();
       $$('.modal').forEach((m) => { m.hidden = true; });
       return;

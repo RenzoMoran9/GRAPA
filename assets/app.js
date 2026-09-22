@@ -756,6 +756,7 @@
     seguirBusquedaTrasPintar();
     pintarRevision();
     pintarPesos();
+    seguirLectorTrasPintar();
   }
   G.pintar = pintar;
 
@@ -2851,7 +2852,7 @@
   /* =========================================================
      LECTOR · las hojas en grande, una debajo de otra
      ========================================================= */
-  const lector = { abierto: false, actual: 0, obs: null, soloMarcadas: false, columnas: 1 };
+  const lector = { abierto: false, actual: 0, obs: null, soloMarcadas: false, columnas: 1, huella: '' };
 
   /**
    * Lo que recorre el lector: normalmente lo que se está viendo en el taller,
@@ -2864,6 +2865,28 @@
   }
 
   function paginaActualLector() { return hojasLector()[lector.actual] || null; }
+
+  /**
+   * Lo que se ve en el lector: qué hojas, en qué orden, giradas cómo y con
+   * qué firmas, sellos y folios. Si cambia, hay que volver a dibujarlo.
+   */
+  function huellaLector() {
+    return hojasLector().map((p) => [p.uid, p.fuenteId, p.indice, p.giro, p.enderezo || 0,
+      folios.get(p.uid), JSON.stringify(p.sellos)].join('|')).join('/') + '#' + totalFolios;
+  }
+
+  /**
+   * El lector ya no tapa el panel: lo que se haga desde ahí (firmar, foliar,
+   * sellar, girar, borrar las blancas…) tiene que verse en él enseguida,
+   * sin cerrarlo y volverlo a abrir. Sigue en la misma hoja que se miraba.
+   */
+  function seguirLectorTrasPintar() {
+    if (!lector.abierto || huellaLector() === lector.huella) return;
+    const antes = $$('.hoja', $('#lectorHojas'))[lector.actual];
+    const uid = antes && antes.dataset.uid;
+    const i = hojasLector().findIndex((p) => p.uid === uid);
+    refrescarLector(i >= 0 ? i : Math.min(lector.actual, hojasLector().length - 1));
+  }
 
   /** Píxeles de dibujo por cada píxel de pantalla. Por debajo de 1 se ve borroso. */
   const TOPE_LIENZO = 3500;   // más allá de esto la memoria no compensa
@@ -2919,6 +2942,7 @@
     const cont = $('#lectorHojas');
     cont.innerHTML = '';
     if (lector.obs) lector.obs.disconnect();
+    lector.huella = huellaLector();
 
     lector.obs = new IntersectionObserver((entradas) => {
       entradas.forEach((en) => {
@@ -2979,7 +3003,16 @@
       const capa = nodoHallazgos(pagina);
       if (capa) hoja.appendChild(capa);
 
-      hoja.addEventListener('click', () => marcarHoja(i));
+      hoja.addEventListener('click', () => {
+        marcarHoja(i);
+        // la hoja que se mira queda seleccionada: así lo que se haga desde
+        // el panel o la barra de arriba va a ESA hoja. Comparando no, que ahí
+        // lo marcado es justamente lo que se está comparando.
+        if (!lector.soloMarcadas && !capturando) {
+          E.seleccion = new Set([pagina.uid]);
+          refrescarSeleccion();
+        }
+      });
       cont.appendChild(hoja);
       lector.obs.observe(hoja);
     });
@@ -3047,6 +3080,7 @@
     lector.columnas = 1;
     $('#lectorColumnas').value = '1';
     $('#lector').hidden = true;
+    lector.huella = '';
     if (lector.obs) lector.obs.disconnect();
     $('#lectorHojas').innerHTML = '';
     pintarLectorBusqueda();
@@ -3055,7 +3089,8 @@
   function refrescarLector(indice) {
     if (!lector.abierto) return;
     if (!hojasLector().length) { cerrarLector(); return; }
-    construirLector();
+    // si ya se había redibujado al pintar el taller, no se hace dos veces
+    if (huellaLector() !== lector.huella) construirLector();
     irAHoja(indice == null ? lector.actual : indice, true);
   }
 
@@ -3471,7 +3506,7 @@
   }
 
   function abrirBuscador() {
-    if (lector.abierto) cerrarLector();
+    // el lector se queda abierto: la búsqueda salta dentro de él
     irASeccion('buscar');
     const campo = $('#buscarTexto');
     campo.focus();
@@ -3748,7 +3783,10 @@
     if (ev.key === 'Escape') {
       // estando a media captura, Esc cancela la captura y no cierra el lector
       if (capturando && $$('.modal:not([hidden])').length === 0) { alternarCaptura(false); return; }
-      if (lector.abierto && $$('.modal:not([hidden])').length === 0) { cerrarLector(); return; }
+      // Esc en un campo del panel (el buscador, por ejemplo) es para ese
+      // campo, no para cerrar las hojas en grande
+      const enPanel = enCampo && !ev.target.closest('#lector');
+      if (lector.abierto && !enPanel && $$('.modal:not([hidden])').length === 0) { cerrarLector(); return; }
       if (!$('#modalCaptura').hidden) cerrarCaptura();
       $$('.modal').forEach((m) => { m.hidden = true; });
       return;
