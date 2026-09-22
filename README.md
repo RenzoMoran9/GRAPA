@@ -162,6 +162,25 @@ una cabecera de color saldría entera negra. El papel se mide **por zonas**, y s
 exige **contraste**: en una zona lisa no hay letra por mucho que sea más oscura
 que el papel.
 
+### Peso máximo: «que no pase de 10 MB»
+
+Si donde subes el PDF hay un límite —el sistema de gestión documental, un correo—, escríbelo en **Peso
+máximo** y pulsa **¿Cabe? Calcular el peso**. Grapa arma el PDF **de verdad**
+con cada ajuste, del que menos pierde al que más (Original → Ligero → Blanco y
+negro → Mínimo), y para en el primero que cabe: no es una estimación, es lo que
+va a pesar. Te dice cuál cabe y el botón **Usar** lo deja elegido.
+
+- Al **guardar**, si el ajuste elegido no cabe, lo dice **antes**: «Con
+  Original pesa 2,3 MB. Con Blanco y negro queda en 137 KB y sí cabe». Si
+  aceptas, guarda ese, que ya está armado; si cancelas, no guarda nada.
+- Si no cabe ni con el más chico, lo dice y propone dividirlo en partes.
+- Si cambias hojas después de calcular, pide volver a calcular.
+- El MB es el de Windows (1 MB = 1024 × 1024 bytes). El máximo se recuerda.
+- Calcular arma el PDF hasta cuatro veces: en un expediente escaneado largo
+  tarda lo mismo que guardarlo esas veces.
+- Por ahora vale para **Guardar PDF**. Al **dividir**, cada parte no se
+  compara con el máximo.
+
 ### Guardar el trabajo a medio hacer
 Grapa **autoguarda** lo que estás armando: si cierras el navegador por error, al
 volver te ofrece continuar. Y puedes guardar expedientes con nombre para

@@ -755,6 +755,7 @@
     programarAutoguardado();
     seguirBusquedaTrasPintar();
     pintarRevision();
+    pintarPesos();
   }
   G.pintar = pintar;
 
@@ -1663,11 +1664,152 @@
     return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: se aligeraron ${d.aligeradas} hoja(s)${intactas}.`;
   }
 
+  /* ---------- peso máximo ----------
+     Muchos sistemas no aceptan más de tantos MB. Se escribe el máximo y
+     Grapa arma el PDF DE VERDAD con cada ajuste de peso, del que menos
+     pierde al que más, hasta dar con el primero que cabe: no es una
+     estimación, es lo que pesará. Y al guardar, si el ajuste elegido no
+     cabe, lo dice antes, con el que sí cabe ya armado.
+
+     El MB es el de Windows: 1 MB = 1024 × 1024 bytes.                    */
+  const ORDEN_PESOS = ['original', 'ligero', 'bn', 'minimo'];
+  const NOMBRE_PESO = { original: 'Original', ligero: 'Ligero', bn: 'Blanco y negro', minimo: 'Mínimo' };
+  let calculoPeso = null;   // { firma, limite, pesos: { modo: bytes } }
+
+  function limitePeso() {
+    const v = parseFloat(String($('#pesoMaximo').value).replace(',', '.'));
+    return v > 0 ? Math.round(v * 1048576) : 0;
+  }
+  /** Lo que decide el peso: qué hojas, cómo giradas y qué llevan encima. */
+  function firmaPeso() {
+    return JSON.stringify(E.paginas.map((p) => [p.fuenteId, p.indice, p.giro, p.enderezo || 0, p.sellos]))
+      + '|' + totalFolios;
+  }
+  const primeroQueCabe = (pesos, limite) => ORDEN_PESOS.find((m) => pesos[m] != null && pesos[m] <= limite);
+
+  /** Arma el PDF con cada ajuste, en orden, y para en el primero que cabe. */
+  async function pesarAjustes(limite, yaArmado) {
+    const pesos = {}, bytesDe = {};
+    if (yaArmado) { pesos[yaArmado.modo] = yaArmado.bytes.length; bytesDe[yaArmado.modo] = yaArmado.bytes; }
+    for (const modo of ORDEN_PESOS) {
+      if (pesos[modo] == null) {
+        G.progreso(`Calculando el peso: «${NOMBRE_PESO[modo]}»…`);
+        const op = Object.assign(opcionesSalida(E.paginas), { comprimir: G.PESOS[modo] || null, informe: null });
+        const b = await G.construirPdf(E.paginas, op);
+        pesos[modo] = b.length; bytesDe[modo] = b;
+      }
+      if (limite && pesos[modo] <= limite) break;
+    }
+    calculoPeso = { firma: firmaPeso(), limite, pesos };
+    return { pesos, bytesDe };
+  }
+
+  async function calcularPeso() {
+    if (!E.paginas.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    G.cargando(true, 'Calculando el peso…');
+    try { await pesarAjustes(limitePeso()); }
+    catch (e) { console.error(e); G.aviso('No se pudo calcular: ' + e.message, 'error'); }
+    finally { G.cargando(false); }
+    pintarPesos();
+  }
+
+  function usarPeso(modo) {
+    $('#pesoSalida').value = modo;
+    $('#pesoSalida').dispatchEvent(new Event('change'));
+  }
+
+  function pintarPesos() {
+    const lista = $('#pesosLista');
+    lista.innerHTML = '';
+    const limite = limitePeso();
+    const c = calculoPeso;
+    if (!c || !E.paginas.length) { lista.hidden = true; return; }
+    lista.hidden = false;
+    if (c.firma !== firmaPeso()) {
+      const li = document.createElement('li');
+      li.className = 'pesos-aviso';
+      li.textContent = 'Cambiaste hojas desde el último cálculo: vuelve a calcular.';
+      lista.appendChild(li);
+      return;
+    }
+    const recomendado = limite ? primeroQueCabe(c.pesos, limite) : null;
+    const elegido = $('#pesoSalida').value;
+    ORDEN_PESOS.forEach((modo) => {
+      const n = c.pesos[modo];
+      const li = document.createElement('li');
+      li.className = 'peso-fila' + (modo === elegido ? ' elegido' : '');
+      li.dataset.modo = modo;
+      const nom = document.createElement('span');
+      nom.className = 'peso-nombre';
+      nom.textContent = NOMBRE_PESO[modo];
+      const mb = document.createElement('span');
+      mb.className = 'peso-mb';
+      mb.textContent = n == null ? '—' : enMb(n);
+      li.append(nom, mb);
+      if (limite && n != null) {
+        const cabe = document.createElement('span');
+        cabe.className = 'peso-cabe ' + (n <= limite ? 'si' : 'no');
+        cabe.textContent = n <= limite ? 'cabe' : 'no cabe';
+        li.appendChild(cabe);
+      }
+      if (n != null && modo !== elegido && (!limite || modo === recomendado)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-mini';
+        b.textContent = 'Usar';
+        b.title = 'Guardar con «' + NOMBRE_PESO[modo] + '»';
+        b.addEventListener('click', () => usarPeso(modo));
+        li.appendChild(b);
+      }
+      if (n == null) li.title = 'No hizo falta calcularlo: ya cabe con uno que pierde menos.';
+      lista.appendChild(li);
+    });
+    if (limite) {
+      const li = document.createElement('li');
+      li.className = 'pesos-aviso';
+      li.textContent = recomendado
+        ? (recomendado === elegido
+          ? `Con «${NOMBRE_PESO[recomendado]}» cabe en ${enMb(limite)}.`
+          : `Cabe en ${enMb(limite)} con «${NOMBRE_PESO[recomendado]}»: es el que menos pierde de los que caben.`)
+        : `No cabe en ${enMb(limite)} ni con el más chico. Divídelo en partes (en «Dividir») o quita hojas.`;
+      lista.appendChild(li);
+    }
+  }
+
   async function guardar() {
     if (!E.paginas.length) { G.aviso('No hay páginas para guardar.', 'error'); return; }
     G.cargando(true, 'Armando el PDF…');
     try {
-      const bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
+      let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
+      // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
+      // que sí cabe ya armado
+      const limite = limitePeso();
+      if (limite && bytes.length > limite) {
+        const modo = $('#pesoSalida').value;
+        const informe = ultimoInforme;
+        const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
+        const cabe = primeroQueCabe(pesos, limite);
+        G.cargando(false);
+        pintarPesos();
+        const ok = cabe
+          ? await G.confirmar({
+            titulo: 'No cabe en ' + enMb(limite),
+            mensaje: `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
+            aceptar: `Guardar con «${NOMBRE_PESO[cabe]}»`,
+          })
+          : await G.confirmar({
+            titulo: 'No cabe en ' + enMb(limite),
+            mensaje: `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
+            aceptar: 'Guardar igual', peligro: true,
+          });
+        if (!ok) { G.aviso('No se guardó nada.'); return; }
+        G.cargando(true, 'Guardando…');
+        if (cabe) {
+          if (cabe !== modo) usarPeso(cabe);
+          bytes = bytesDe[cabe];
+          ultimoInforme = null;
+        } else ultimoInforme = informe;
+      }
       const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
       const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
       G.aviso(
@@ -3949,8 +4091,15 @@
     $('#buscarGuardados').addEventListener('input', () => pintarGuardados());
     $('#pesoSalida').addEventListener('change', (ev) => {
       pintarNotaPeso();
+      pintarPesos();
       try { localStorage.setItem('grapa-peso', ev.target.value); } catch (e) {}
     });
+    try { $('#pesoMaximo').value = localStorage.getItem('grapa-peso-max') || ''; } catch (e) {}
+    $('#pesoMaximo').addEventListener('input', () => {
+      try { localStorage.setItem('grapa-peso-max', $('#pesoMaximo').value); } catch (e) {}
+      pintarPesos();
+    });
+    $('#btnVerPeso').addEventListener('click', calcularPeso);
     $('#btnComparar').addEventListener('click', compararMarcadas);
     $('#lectorColumnas').addEventListener('change', (ev) => {
       lector.columnas = Number(ev.target.value) || 1;
