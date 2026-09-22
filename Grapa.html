@@ -776,6 +776,78 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
   border:1px solid var(--borde); border-radius:var(--radio-s); background:#fff;
 }
 
+/* ---------- buscar en el expediente ---------- */
+.buscar-fila{display:flex;align-items:center;gap:4px}
+.buscar-texto{
+  flex:1;min-width:0;padding:8px 10px;border-radius:var(--radio-s);font-size:13px;
+  background:var(--fondo);border:1px solid var(--borde);color:var(--texto);
+}
+.buscar-texto:focus{outline:none;border-color:var(--acento);box-shadow:0 0 0 3px var(--acento-tenue)}
+.buscar-fila .btn-mini{padding:7px 8px;border:1px solid var(--borde-suave)}
+.buscar-fila .btn-mini:disabled{opacity:.4;cursor:default}
+.buscar-estado{font-variant-numeric:tabular-nums}
+.lista-hallazgos{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.hallazgo-li{display:flex;align-items:stretch;gap:4px}
+.hallazgo-fila{
+  flex:1;min-width:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:3px;
+  padding:7px 9px;border-radius:var(--radio-s);background:var(--fondo);
+  border:1px solid var(--borde-suave);color:var(--texto);font:inherit;
+}
+.hallazgo-fila:hover{border-color:var(--texto-3)}
+.hallazgo-fila.actual{border-color:var(--acento);background:var(--acento-tenue)}
+.hallazgo-hoja{
+  font-size:11px;color:var(--texto-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.hallazgo-hoja strong{color:var(--texto-2);font-variant-numeric:tabular-nums}
+.hallazgo-texto{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.hallazgo-texto mark{background:#ffe066;color:#1b1f27;border-radius:2px;padding:0 1px}
+.hallazgo-ver{align-self:center;flex:none}
+.hallazgos-mas{padding:2px 2px 0}
+
+/* el resaltado sobre la hoja: amarillo de rotulador, que deja leer la letra */
+.pag-hallazgos{position:absolute;inset:0;pointer-events:none}
+.hallazgo{
+  position:absolute;padding:0;color:transparent;border-radius:2px;
+  background:rgba(255,214,0,.45);box-shadow:0 0 0 1.5px rgba(214,160,0,.95);
+  mix-blend-mode:multiply;min-width:4px;min-height:4px;
+}
+.hallazgo.actual{background:rgba(255,128,48,.5);box-shadow:0 0 0 2px var(--acento),0 0 0 5px rgba(224,83,47,.28)}
+/* con una búsqueda en marcha, las hojas donde no aparece se apagan un poco */
+#rejilla.con-hallazgos .pag:not(.hallada) .pag-marco{opacity:.42;transition:opacity .15s}
+#rejilla.con-hallazgos .pag:not(.hallada):hover .pag-marco{opacity:.8}
+@keyframes hallada-llega{
+  0%{box-shadow:0 0 0 0 rgba(255,190,0,.0),var(--sombra)}
+  25%{box-shadow:0 0 0 6px rgba(255,190,0,.75),var(--sombra)}
+  100%{box-shadow:0 0 0 0 rgba(255,190,0,0),var(--sombra)}
+}
+.pag.destello .pag-marco{animation:hallada-llega 1.2s ease-out}
+.paquete-hallazgos{
+  position:absolute;left:6px;bottom:6px;display:flex;align-items:center;gap:2px;
+  background:#ffe066;color:#1b1f27;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;
+  font-variant-numeric:tabular-nums;
+}
+.paquete-hallazgos .ico{width:12px;height:12px}
+
+/* recordatorio en la barra del taller: hay una búsqueda puesta */
+.chip-busqueda{
+  display:inline-flex;align-items:center;gap:5px;max-width:260px;margin-left:10px;
+  padding:4px 8px 4px 9px;border-radius:999px;cursor:pointer;font:inherit;font-size:12px;
+  background:#fff4bf;color:#5a4400;border:1px solid #f0d36b;
+}
+.chip-busqueda span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip-busqueda .ico{width:13px;height:13px;flex:none}
+.chip-busqueda:hover{border-color:#d9b53a}
+@media (prefers-color-scheme: dark){
+  :root:not([data-tema="claro"]):not([data-theme="light"]) .chip-busqueda{background:#3a3110;color:#ffe9a3;border-color:#6b5a1c}
+}
+:root[data-theme="dark"]:not([data-tema="claro"]) .chip-busqueda,
+:root[data-tema="oscuro"] .chip-busqueda{background:#3a3110;color:#ffe9a3;border-color:#6b5a1c}
+.lector-busqueda{display:inline-flex;align-items:center;gap:4px}
+.lector-busqueda-cuenta{
+  font-size:12px;color:var(--texto-2);max-width:200px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
 
@@ -871,6 +943,9 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg></span><span class="riel-txt">Exped.</span><em class="riel-marca" id="marcaGuardados" hidden>0</em>
       </button>
       <span class="riel-etapa">Trabajo</span>
+      <button class="riel-btn" data-va="buscar" type="button" title="Buscar una palabra en todas las hojas (Ctrl+F)">
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg></span><span class="riel-txt">Buscar</span><em class="riel-marca" id="marcaBuscar" hidden>0</em>
+      </button>
       <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
       </button>
@@ -918,6 +993,21 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
                placeholder="Buscar por nombre…" autocomplete="off" hidden>
         <ul class="lista-guardados" id="listaGuardados"></ul>
         <p class="nota" id="espacioUsado"></p>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="buscar">
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Buscar en el expediente</button>
+      <div class="bloque-cuerpo">
+        <div class="buscar-fila">
+          <input type="search" class="buscar-texto" id="buscarTexto" placeholder="Palabra, RUC, nombre, monto…"
+                 autocomplete="off" spellcheck="false" aria-label="Buscar en el texto de las hojas">
+          <button class="btn btn-mini" id="buscarAnterior" type="button" title="Anterior (Shift+Enter)" aria-label="Coincidencia anterior" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+          <button class="btn btn-mini" id="buscarSiguiente" type="button" title="Siguiente (Enter)" aria-label="Coincidencia siguiente" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+        </div>
+        <p class="nota buscar-estado" id="buscarEstado" aria-live="polite">Busca en el texto de todas las hojas. Da igual si escribes con tildes o mayúsculas.</p>
+        <button class="btn btn-suave ancho" id="buscarMarcar" type="button" hidden>Marcar estas hojas</button>
+        <ol class="lista-hallazgos" id="listaHallazgos"></ol>
       </div>
     </section>
 
@@ -1060,6 +1150,11 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
         <strong id="infoPaginas">0 páginas</strong>
         <span id="infoSeleccion">nada seleccionado</span>
       </div>
+      <button class="chip-busqueda" id="chipBusqueda" type="button" hidden title="Quitar la búsqueda (Esc en el buscador)">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg>
+        <span id="chipBusquedaTexto"></span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg>
+      </button>
       <div class="taller-herramientas">
         <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paquete"/></svg> Ver por paquetes</button>
         <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-volver"/></svg> Paquetes</button>
@@ -1119,6 +1214,12 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
     <div class="lector-acciones">
       <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)" aria-label="Hoja anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
       <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)" aria-label="Hoja siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+      <span class="lector-busqueda" id="lectorBusqueda" hidden>
+        <span class="separador-vertical"></span>
+        <button class="btn btn-mini" id="lectorBuscarAnterior" title="Coincidencia anterior" aria-label="Coincidencia anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+        <span class="lector-busqueda-cuenta" id="lectorBuscarCuenta"></span>
+        <button class="btn btn-mini" id="lectorBuscarSiguiente" title="Coincidencia siguiente" aria-label="Coincidencia siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+      </span>
       <span class="separador-vertical"></span>
       <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
       <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
@@ -1346,6 +1447,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
       <table class="tabla-atajos">
         <tr><td>Ctrl+O</td><td>Abrir archivos</td></tr>
         <tr><td>Ctrl+S</td><td>Guardar PDF</td></tr>
+        <tr><td>Ctrl+F</td><td>Buscar una palabra en todas las hojas · Enter pasa a la siguiente</td></tr>
         <tr><td>Ctrl+Z / Ctrl+Y</td><td>Deshacer / Rehacer</td></tr>
         <tr><td>Ctrl+A</td><td>Seleccionar todas las páginas</td></tr>
         <tr><td>Ctrl+D</td><td>Duplicar páginas</td></tr>
@@ -2429,6 +2531,299 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       } catch (e) { return false; }
     },
   };
+})();
+
+</script>
+
+<!-- assets/buscar.js -->
+<script>
+/* ===========================================================
+   Grapa · buscar dentro del expediente
+   Lee el texto de cada hoja una sola vez y encuentra en qué hojas
+   aparece una palabra, y en qué sitio de la hoja, para resaltarla.
+   Todo en el navegador, como el resto.
+   =========================================================== */
+(function () {
+  'use strict';
+
+  const G = (window.Grapa = window.Grapa || {});
+
+  /* ---------- normalizar: que «Cotización» y «COTIZACION» sean lo mismo ----
+     Se quitan tildes y mayúsculas, y no cuentan ni los espacios ni los
+     signos. Los espacios valen poco en un PDF: unos traen «R U C» letra a
+     letra, otros pegan «RUC:20131257750». Y quien busca no escribe los
+     signos: «razon social distribuidora» tiene que dar con «Razón social:
+     Distribuidora», y «1250» con «S/ 1,250.00». */
+  const EQUIVALENTES = new Map([['º', '°'], ['˚', '°']]);
+  const MARCAS = /\p{M}/gu;
+  const NO_CUENTA = /[\s\p{P}´`¨]/u;
+
+  /** Una letra del documento en su forma de comparar: '' si no cuenta. */
+  function formaDe(c) {
+    if (NO_CUENTA.test(c)) return '';
+    const e = EQUIVALENTES.get(c);
+    if (e) return e;
+    // NFKD también abre las ligaduras que traen muchos PDF: «ﬁ» pasa a «fi»
+    return c.normalize('NFKD').replace(MARCAS, '').toLowerCase();
+  }
+
+  const formas = new Map();
+  const formaGuardada = (c) => {
+    let f = formas.get(c);
+    if (f === undefined) { f = formaDe(c); formas.set(c, f); }
+    return f;
+  };
+
+  /** Normaliza guardando de qué letra original sale cada letra normalizada. */
+  function normalizar(texto) {
+    let norm = '';
+    const mapa = [];
+    for (let i = 0; i < texto.length; i++) {
+      const f = formaGuardada(texto[i]);
+      for (let k = 0; k < f.length; k++) { norm += f[k]; mapa.push(i); }
+    }
+    return { norm, mapa };
+  }
+  G.normalizarParaBuscar = (s) => normalizar(String(s || '')).norm;
+
+  /* ---------- ancho aproximado de cada letra ----
+     pdf.js da el ancho del trozo entero, no el de cada letra. Repartirlo a
+     partes iguales ponía el resaltado corrido en cuanto había una «m» o
+     una «i»; se reparte según lo que mide cada letra en una letra común. */
+  let lienzoMedir = null;
+  const anchoLetra = new Map();
+  function medida(c) {
+    if (anchoLetra.has(c)) return anchoLetra.get(c);
+    if (!lienzoMedir) {
+      lienzoMedir = document.createElement('canvas').getContext('2d');
+      lienzoMedir.font = '100px Helvetica, Arial, sans-serif';
+    }
+    const w = lienzoMedir.measureText(c).width || 50;
+    anchoLetra.set(c, w);
+    return w;
+  }
+
+  /* ---------- el texto de una hoja ---------- */
+  const indice = new Map();     // 'fuenteId:indice' -> hoja leída
+  const enCurso = new Map();    // misma clave -> promesa, para no leerla dos veces
+
+  const claveDe = (pagina) => pagina.fuenteId + ':' + pagina.indice;
+
+  /**
+   * Junta los trozos de texto de la hoja en una sola cadena, sabiendo de qué
+   * trozo y de qué letra sale cada carácter. Entre trozos se pone un espacio
+   * o un salto de renglón según dónde caen, para que el contexto que se
+   * enseña en la lista se lea como una frase y no como «RUC:20131257750S.A.».
+   */
+  function juntar(items) {
+    let texto = '';
+    const origen = [];          // por carácter: [trozo, letra] o null
+    let previo = null;
+    items.forEach((it, n) => {
+      const s = it.str;
+      if (previo) {
+        let sep = '';
+        if (previo.hasEOL) sep = '\n';
+        else if (!/\s$/.test(previo.str) && !/^\s/.test(s)) {
+          const [a, b] = previo.transform;
+          const largo = Math.hypot(a, b) || 1;
+          const dx = a / largo, dy = b / largo;
+          const finX = previo.transform[4] + dx * previo.width;
+          const finY = previo.transform[5] + dy * previo.width;
+          const vx = it.transform[4] - finX, vy = it.transform[5] - finY;
+          const avance = vx * dx + vy * dy;
+          const salto = Math.abs(-vx * dy + vy * dx);
+          const alto = previo.height || largo;
+          if (salto > alto * 0.6) sep = '\n';
+          else if (avance > alto * 0.2) sep = ' ';
+        }
+        for (let k = 0; k < sep.length; k++) { texto += sep[k]; origen.push(null); }
+      }
+      for (let k = 0; k < s.length; k++) { texto += s[k]; origen.push([n, k]); }
+      if (s.length || it.hasEOL) previo = it;
+    });
+    return { texto, origen };
+  }
+
+  async function leerHoja(pagina) {
+    const k = claveDe(pagina);
+    if (indice.has(k)) return indice.get(k);
+    if (enCurso.has(k)) return enCurso.get(k);
+    const p = (async () => {
+      let hoja;
+      try {
+        const fuente = G.estado.fuentes.get(pagina.fuenteId);
+        const pag = await fuente.doc.getPage(pagina.indice + 1);
+        const tc = await pag.getTextContent();
+        // la hoja sin girar: las cajas se guardan así y se giran al pintarlas,
+        // para que girar una hoja no obligue a leerla otra vez
+        const vp = pag.getViewport({ scale: 1, rotation: 0 });
+        const items = tc.items
+          .filter((it) => typeof it.str === 'string')
+          .map((it) => ({
+            str: it.str, transform: it.transform, width: it.width,
+            height: it.height, hasEOL: !!it.hasEOL,
+          }));
+        const { texto, origen } = juntar(items);
+        const { norm, mapa } = normalizar(texto);
+        const letras = texto.replace(/\s/g, '').length;
+        hoja = {
+          items, texto, origen, norm, mapa,
+          // un par de letras sueltas puede ser basura del escáner
+          conTexto: letras >= 20,
+          vista: { t: vp.transform.slice(), w: vp.width, h: vp.height },
+        };
+      } catch (e) {
+        hoja = { items: [], texto: '', origen: [], norm: '', mapa: [], conTexto: false, fallo: true,
+                 vista: { t: [1, 0, 0, -1, 0, 0], w: 1, h: 1 } };
+      }
+      indice.set(k, hoja);
+      enCurso.delete(k);
+      return hoja;
+    })();
+    enCurso.set(k, p);
+    return p;
+  }
+
+  /** ¿Ya se leyeron todas estas hojas? */
+  G.buscadorListo = (paginas) => paginas.every((p) => indice.has(claveDe(p)));
+
+  /**
+   * Lee las hojas que falten. De a una: pdf.js sin worker (con Grapa abierta
+   * con doble clic) trabaja en el hilo de la página, y así la interfaz sigue
+   * respondiendo entre hoja y hoja.
+   */
+  G.prepararBusqueda = async function (paginas, alProgresar) {
+    const vistas = new Set();
+    const faltan = paginas.filter((p) => {
+      const k = claveDe(p);
+      if (indice.has(k) || vistas.has(k)) return false;
+      vistas.add(k);
+      return true;
+    });
+    for (let i = 0; i < faltan.length; i++) {
+      await leerHoja(faltan[i]);
+      if (alProgresar) alProgresar(i + 1, faltan.length);
+    }
+    return faltan.length;
+  };
+
+  /* ---------- dónde cae cada coincidencia en la hoja ---------- */
+  function aplicar(t, x, y) {
+    return [t[0] * x + t[2] * y + t[4], t[1] * x + t[3] * y + t[5]];
+  }
+
+  /** Caja de las letras [desde, hasta) del trozo, en fracciones de la hoja sin girar. */
+  function cajaDeTrozo(it, desde, hasta, vista) {
+    const [a, b, c, d, e, f] = it.transform;
+    const largo = Math.hypot(a, b) || 1;
+    const dx = a / largo, dy = b / largo;
+    const alto = it.height || Math.hypot(c, d) || largo;
+    const letras = Array.from(it.str);
+    // Array.from separa por puntos de código; las posiciones vienen en
+    // unidades UTF-16. Para los textos de estos documentos coinciden, y si no,
+    // se reparte a partes iguales, que también sirve.
+    let total = 0;
+    const acumulado = [0];
+    const usarMedidas = letras.length === it.str.length;
+    for (let k = 0; k < it.str.length; k++) {
+      total += usarMedidas ? medida(it.str[k]) : 1;
+      acumulado.push(total);
+    }
+    const ancho = it.width > 0 ? it.width : it.str.length * alto * 0.5;
+    const s0 = total ? (acumulado[desde] / total) * ancho : 0;
+    const s1 = total ? (acumulado[hasta] / total) * ancho : ancho;
+    // un poco por debajo de la línea base (las colas de la «p» y la «g») y
+    // hasta lo alto de las mayúsculas
+    const abajo = -0.24 * alto, arriba = 0.92 * alto;
+    const esquinas = [[s0, abajo], [s1, abajo], [s0, arriba], [s1, arriba]].map(([s, h]) =>
+      aplicar(vista.t, e + dx * s - dy * h, f + dy * s + dx * h));
+    const xs = esquinas.map((p) => p[0]), ys = esquinas.map((p) => p[1]);
+    return {
+      x0: Math.max(0, Math.min(...xs) / vista.w), x1: Math.min(1, Math.max(...xs) / vista.w),
+      y0: Math.max(0, Math.min(...ys) / vista.h), y1: Math.min(1, Math.max(...ys) / vista.h),
+    };
+  }
+
+  /** Cajas de un tramo del texto de la hoja: una por cada trozo que toca. */
+  function cajasDe(hoja, o0, o1) {
+    const cajas = [];
+    let trozo = -1, desde = 0, hasta = 0;
+    const cerrar = () => {
+      if (trozo >= 0) cajas.push(cajaDeTrozo(hoja.items[trozo], desde, hasta, hoja.vista));
+    };
+    for (let i = o0; i < o1; i++) {
+      const o = hoja.origen[i];
+      if (!o) continue;
+      if (o[0] !== trozo) { cerrar(); trozo = o[0]; desde = o[1]; }
+      hasta = o[1] + 1;
+    }
+    cerrar();
+    return cajas;
+  }
+
+  /** Un trozo de la frase alrededor de la coincidencia, para la lista. */
+  function contexto(texto, o0, o1) {
+    const MARGEN = 42;
+    let a = Math.max(0, o0 - MARGEN), b = Math.min(texto.length, o1 + MARGEN);
+    // no empezar ni acabar a media palabra
+    if (a > 0) { const sp = texto.slice(a, o0).search(/\s/); if (sp >= 0) a += sp + 1; }
+    if (b < texto.length) { const sp = texto.slice(o1, b).search(/\s\S*$/); if (sp >= 0) b = o1 + sp; }
+    const limpio = (s) => s.replace(/\s+/g, ' ');
+    return {
+      antes: (a > 0 ? '…' : '') + limpio(texto.slice(a, o0)).trimStart(),
+      dentro: limpio(texto.slice(o0, o1)),
+      despues: limpio(texto.slice(o1, b)).trimEnd() + (b < texto.length ? '…' : ''),
+    };
+  }
+
+  /**
+   * Busca en las hojas dadas, en su orden. Devuelve cada coincidencia con su
+   * hoja, sus cajas y su contexto, y aparte las hojas sin texto, donde no hay
+   * nada en qué buscar (las escaneadas).
+   */
+  G.buscarEnHojas = function (paginas, consulta, opciones) {
+    const tope = (opciones && opciones.tope) || 5000;
+    const q = normalizar(String(consulta || '')).norm;
+    const hallazgos = [];
+    const sinTexto = [];
+    const porHoja = new Map();  // uid -> cuántas veces, también las que pasan del tope
+    let total = 0;
+    if (!q) return { hallazgos, sinTexto, porHoja, total, consulta: q };
+    paginas.forEach((pagina) => {
+      const hoja = indice.get(claveDe(pagina));
+      if (!hoja) return;
+      if (!hoja.conTexto) sinTexto.push(pagina);
+      let desde = 0;
+      for (;;) {
+        const i = hoja.norm.indexOf(q, desde);
+        if (i < 0) break;
+        desde = i + q.length;
+        total++;
+        porHoja.set(pagina.uid, (porHoja.get(pagina.uid) || 0) + 1);
+        if (hallazgos.length >= tope) continue;
+        const o0 = hoja.mapa[i];
+        const o1 = hoja.mapa[i + q.length - 1] + 1;
+        hallazgos.push({ pagina, cajas: cajasDe(hoja, o0, o1), ...contexto(hoja.texto, o0, o1) });
+      }
+    });
+    return { hallazgos, sinTexto, porHoja, total, consulta: q };
+  };
+
+  /**
+   * Gira una caja guardada sin girar para la hoja tal como se ve. El giro es
+   * el de la hoja en Grapa, que es absoluto: el mismo que usa la miniatura.
+   */
+  G.girarCaja = function (c, giro) {
+    switch (G.norm(giro || 0)) {
+      case 90: return { x0: 1 - c.y1, x1: 1 - c.y0, y0: c.x0, y1: c.x1 };
+      case 180: return { x0: 1 - c.x1, x1: 1 - c.x0, y0: 1 - c.y1, y1: 1 - c.y0 };
+      case 270: return { x0: c.y0, x1: c.y1, y0: 1 - c.x1, y1: 1 - c.x0 };
+      default: return c;
+    }
+  };
+
+  G.olvidarBusqueda = () => { indice.clear(); enCurso.clear(); };
 })();
 
 </script>
@@ -3942,6 +4337,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     cuenta.className = 'paquete-cuenta';
     cuenta.textContent = paginas.length + (paginas.length === 1 ? ' hoja' : ' hojas');
     marco.appendChild(cuenta);
+    const enPaquete = nodoHallazgosPaquete(paginas);
+    if (enPaquete) { marco.appendChild(enPaquete); el.classList.add('hallada'); }
     el.appendChild(marco);
 
     const pie = document.createElement('div');
@@ -4085,6 +4482,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     marco.appendChild(cinta);
 
     marco.appendChild(nodoSellos(pagina, anchoPx));
+    const capaHallazgos = nodoHallazgos(pagina);
+    if (capaHallazgos) { marco.appendChild(capaHallazgos); el.classList.add('hallada'); }
 
     const num = document.createElement('span');
     num.className = 'pag-num';
@@ -4195,8 +4594,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     asegurarPaquetes();
     normalizarPaquetes();
     recalcularFolios();
+    recalcularBusqueda();
     const rejilla = $('#rejilla');
     rejilla.innerHTML = '';
+    rejilla.classList.toggle('con-hallazgos', hojasConHallazgos().size > 0);
     const enPaquetes = vista === 'paquetes' && !paqueteAbierto;
     rejilla.classList.toggle('rejilla-paquetes', enPaquetes);
     if (enPaquetes) {
@@ -4236,6 +4637,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     sincronizarNombreSalida();
     afinarVisibles();
     programarAutoguardado();
+    seguirBusquedaTrasPintar();
   }
   G.pintar = pintar;
 
@@ -5629,6 +6031,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     vista = 'hojas';
     E.ancla = null;
     G.olvidarDocs();
+    G.olvidarBusqueda();
+    $('#buscarTexto').value = '';
+    busqueda.texto = '';
+    busqueda.turno++;
     historial.atras.length = 0;
     historial.adelante.length = 0;
     expedienteAbierto = null;
@@ -6309,11 +6715,17 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         hoja.appendChild(org);
       }
 
+      // el resaltado va desde ya, antes de dibujar la hoja: así se puede
+      // saltar a una coincidencia de una hoja que todavía no se pintó
+      const capa = nodoHallazgos(pagina);
+      if (capa) hoja.appendChild(capa);
+
       hoja.addEventListener('click', () => marcarHoja(i));
       cont.appendChild(hoja);
       lector.obs.observe(hoja);
     });
     aplicarZoomLector();
+    pintarLectorBusqueda();
   }
 
   function aplicarZoomLector() {
@@ -6378,6 +6790,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     $('#lector').hidden = true;
     if (lector.obs) lector.obs.disconnect();
     $('#lectorHojas').innerHTML = '';
+    pintarLectorBusqueda();
   }
 
   function refrescarLector(indice) {
@@ -6436,6 +6849,425 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     }, { passive: true });
   }
 
+  /* ---------------- buscar en el expediente ----------------
+     En qué hojas aparece una palabra y en qué sitio de cada una, sin salir
+     del taller. El texto de cada hoja se lee una sola vez: buscar otra
+     palabra, girar o mover hojas ya no vuelve a leer nada. */
+  const busqueda = {
+    texto: '',            // lo escrito, tal cual
+    resultado: null,      // lo que devuelve G.buscarEnHojas
+    porUid: new Map(),    // uid -> [{caja, n}] para pintar el resaltado
+    actual: -1,           // la coincidencia a la que se saltó por última vez
+    leyendo: null,        // {hechas, total} mientras se lee el texto
+    turno: 0,             // para descartar una búsqueda que ya quedó vieja
+    saltarAlLeer: false,  // se pulsó Enter antes de que terminara de leer
+  };
+  const MOSTRAR_HALLAZGOS = 200;
+  const AYUDA_BUSCAR = 'Busca en el texto de todas las hojas. Da igual si escribes con tildes o mayúsculas.';
+
+  const hayBusqueda = () => !!G.normalizarParaBuscar(busqueda.texto);
+  const hallazgos = () => (busqueda.resultado ? busqueda.resultado.hallazgos : []);
+  const hojasConHallazgos = () => (busqueda.resultado ? busqueda.resultado.porHoja : new Map());
+
+  /** Recalcula con lo ya leído. Es barato: se hace en cada pintada. */
+  function recalcularBusqueda() {
+    busqueda.porUid = new Map();
+    if (!hayBusqueda()) { busqueda.resultado = null; busqueda.actual = -1; return; }
+    busqueda.resultado = G.buscarEnHojas(E.paginas, busqueda.texto);
+    hallazgos().forEach((h, n) => {
+      if (!busqueda.porUid.has(h.pagina.uid)) busqueda.porUid.set(h.pagina.uid, []);
+      const lista = busqueda.porUid.get(h.pagina.uid);
+      h.cajas.forEach((caja) => lista.push({ caja, n }));
+    });
+    if (busqueda.actual >= hallazgos().length) busqueda.actual = hallazgos().length - 1;
+  }
+
+  /** El resaltado de una hoja, girado como se ve la hoja. null si no hay nada. */
+  function nodoHallazgos(pagina) {
+    const lista = busqueda.porUid.get(pagina.uid);
+    if (!lista || !lista.length) return null;
+    const capa = document.createElement('div');
+    capa.className = 'pag-hallazgos';
+    lista.forEach(({ caja, n }) => {
+      const c = G.girarCaja(caja, pagina.giro);
+      const m = document.createElement('mark');
+      m.className = 'hallazgo' + (n === busqueda.actual ? ' actual' : '');
+      m.dataset.n = n;
+      m.style.left = c.x0 * 100 + '%';
+      m.style.top = c.y0 * 100 + '%';
+      m.style.width = (c.x1 - c.x0) * 100 + '%';
+      m.style.height = (c.y1 - c.y0) * 100 + '%';
+      capa.appendChild(m);
+    });
+    return capa;
+  }
+
+  /** Cuántas veces sale en un paquete, para enseñarlo en su tarjeta. */
+  function nodoHallazgosPaquete(paginas) {
+    const porHoja = hojasConHallazgos();
+    const veces = paginas.reduce((n, p) => n + (porHoja.get(p.uid) || 0), 0);
+    if (!veces) return null;
+    const el = document.createElement('span');
+    el.className = 'paquete-hallazgos';
+    el.innerHTML = icono('lupa');
+    el.append(' ' + veces);
+    el.title = veces === 1 ? 'Aparece 1 vez en este paquete' : `Aparece ${veces} veces en este paquete`;
+    return el;
+  }
+
+  /**
+   * Pone o quita el resaltado en lo que ya está pintado, sin rehacer la
+   * rejilla: rehacerla en cada letra que se escribe hacía parpadear todas
+   * las miniaturas.
+   */
+  function ponerCapasHallazgos() {
+    const porUid = new Map(E.paginas.map((p) => [p.uid, p]));
+    const porHoja = hojasConHallazgos();
+    const rejilla = $('#rejilla');
+    rejilla.classList.toggle('con-hallazgos', porHoja.size > 0);
+    $$('.pag', rejilla).forEach((el) => {
+      const marco = el.querySelector('.pag-marco');
+      if (!marco) return;
+      if (el.classList.contains('paquete')) {
+        const previo = marco.querySelector('.paquete-hallazgos');
+        if (previo) previo.remove();
+        const g = paquetesEnOrden().find((x) => x.paquete.id === el.dataset.paquete);
+        const nodo = g ? nodoHallazgosPaquete(g.paginas) : null;
+        if (nodo) marco.appendChild(nodo);
+        el.classList.toggle('hallada', !!nodo);
+        return;
+      }
+      const pagina = porUid.get(el.dataset.uid);
+      const previo = marco.querySelector('.pag-hallazgos');
+      if (previo) previo.remove();
+      const capa = pagina ? nodoHallazgos(pagina) : null;
+      if (capa) (marco.querySelector('.pag-sellos') || marco.querySelector('.mini')).after(capa);
+      el.classList.toggle('hallada', !!capa);
+    });
+    $$('.hoja', $('#lectorHojas')).forEach((hoja) => {
+      const previo = hoja.querySelector('.pag-hallazgos');
+      if (previo) previo.remove();
+      const pagina = porUid.get(hoja.dataset.uid);
+      const capa = pagina ? nodoHallazgos(pagina) : null;
+      if (capa) hoja.appendChild(capa);
+    });
+  }
+
+  function marcarHallazgoActual() {
+    $$('.hallazgo').forEach((m) => m.classList.toggle('actual', Number(m.dataset.n) === busqueda.actual));
+    $$('.hallazgo-fila').forEach((b) => b.classList.toggle('actual', Number(b.dataset.n) === busqueda.actual));
+  }
+
+  const listaHojas = (nums) => nums.length === 1 ? 'la ' + nums[0]
+    : 'las ' + nums.slice(0, -1).join(', ') + ' y ' + nums[nums.length - 1];
+
+  function textoEstadoBusqueda() {
+    if (busqueda.leyendo && (hayBusqueda() || document.activeElement === $('#buscarTexto'))) {
+      const { hechas, total } = busqueda.leyendo;
+      return `Leyendo el texto de las hojas… ${hechas} de ${total}`;
+    }
+    if (!hayBusqueda()) return AYUDA_BUSCAR;
+    if (!E.paginas.length) return 'Primero abre un PDF.';
+    const r = busqueda.resultado;
+    if (!r) return 'Buscando…';
+    const buscado = busqueda.texto.trim();
+    let t;
+    if (!r.total) {
+      t = `«${buscado}» no aparece en ninguna hoja.`;
+    } else {
+      const hojas = r.porHoja.size;
+      t = (r.total === 1 ? 'Aparece 1 vez' : `Aparece ${r.total} veces`)
+        + (hojas === 1 ? ' en 1 hoja.' : ` en ${hojas} hojas.`);
+      if (busqueda.actual >= 0) t = `${busqueda.actual + 1} de ${r.hallazgos.length} · ` + t;
+    }
+    const escaneadas = r.sinTexto.length;
+    if (escaneadas) {
+      if (escaneadas === E.paginas.length) {
+        t += ' Todas las hojas son escaneadas: son fotos del papel y no llevan texto en el que buscar.';
+      } else {
+        const pos = new Map(E.paginas.map((p, i) => [p.uid, i + 1]));
+        const nums = r.sinTexto.map((p) => pos.get(p.uid)).sort((a, b) => a - b);
+        t += escaneadas <= 6
+          ? ` ${escaneadas === 1 ? 'La hoja' : 'Las hojas'} ${listaHojas(nums).replace(/^la |^las /, '')} ${escaneadas === 1 ? 'es escaneada' : 'son escaneadas'}: ahí no se puede buscar todavía.`
+          : ` ${escaneadas} hojas son escaneadas: ahí no se puede buscar todavía.`;
+      }
+    }
+    return t;
+  }
+
+  function pintarListaHallazgos() {
+    const ol = $('#listaHallazgos');
+    ol.innerHTML = '';
+    const hs = hallazgos();
+    if (!hs.length) return;
+    const pos = new Map(E.paginas.map((p, i) => [p.uid, i + 1]));
+    hs.slice(0, MOSTRAR_HALLAZGOS).forEach((h, n) => {
+      const li = document.createElement('li');
+      li.className = 'hallazgo-li';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hallazgo-fila' + (n === busqueda.actual ? ' actual' : '');
+      b.dataset.n = n;
+      const cab = document.createElement('span');
+      cab.className = 'hallazgo-hoja';
+      const f = E.fuentes.get(h.pagina.fuenteId);
+      const num = document.createElement('strong');
+      num.textContent = 'Hoja ' + pos.get(h.pagina.uid);
+      cab.appendChild(num);
+      if (f) cab.append(' · ' + f.nombre);
+      const txt = document.createElement('span');
+      txt.className = 'hallazgo-texto';
+      const m = document.createElement('mark');
+      m.textContent = h.dentro;
+      txt.append(h.antes, m, h.despues);
+      b.append(cab, txt);
+      b.addEventListener('click', () => irAHallazgo(n));
+      const ver = document.createElement('button');
+      ver.type = 'button';
+      ver.className = 'btn btn-mini hallazgo-ver';
+      ver.innerHTML = icono('lupa');
+      ver.title = 'Ver esta hoja en grande';
+      ver.setAttribute('aria-label', 'Ver la hoja ' + pos.get(h.pagina.uid) + ' en grande');
+      ver.addEventListener('click', () => {
+        busqueda.actual = n;
+        abrirLector(h.pagina);
+        centrarHallazgoEnLector();
+      });
+      li.append(b, ver);
+      ol.appendChild(li);
+    });
+    if (hs.length > MOSTRAR_HALLAZGOS) {
+      const li = document.createElement('li');
+      li.className = 'nota hallazgos-mas';
+      li.textContent = `Y ${hs.length - MOSTRAR_HALLAZGOS} más: sigue con ↓, o escribe algo más preciso.`;
+      ol.appendChild(li);
+    }
+  }
+
+  function pintarLectorBusqueda() {
+    const caja = $('#lectorBusqueda');
+    const hs = hallazgos();
+    caja.hidden = !(lector.abierto && hs.length);
+    if (caja.hidden) return;
+    $('#lectorBuscarCuenta').textContent = `«${busqueda.texto.trim()}» · `
+      + (busqueda.actual >= 0 ? `${busqueda.actual + 1} de ${hs.length}` : `${hs.length}`);
+  }
+
+  function pintarPanelBusqueda() {
+    $('#buscarEstado').textContent = textoEstadoBusqueda();
+    const hs = hallazgos();
+    const porHoja = hojasConHallazgos();
+    $('#buscarAnterior').disabled = !hs.length;
+    $('#buscarSiguiente').disabled = !hs.length;
+    const marcarBtn = $('#buscarMarcar');
+    marcarBtn.hidden = !porHoja.size;
+    marcarBtn.textContent = porHoja.size === 1 ? 'Marcar esta hoja' : `Marcar estas ${porHoja.size} hojas`;
+    pintarListaHallazgos();
+    pintarMarcaRiel('#marcaBuscar', porHoja.size);
+    const chip = $('#chipBusqueda');
+    chip.hidden = !hayBusqueda();
+    if (!chip.hidden) {
+      $('#chipBusquedaTexto').textContent = `«${busqueda.texto.trim()}» · `
+        + (busqueda.leyendo || !busqueda.resultado ? 'buscando…'
+          : porHoja.size === 1 ? 'en 1 hoja' : porHoja.size ? `en ${porHoja.size} hojas` : 'en ninguna');
+    }
+    pintarLectorBusqueda();
+  }
+
+  /** Lee el texto de las hojas que falten, una sola lectura a la vez. */
+  let lecturaBusqueda = null;
+  function leerTextoQueFalta() {
+    if (lecturaBusqueda) return lecturaBusqueda;
+    if (G.buscadorListo(E.paginas)) return Promise.resolve();
+    lecturaBusqueda = (async () => {
+      try {
+        // mientras se lee pueden entrar hojas nuevas: se sigue hasta tenerlas todas
+        while (!G.buscadorListo(E.paginas)) {
+          await G.prepararBusqueda(E.paginas, (hechas, total) => {
+            busqueda.leyendo = { hechas, total };
+            $('#buscarEstado').textContent = textoEstadoBusqueda();
+          });
+        }
+      } finally {
+        busqueda.leyendo = null;
+        lecturaBusqueda = null;
+      }
+    })();
+    return lecturaBusqueda;
+  }
+
+  async function lanzarBusqueda() {
+    busqueda.texto = $('#buscarTexto').value;
+    busqueda.actual = -1;
+    const turno = ++busqueda.turno;
+    if (hayBusqueda() && !G.buscadorListo(E.paginas)) {
+      // lo que ya está leído se enseña ya; el resto llega al terminar
+      recalcularBusqueda();
+      ponerCapasHallazgos();
+      pintarPanelBusqueda();
+      await leerTextoQueFalta();
+      if (turno !== busqueda.turno) return;
+    }
+    recalcularBusqueda();
+    ponerCapasHallazgos();
+    pintarPanelBusqueda();
+    if (busqueda.saltarAlLeer) { busqueda.saltarAlLeer = false; irAHallazgo(0); }
+  }
+
+  /** Después de pintar(): si entraron hojas nuevas, leerlas y volver a buscar. */
+  function seguirBusquedaTrasPintar() {
+    pintarPanelBusqueda();
+    if (!hayBusqueda() || G.buscadorListo(E.paginas)) return;
+    const turno = busqueda.turno;
+    leerTextoQueFalta().then(() => {
+      if (turno !== busqueda.turno) return;
+      recalcularBusqueda();
+      ponerCapasHallazgos();
+      pintarPanelBusqueda();
+    });
+  }
+
+  function limpiarBusqueda() {
+    $('#buscarTexto').value = '';
+    busqueda.texto = '';
+    busqueda.turno++;
+    busqueda.saltarAlLeer = false;
+    recalcularBusqueda();
+    ponerCapasHallazgos();
+    pintarPanelBusqueda();
+  }
+
+  /**
+   * En el lector, con la hoja ya arriba (irAHoja), trae la coincidencia a la
+   * vista si quedó fuera. Solo se baja, nunca se sube: centrarla subiendo
+   * dejaba a la vista el final de la hoja anterior, el lector la tomaba por
+   * la actual, y «Texto» o «Girar» habrían caído en la hoja equivocada.
+   */
+  function centrarHallazgoEnLector() {
+    const cont = $('#lectorHojas');
+    const m = $(`#lectorHojas .hallazgo[data-n="${busqueda.actual}"]`);
+    if (m) {
+      const c = cont.getBoundingClientRect();
+      const r = m.getBoundingClientRect();
+      const abajo = r.bottom > c.bottom - 40;
+      const deLado = r.left < c.left || r.right > c.right;
+      if (abajo || deLado) {
+        cont.scrollBy({
+          top: abajo ? Math.max(0, r.top + r.height / 2 - (c.top + c.height / 2)) : 0,
+          left: deLado ? r.left + r.width / 2 - (c.left + c.width / 2) : 0,
+          behavior: 'instant',
+        });
+      }
+    }
+    marcarHallazgoActual();
+    pintarLectorBusqueda();
+  }
+
+  /**
+   * Salta a una coincidencia. Si la hoja no está a la vista —porque se ven
+   * los paquetes cerrados, o otro paquete— se pasa a ver todas las hojas:
+   * abrir el paquete obligaría a soltar lo que esté marcado.
+   */
+  function irAHallazgo(n) {
+    const hs = hallazgos();
+    if (!hs.length) return;
+    busqueda.actual = ((n % hs.length) + hs.length) % hs.length;   // da la vuelta
+    const h = hs[busqueda.actual];
+
+    if (lector.abierto) {
+      const i = hojasLector().indexOf(h.pagina);
+      if (i >= 0) { irAHoja(i, true); centrarHallazgoEnLector(); }
+      return;
+    }
+
+    const aLaVista = !(vista === 'paquetes' && !paqueteAbierto) && hojasVisibles().includes(h.pagina);
+    if (!aLaVista) { vista = 'hojas'; paqueteAbierto = null; pintar(); }
+    marcarHallazgoActual();
+    $('#buscarEstado').textContent = textoEstadoBusqueda();
+    const el = $(`#rejilla .pag[data-uid="${h.pagina.uid}"]`);
+    if (el) {
+      const marca = el.querySelector(`.hallazgo[data-n="${busqueda.actual}"]`);
+      (marca || el).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      el.classList.remove('destello');
+      void el.offsetWidth;
+      el.classList.add('destello');
+    }
+    const fila = $(`#listaHallazgos .hallazgo-fila[data-n="${busqueda.actual}"]`);
+    if (fila) fila.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** En el lector con «solo marcadas», salta solo entre las que se ven. */
+  function saltarHallazgoLector(delta) {
+    const hs = hallazgos();
+    if (!hs.length) return;
+    const enLector = new Set(hojasLector().map((p) => p.uid));
+    // sin ninguna elegida, «siguiente» es la primera y «anterior» la última
+    const base = busqueda.actual >= 0 ? busqueda.actual : (delta > 0 ? -1 : 0);
+    for (let k = 1; k <= hs.length; k++) {
+      const n = ((base + delta * k) % hs.length + hs.length) % hs.length;
+      if (enLector.has(hs[n].pagina.uid)) { irAHallazgo(n); return; }
+    }
+  }
+
+  function abrirBuscador() {
+    if (lector.abierto) cerrarLector();
+    irASeccion('buscar');
+    const campo = $('#buscarTexto');
+    campo.focus();
+    campo.select();
+    leerTextoQueFalta();
+  }
+
+  function conectarBuscador() {
+    const campo = $('#buscarTexto');
+    let reloj = null;
+    campo.addEventListener('input', () => {
+      clearTimeout(reloj);
+      reloj = setTimeout(lanzarBusqueda, 220);
+    });
+    // se empieza a leer en cuanto se va a buscar, no al escribir la primera letra
+    campo.addEventListener('focus', () => {
+      if (!E.paginas.length || G.buscadorListo(E.paginas)) return;
+      leerTextoQueFalta().then(() => { $('#buscarEstado').textContent = textoEstadoBusqueda(); });
+      $('#buscarEstado').textContent = textoEstadoBusqueda();
+    });
+    campo.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        if (campo.value) { ev.preventDefault(); ev.stopPropagation(); limpiarBusqueda(); }
+        return;
+      }
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      // lo último escrito puede no haberse buscado aún
+      if (campo.value !== busqueda.texto || busqueda.leyendo) {
+        clearTimeout(reloj);
+        busqueda.saltarAlLeer = true;
+        if (campo.value !== busqueda.texto) lanzarBusqueda();
+        return;
+      }
+      if (ev.shiftKey) irAHallazgo(busqueda.actual < 0 ? -1 : busqueda.actual - 1);
+      else irAHallazgo(busqueda.actual + 1);
+    });
+    $('#buscarSiguiente').addEventListener('click', () => irAHallazgo(busqueda.actual + 1));
+    $('#buscarAnterior').addEventListener('click', () => irAHallazgo(busqueda.actual < 0 ? -1 : busqueda.actual - 1));
+    $('#chipBusqueda').addEventListener('click', limpiarBusqueda);
+    $('#lectorBuscarSiguiente').addEventListener('click', () => saltarHallazgoLector(1));
+    $('#lectorBuscarAnterior').addEventListener('click', () => saltarHallazgoLector(-1));
+    $('#buscarMarcar').addEventListener('click', () => {
+      const uids = new Set(hojasConHallazgos().keys());
+      if (!uids.size) return;
+      // marcadas se tienen que ver: lo que se haga con ellas no puede caer
+      // sobre hojas escondidas en un paquete cerrado
+      vista = 'hojas';
+      paqueteAbierto = null;
+      E.seleccion = uids;
+      pintar();
+      G.aviso(uids.size === 1
+        ? 'Hoja marcada. Ahora puedes bajarla, moverla o sacarla a un PDF aparte.'
+        : `${uids.size} hojas marcadas. Ahora puedes bajarlas, moverlas o sacarlas a un PDF aparte.`);
+    });
+  }
+
   /* ---------------- atajos de teclado ---------------- */
   document.addEventListener('keydown', (ev) => {
     const enCampo = /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
@@ -6466,6 +7298,11 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     if (ctrl && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
     if (ctrl && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
     if (ctrl && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
+    // Ctrl+F busca dentro del expediente: la del navegador no ve el texto de
+    // las hojas, que en pantalla son imágenes
+    if (ctrl && ev.key.toLowerCase() === 'f' && !$$('.modal:not([hidden])').length) {
+      ev.preventDefault(); abrirBuscador(); return;
+    }
     if (ctrl && ev.key.toLowerCase() === 'o') { ev.preventDefault(); $('#entradaArchivos').click(); return; }
     if (enCampo) return;
     if (ctrl && ev.key.toLowerCase() === 'a') {
@@ -6966,6 +7803,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     seguirScrollLector();
 
     ponerBotonesDePaso();
+    conectarBuscador();
 
     iniciarEditorFirma();
     G.iniciarFirmasUI();

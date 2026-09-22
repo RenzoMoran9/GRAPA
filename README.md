@@ -81,6 +81,29 @@ dividir el expediente.
 una debajo de otra, con sus firmas y folios ya puestos. Desde ahí puedes girar,
 firmar o eliminar la hoja que estás mirando.
 
+### Buscar dentro del expediente
+**Buscar** en el panel (o `Ctrl+F`) encuentra una palabra en todas las hojas:
+un RUC, el nombre de un postor, un monto, un número de expediente. Dice
+cuántas veces aparece y en qué hojas, la resalta en amarillo **encima de la
+palabra misma** —en la miniatura y en **Ver en grande**— y apaga un poco las
+hojas donde no está, para que las otras salten a la vista.
+
+- Da igual cómo se escriba: sin tildes, en minúsculas, sin los signos.
+  `razon social distribuidora` encuentra «Razón social: Distribuidora», y
+  `1250` encuentra «S/ 1,250.00».
+- `Enter` salta a la siguiente y `Shift+Enter` a la anterior; la lista del
+  panel enseña cada una con su trozo de frase, y la lupa de la fila la abre
+  en grande. En **Ver en grande** también se salta de una a otra.
+- **Marcar estas hojas** deja marcadas justo las hojas donde aparece, para
+  bajarlas, moverlas o sacarlas a un PDF aparte.
+- El texto de cada hoja se lee una sola vez, la primera vez que buscas; un
+  expediente de 90 hojas tarda menos de un segundo, y las búsquedas que
+  siguen son al instante.
+
+Solo se puede buscar en las hojas que **tienen texto**. Las escaneadas son
+una foto del papel: Grapa dice cuáles son para que sepas dónde no ha podido
+mirar.
+
 ### Bajarle el peso al PDF
 
 En **Archivo de salida · Peso del archivo**, cuatro maneras:
@@ -232,6 +255,7 @@ salga tal como se ve.
 | `P` | Plegar o desplegar el panel lateral |
 | `Ctrl+O` | Abrir archivos |
 | `Ctrl+S` | Guardar PDF |
+| `Ctrl+F` | Buscar una palabra en todas las hojas · `Enter` pasa a la siguiente |
 | `Ctrl+Z` / `Ctrl+Y` | Deshacer / Rehacer |
 | `Ctrl+A` | Seleccionar todas las páginas |
 | `Ctrl+D` | Duplicar |
@@ -263,6 +287,7 @@ index.html            estructura de la interfaz
 assets/
   styles.css          tema claro y oscuro
   core.js             estado, lectura de PDF, miniaturas, geometría y armado final
+  buscar.js           el texto de cada hoja: qué palabra está dónde
   expedientes.js      guardado del trabajo (IndexedDB) y carpeta de salida
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
@@ -289,6 +314,5 @@ worker de verdad y va más rápido con documentos largos.
 
 ## Ideas para más adelante
 
-- Reconocer texto (OCR) en escaneos para poder buscar dentro del expediente.
+- Reconocer texto (OCR) en escaneos, para poder buscar también en ellos.
 - Índice o carátula automática con la lista de documentos y sus folios.
-- Comprimir el PDF final bajando la resolución de las imágenes escaneadas.

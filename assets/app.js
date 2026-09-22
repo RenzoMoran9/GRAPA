@@ -450,6 +450,8 @@
     cuenta.className = 'paquete-cuenta';
     cuenta.textContent = paginas.length + (paginas.length === 1 ? ' hoja' : ' hojas');
     marco.appendChild(cuenta);
+    const enPaquete = nodoHallazgosPaquete(paginas);
+    if (enPaquete) { marco.appendChild(enPaquete); el.classList.add('hallada'); }
     el.appendChild(marco);
 
     const pie = document.createElement('div');
@@ -593,6 +595,8 @@
     marco.appendChild(cinta);
 
     marco.appendChild(nodoSellos(pagina, anchoPx));
+    const capaHallazgos = nodoHallazgos(pagina);
+    if (capaHallazgos) { marco.appendChild(capaHallazgos); el.classList.add('hallada'); }
 
     const num = document.createElement('span');
     num.className = 'pag-num';
@@ -703,8 +707,10 @@
     asegurarPaquetes();
     normalizarPaquetes();
     recalcularFolios();
+    recalcularBusqueda();
     const rejilla = $('#rejilla');
     rejilla.innerHTML = '';
+    rejilla.classList.toggle('con-hallazgos', hojasConHallazgos().size > 0);
     const enPaquetes = vista === 'paquetes' && !paqueteAbierto;
     rejilla.classList.toggle('rejilla-paquetes', enPaquetes);
     if (enPaquetes) {
@@ -744,6 +750,7 @@
     sincronizarNombreSalida();
     afinarVisibles();
     programarAutoguardado();
+    seguirBusquedaTrasPintar();
   }
   G.pintar = pintar;
 
@@ -2137,6 +2144,10 @@
     vista = 'hojas';
     E.ancla = null;
     G.olvidarDocs();
+    G.olvidarBusqueda();
+    $('#buscarTexto').value = '';
+    busqueda.texto = '';
+    busqueda.turno++;
     historial.atras.length = 0;
     historial.adelante.length = 0;
     expedienteAbierto = null;
@@ -2817,11 +2828,17 @@
         hoja.appendChild(org);
       }
 
+      // el resaltado va desde ya, antes de dibujar la hoja: así se puede
+      // saltar a una coincidencia de una hoja que todavía no se pintó
+      const capa = nodoHallazgos(pagina);
+      if (capa) hoja.appendChild(capa);
+
       hoja.addEventListener('click', () => marcarHoja(i));
       cont.appendChild(hoja);
       lector.obs.observe(hoja);
     });
     aplicarZoomLector();
+    pintarLectorBusqueda();
   }
 
   function aplicarZoomLector() {
@@ -2886,6 +2903,7 @@
     $('#lector').hidden = true;
     if (lector.obs) lector.obs.disconnect();
     $('#lectorHojas').innerHTML = '';
+    pintarLectorBusqueda();
   }
 
   function refrescarLector(indice) {
@@ -2944,6 +2962,425 @@
     }, { passive: true });
   }
 
+  /* ---------------- buscar en el expediente ----------------
+     En qué hojas aparece una palabra y en qué sitio de cada una, sin salir
+     del taller. El texto de cada hoja se lee una sola vez: buscar otra
+     palabra, girar o mover hojas ya no vuelve a leer nada. */
+  const busqueda = {
+    texto: '',            // lo escrito, tal cual
+    resultado: null,      // lo que devuelve G.buscarEnHojas
+    porUid: new Map(),    // uid -> [{caja, n}] para pintar el resaltado
+    actual: -1,           // la coincidencia a la que se saltó por última vez
+    leyendo: null,        // {hechas, total} mientras se lee el texto
+    turno: 0,             // para descartar una búsqueda que ya quedó vieja
+    saltarAlLeer: false,  // se pulsó Enter antes de que terminara de leer
+  };
+  const MOSTRAR_HALLAZGOS = 200;
+  const AYUDA_BUSCAR = 'Busca en el texto de todas las hojas. Da igual si escribes con tildes o mayúsculas.';
+
+  const hayBusqueda = () => !!G.normalizarParaBuscar(busqueda.texto);
+  const hallazgos = () => (busqueda.resultado ? busqueda.resultado.hallazgos : []);
+  const hojasConHallazgos = () => (busqueda.resultado ? busqueda.resultado.porHoja : new Map());
+
+  /** Recalcula con lo ya leído. Es barato: se hace en cada pintada. */
+  function recalcularBusqueda() {
+    busqueda.porUid = new Map();
+    if (!hayBusqueda()) { busqueda.resultado = null; busqueda.actual = -1; return; }
+    busqueda.resultado = G.buscarEnHojas(E.paginas, busqueda.texto);
+    hallazgos().forEach((h, n) => {
+      if (!busqueda.porUid.has(h.pagina.uid)) busqueda.porUid.set(h.pagina.uid, []);
+      const lista = busqueda.porUid.get(h.pagina.uid);
+      h.cajas.forEach((caja) => lista.push({ caja, n }));
+    });
+    if (busqueda.actual >= hallazgos().length) busqueda.actual = hallazgos().length - 1;
+  }
+
+  /** El resaltado de una hoja, girado como se ve la hoja. null si no hay nada. */
+  function nodoHallazgos(pagina) {
+    const lista = busqueda.porUid.get(pagina.uid);
+    if (!lista || !lista.length) return null;
+    const capa = document.createElement('div');
+    capa.className = 'pag-hallazgos';
+    lista.forEach(({ caja, n }) => {
+      const c = G.girarCaja(caja, pagina.giro);
+      const m = document.createElement('mark');
+      m.className = 'hallazgo' + (n === busqueda.actual ? ' actual' : '');
+      m.dataset.n = n;
+      m.style.left = c.x0 * 100 + '%';
+      m.style.top = c.y0 * 100 + '%';
+      m.style.width = (c.x1 - c.x0) * 100 + '%';
+      m.style.height = (c.y1 - c.y0) * 100 + '%';
+      capa.appendChild(m);
+    });
+    return capa;
+  }
+
+  /** Cuántas veces sale en un paquete, para enseñarlo en su tarjeta. */
+  function nodoHallazgosPaquete(paginas) {
+    const porHoja = hojasConHallazgos();
+    const veces = paginas.reduce((n, p) => n + (porHoja.get(p.uid) || 0), 0);
+    if (!veces) return null;
+    const el = document.createElement('span');
+    el.className = 'paquete-hallazgos';
+    el.innerHTML = icono('lupa');
+    el.append(' ' + veces);
+    el.title = veces === 1 ? 'Aparece 1 vez en este paquete' : `Aparece ${veces} veces en este paquete`;
+    return el;
+  }
+
+  /**
+   * Pone o quita el resaltado en lo que ya está pintado, sin rehacer la
+   * rejilla: rehacerla en cada letra que se escribe hacía parpadear todas
+   * las miniaturas.
+   */
+  function ponerCapasHallazgos() {
+    const porUid = new Map(E.paginas.map((p) => [p.uid, p]));
+    const porHoja = hojasConHallazgos();
+    const rejilla = $('#rejilla');
+    rejilla.classList.toggle('con-hallazgos', porHoja.size > 0);
+    $$('.pag', rejilla).forEach((el) => {
+      const marco = el.querySelector('.pag-marco');
+      if (!marco) return;
+      if (el.classList.contains('paquete')) {
+        const previo = marco.querySelector('.paquete-hallazgos');
+        if (previo) previo.remove();
+        const g = paquetesEnOrden().find((x) => x.paquete.id === el.dataset.paquete);
+        const nodo = g ? nodoHallazgosPaquete(g.paginas) : null;
+        if (nodo) marco.appendChild(nodo);
+        el.classList.toggle('hallada', !!nodo);
+        return;
+      }
+      const pagina = porUid.get(el.dataset.uid);
+      const previo = marco.querySelector('.pag-hallazgos');
+      if (previo) previo.remove();
+      const capa = pagina ? nodoHallazgos(pagina) : null;
+      if (capa) (marco.querySelector('.pag-sellos') || marco.querySelector('.mini')).after(capa);
+      el.classList.toggle('hallada', !!capa);
+    });
+    $$('.hoja', $('#lectorHojas')).forEach((hoja) => {
+      const previo = hoja.querySelector('.pag-hallazgos');
+      if (previo) previo.remove();
+      const pagina = porUid.get(hoja.dataset.uid);
+      const capa = pagina ? nodoHallazgos(pagina) : null;
+      if (capa) hoja.appendChild(capa);
+    });
+  }
+
+  function marcarHallazgoActual() {
+    $$('.hallazgo').forEach((m) => m.classList.toggle('actual', Number(m.dataset.n) === busqueda.actual));
+    $$('.hallazgo-fila').forEach((b) => b.classList.toggle('actual', Number(b.dataset.n) === busqueda.actual));
+  }
+
+  const listaHojas = (nums) => nums.length === 1 ? 'la ' + nums[0]
+    : 'las ' + nums.slice(0, -1).join(', ') + ' y ' + nums[nums.length - 1];
+
+  function textoEstadoBusqueda() {
+    if (busqueda.leyendo && (hayBusqueda() || document.activeElement === $('#buscarTexto'))) {
+      const { hechas, total } = busqueda.leyendo;
+      return `Leyendo el texto de las hojas… ${hechas} de ${total}`;
+    }
+    if (!hayBusqueda()) return AYUDA_BUSCAR;
+    if (!E.paginas.length) return 'Primero abre un PDF.';
+    const r = busqueda.resultado;
+    if (!r) return 'Buscando…';
+    const buscado = busqueda.texto.trim();
+    let t;
+    if (!r.total) {
+      t = `«${buscado}» no aparece en ninguna hoja.`;
+    } else {
+      const hojas = r.porHoja.size;
+      t = (r.total === 1 ? 'Aparece 1 vez' : `Aparece ${r.total} veces`)
+        + (hojas === 1 ? ' en 1 hoja.' : ` en ${hojas} hojas.`);
+      if (busqueda.actual >= 0) t = `${busqueda.actual + 1} de ${r.hallazgos.length} · ` + t;
+    }
+    const escaneadas = r.sinTexto.length;
+    if (escaneadas) {
+      if (escaneadas === E.paginas.length) {
+        t += ' Todas las hojas son escaneadas: son fotos del papel y no llevan texto en el que buscar.';
+      } else {
+        const pos = new Map(E.paginas.map((p, i) => [p.uid, i + 1]));
+        const nums = r.sinTexto.map((p) => pos.get(p.uid)).sort((a, b) => a - b);
+        t += escaneadas <= 6
+          ? ` ${escaneadas === 1 ? 'La hoja' : 'Las hojas'} ${listaHojas(nums).replace(/^la |^las /, '')} ${escaneadas === 1 ? 'es escaneada' : 'son escaneadas'}: ahí no se puede buscar todavía.`
+          : ` ${escaneadas} hojas son escaneadas: ahí no se puede buscar todavía.`;
+      }
+    }
+    return t;
+  }
+
+  function pintarListaHallazgos() {
+    const ol = $('#listaHallazgos');
+    ol.innerHTML = '';
+    const hs = hallazgos();
+    if (!hs.length) return;
+    const pos = new Map(E.paginas.map((p, i) => [p.uid, i + 1]));
+    hs.slice(0, MOSTRAR_HALLAZGOS).forEach((h, n) => {
+      const li = document.createElement('li');
+      li.className = 'hallazgo-li';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hallazgo-fila' + (n === busqueda.actual ? ' actual' : '');
+      b.dataset.n = n;
+      const cab = document.createElement('span');
+      cab.className = 'hallazgo-hoja';
+      const f = E.fuentes.get(h.pagina.fuenteId);
+      const num = document.createElement('strong');
+      num.textContent = 'Hoja ' + pos.get(h.pagina.uid);
+      cab.appendChild(num);
+      if (f) cab.append(' · ' + f.nombre);
+      const txt = document.createElement('span');
+      txt.className = 'hallazgo-texto';
+      const m = document.createElement('mark');
+      m.textContent = h.dentro;
+      txt.append(h.antes, m, h.despues);
+      b.append(cab, txt);
+      b.addEventListener('click', () => irAHallazgo(n));
+      const ver = document.createElement('button');
+      ver.type = 'button';
+      ver.className = 'btn btn-mini hallazgo-ver';
+      ver.innerHTML = icono('lupa');
+      ver.title = 'Ver esta hoja en grande';
+      ver.setAttribute('aria-label', 'Ver la hoja ' + pos.get(h.pagina.uid) + ' en grande');
+      ver.addEventListener('click', () => {
+        busqueda.actual = n;
+        abrirLector(h.pagina);
+        centrarHallazgoEnLector();
+      });
+      li.append(b, ver);
+      ol.appendChild(li);
+    });
+    if (hs.length > MOSTRAR_HALLAZGOS) {
+      const li = document.createElement('li');
+      li.className = 'nota hallazgos-mas';
+      li.textContent = `Y ${hs.length - MOSTRAR_HALLAZGOS} más: sigue con ↓, o escribe algo más preciso.`;
+      ol.appendChild(li);
+    }
+  }
+
+  function pintarLectorBusqueda() {
+    const caja = $('#lectorBusqueda');
+    const hs = hallazgos();
+    caja.hidden = !(lector.abierto && hs.length);
+    if (caja.hidden) return;
+    $('#lectorBuscarCuenta').textContent = `«${busqueda.texto.trim()}» · `
+      + (busqueda.actual >= 0 ? `${busqueda.actual + 1} de ${hs.length}` : `${hs.length}`);
+  }
+
+  function pintarPanelBusqueda() {
+    $('#buscarEstado').textContent = textoEstadoBusqueda();
+    const hs = hallazgos();
+    const porHoja = hojasConHallazgos();
+    $('#buscarAnterior').disabled = !hs.length;
+    $('#buscarSiguiente').disabled = !hs.length;
+    const marcarBtn = $('#buscarMarcar');
+    marcarBtn.hidden = !porHoja.size;
+    marcarBtn.textContent = porHoja.size === 1 ? 'Marcar esta hoja' : `Marcar estas ${porHoja.size} hojas`;
+    pintarListaHallazgos();
+    pintarMarcaRiel('#marcaBuscar', porHoja.size);
+    const chip = $('#chipBusqueda');
+    chip.hidden = !hayBusqueda();
+    if (!chip.hidden) {
+      $('#chipBusquedaTexto').textContent = `«${busqueda.texto.trim()}» · `
+        + (busqueda.leyendo || !busqueda.resultado ? 'buscando…'
+          : porHoja.size === 1 ? 'en 1 hoja' : porHoja.size ? `en ${porHoja.size} hojas` : 'en ninguna');
+    }
+    pintarLectorBusqueda();
+  }
+
+  /** Lee el texto de las hojas que falten, una sola lectura a la vez. */
+  let lecturaBusqueda = null;
+  function leerTextoQueFalta() {
+    if (lecturaBusqueda) return lecturaBusqueda;
+    if (G.buscadorListo(E.paginas)) return Promise.resolve();
+    lecturaBusqueda = (async () => {
+      try {
+        // mientras se lee pueden entrar hojas nuevas: se sigue hasta tenerlas todas
+        while (!G.buscadorListo(E.paginas)) {
+          await G.prepararBusqueda(E.paginas, (hechas, total) => {
+            busqueda.leyendo = { hechas, total };
+            $('#buscarEstado').textContent = textoEstadoBusqueda();
+          });
+        }
+      } finally {
+        busqueda.leyendo = null;
+        lecturaBusqueda = null;
+      }
+    })();
+    return lecturaBusqueda;
+  }
+
+  async function lanzarBusqueda() {
+    busqueda.texto = $('#buscarTexto').value;
+    busqueda.actual = -1;
+    const turno = ++busqueda.turno;
+    if (hayBusqueda() && !G.buscadorListo(E.paginas)) {
+      // lo que ya está leído se enseña ya; el resto llega al terminar
+      recalcularBusqueda();
+      ponerCapasHallazgos();
+      pintarPanelBusqueda();
+      await leerTextoQueFalta();
+      if (turno !== busqueda.turno) return;
+    }
+    recalcularBusqueda();
+    ponerCapasHallazgos();
+    pintarPanelBusqueda();
+    if (busqueda.saltarAlLeer) { busqueda.saltarAlLeer = false; irAHallazgo(0); }
+  }
+
+  /** Después de pintar(): si entraron hojas nuevas, leerlas y volver a buscar. */
+  function seguirBusquedaTrasPintar() {
+    pintarPanelBusqueda();
+    if (!hayBusqueda() || G.buscadorListo(E.paginas)) return;
+    const turno = busqueda.turno;
+    leerTextoQueFalta().then(() => {
+      if (turno !== busqueda.turno) return;
+      recalcularBusqueda();
+      ponerCapasHallazgos();
+      pintarPanelBusqueda();
+    });
+  }
+
+  function limpiarBusqueda() {
+    $('#buscarTexto').value = '';
+    busqueda.texto = '';
+    busqueda.turno++;
+    busqueda.saltarAlLeer = false;
+    recalcularBusqueda();
+    ponerCapasHallazgos();
+    pintarPanelBusqueda();
+  }
+
+  /**
+   * En el lector, con la hoja ya arriba (irAHoja), trae la coincidencia a la
+   * vista si quedó fuera. Solo se baja, nunca se sube: centrarla subiendo
+   * dejaba a la vista el final de la hoja anterior, el lector la tomaba por
+   * la actual, y «Texto» o «Girar» habrían caído en la hoja equivocada.
+   */
+  function centrarHallazgoEnLector() {
+    const cont = $('#lectorHojas');
+    const m = $(`#lectorHojas .hallazgo[data-n="${busqueda.actual}"]`);
+    if (m) {
+      const c = cont.getBoundingClientRect();
+      const r = m.getBoundingClientRect();
+      const abajo = r.bottom > c.bottom - 40;
+      const deLado = r.left < c.left || r.right > c.right;
+      if (abajo || deLado) {
+        cont.scrollBy({
+          top: abajo ? Math.max(0, r.top + r.height / 2 - (c.top + c.height / 2)) : 0,
+          left: deLado ? r.left + r.width / 2 - (c.left + c.width / 2) : 0,
+          behavior: 'instant',
+        });
+      }
+    }
+    marcarHallazgoActual();
+    pintarLectorBusqueda();
+  }
+
+  /**
+   * Salta a una coincidencia. Si la hoja no está a la vista —porque se ven
+   * los paquetes cerrados, o otro paquete— se pasa a ver todas las hojas:
+   * abrir el paquete obligaría a soltar lo que esté marcado.
+   */
+  function irAHallazgo(n) {
+    const hs = hallazgos();
+    if (!hs.length) return;
+    busqueda.actual = ((n % hs.length) + hs.length) % hs.length;   // da la vuelta
+    const h = hs[busqueda.actual];
+
+    if (lector.abierto) {
+      const i = hojasLector().indexOf(h.pagina);
+      if (i >= 0) { irAHoja(i, true); centrarHallazgoEnLector(); }
+      return;
+    }
+
+    const aLaVista = !(vista === 'paquetes' && !paqueteAbierto) && hojasVisibles().includes(h.pagina);
+    if (!aLaVista) { vista = 'hojas'; paqueteAbierto = null; pintar(); }
+    marcarHallazgoActual();
+    $('#buscarEstado').textContent = textoEstadoBusqueda();
+    const el = $(`#rejilla .pag[data-uid="${h.pagina.uid}"]`);
+    if (el) {
+      const marca = el.querySelector(`.hallazgo[data-n="${busqueda.actual}"]`);
+      (marca || el).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      el.classList.remove('destello');
+      void el.offsetWidth;
+      el.classList.add('destello');
+    }
+    const fila = $(`#listaHallazgos .hallazgo-fila[data-n="${busqueda.actual}"]`);
+    if (fila) fila.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** En el lector con «solo marcadas», salta solo entre las que se ven. */
+  function saltarHallazgoLector(delta) {
+    const hs = hallazgos();
+    if (!hs.length) return;
+    const enLector = new Set(hojasLector().map((p) => p.uid));
+    // sin ninguna elegida, «siguiente» es la primera y «anterior» la última
+    const base = busqueda.actual >= 0 ? busqueda.actual : (delta > 0 ? -1 : 0);
+    for (let k = 1; k <= hs.length; k++) {
+      const n = ((base + delta * k) % hs.length + hs.length) % hs.length;
+      if (enLector.has(hs[n].pagina.uid)) { irAHallazgo(n); return; }
+    }
+  }
+
+  function abrirBuscador() {
+    if (lector.abierto) cerrarLector();
+    irASeccion('buscar');
+    const campo = $('#buscarTexto');
+    campo.focus();
+    campo.select();
+    leerTextoQueFalta();
+  }
+
+  function conectarBuscador() {
+    const campo = $('#buscarTexto');
+    let reloj = null;
+    campo.addEventListener('input', () => {
+      clearTimeout(reloj);
+      reloj = setTimeout(lanzarBusqueda, 220);
+    });
+    // se empieza a leer en cuanto se va a buscar, no al escribir la primera letra
+    campo.addEventListener('focus', () => {
+      if (!E.paginas.length || G.buscadorListo(E.paginas)) return;
+      leerTextoQueFalta().then(() => { $('#buscarEstado').textContent = textoEstadoBusqueda(); });
+      $('#buscarEstado').textContent = textoEstadoBusqueda();
+    });
+    campo.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        if (campo.value) { ev.preventDefault(); ev.stopPropagation(); limpiarBusqueda(); }
+        return;
+      }
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      // lo último escrito puede no haberse buscado aún
+      if (campo.value !== busqueda.texto || busqueda.leyendo) {
+        clearTimeout(reloj);
+        busqueda.saltarAlLeer = true;
+        if (campo.value !== busqueda.texto) lanzarBusqueda();
+        return;
+      }
+      if (ev.shiftKey) irAHallazgo(busqueda.actual < 0 ? -1 : busqueda.actual - 1);
+      else irAHallazgo(busqueda.actual + 1);
+    });
+    $('#buscarSiguiente').addEventListener('click', () => irAHallazgo(busqueda.actual + 1));
+    $('#buscarAnterior').addEventListener('click', () => irAHallazgo(busqueda.actual < 0 ? -1 : busqueda.actual - 1));
+    $('#chipBusqueda').addEventListener('click', limpiarBusqueda);
+    $('#lectorBuscarSiguiente').addEventListener('click', () => saltarHallazgoLector(1));
+    $('#lectorBuscarAnterior').addEventListener('click', () => saltarHallazgoLector(-1));
+    $('#buscarMarcar').addEventListener('click', () => {
+      const uids = new Set(hojasConHallazgos().keys());
+      if (!uids.size) return;
+      // marcadas se tienen que ver: lo que se haga con ellas no puede caer
+      // sobre hojas escondidas en un paquete cerrado
+      vista = 'hojas';
+      paqueteAbierto = null;
+      E.seleccion = uids;
+      pintar();
+      G.aviso(uids.size === 1
+        ? 'Hoja marcada. Ahora puedes bajarla, moverla o sacarla a un PDF aparte.'
+        : `${uids.size} hojas marcadas. Ahora puedes bajarlas, moverlas o sacarlas a un PDF aparte.`);
+    });
+  }
+
   /* ---------------- atajos de teclado ---------------- */
   document.addEventListener('keydown', (ev) => {
     const enCampo = /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
@@ -2974,6 +3411,11 @@
     if (ctrl && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
     if (ctrl && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
     if (ctrl && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
+    // Ctrl+F busca dentro del expediente: la del navegador no ve el texto de
+    // las hojas, que en pantalla son imágenes
+    if (ctrl && ev.key.toLowerCase() === 'f' && !$$('.modal:not([hidden])').length) {
+      ev.preventDefault(); abrirBuscador(); return;
+    }
     if (ctrl && ev.key.toLowerCase() === 'o') { ev.preventDefault(); $('#entradaArchivos').click(); return; }
     if (enCampo) return;
     if (ctrl && ev.key.toLowerCase() === 'a') {
@@ -3474,6 +3916,7 @@
     seguirScrollLector();
 
     ponerBotonesDePaso();
+    conectarBuscador();
 
     iniciarEditorFirma();
     G.iniciarFirmasUI();

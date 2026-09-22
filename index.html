@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260922a">
+<link rel="stylesheet" href="assets/styles.css?v=20260922b">
 </head>
 <body>
 
@@ -100,6 +100,9 @@
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg></span><span class="riel-txt">Exped.</span><em class="riel-marca" id="marcaGuardados" hidden>0</em>
       </button>
       <span class="riel-etapa">Trabajo</span>
+      <button class="riel-btn" data-va="buscar" type="button" title="Buscar una palabra en todas las hojas (Ctrl+F)">
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg></span><span class="riel-txt">Buscar</span><em class="riel-marca" id="marcaBuscar" hidden>0</em>
+      </button>
       <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
       </button>
@@ -147,6 +150,21 @@
                placeholder="Buscar por nombre…" autocomplete="off" hidden>
         <ul class="lista-guardados" id="listaGuardados"></ul>
         <p class="nota" id="espacioUsado"></p>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="buscar">
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Buscar en el expediente</button>
+      <div class="bloque-cuerpo">
+        <div class="buscar-fila">
+          <input type="search" class="buscar-texto" id="buscarTexto" placeholder="Palabra, RUC, nombre, monto…"
+                 autocomplete="off" spellcheck="false" aria-label="Buscar en el texto de las hojas">
+          <button class="btn btn-mini" id="buscarAnterior" type="button" title="Anterior (Shift+Enter)" aria-label="Coincidencia anterior" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+          <button class="btn btn-mini" id="buscarSiguiente" type="button" title="Siguiente (Enter)" aria-label="Coincidencia siguiente" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+        </div>
+        <p class="nota buscar-estado" id="buscarEstado" aria-live="polite">Busca en el texto de todas las hojas. Da igual si escribes con tildes o mayúsculas.</p>
+        <button class="btn btn-suave ancho" id="buscarMarcar" type="button" hidden>Marcar estas hojas</button>
+        <ol class="lista-hallazgos" id="listaHallazgos"></ol>
       </div>
     </section>
 
@@ -289,6 +307,11 @@
         <strong id="infoPaginas">0 páginas</strong>
         <span id="infoSeleccion">nada seleccionado</span>
       </div>
+      <button class="chip-busqueda" id="chipBusqueda" type="button" hidden title="Quitar la búsqueda (Esc en el buscador)">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg>
+        <span id="chipBusquedaTexto"></span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg>
+      </button>
       <div class="taller-herramientas">
         <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paquete"/></svg> Ver por paquetes</button>
         <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-volver"/></svg> Paquetes</button>
@@ -348,6 +371,12 @@
     <div class="lector-acciones">
       <button class="btn btn-mini" id="lectorAnterior" title="Hoja anterior (↑ o AvPág)" aria-label="Hoja anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
       <button class="btn btn-mini" id="lectorSiguiente" title="Hoja siguiente (↓ o RePág)" aria-label="Hoja siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+      <span class="lector-busqueda" id="lectorBusqueda" hidden>
+        <span class="separador-vertical"></span>
+        <button class="btn btn-mini" id="lectorBuscarAnterior" title="Coincidencia anterior" aria-label="Coincidencia anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+        <span class="lector-busqueda-cuenta" id="lectorBuscarCuenta"></span>
+        <button class="btn btn-mini" id="lectorBuscarSiguiente" title="Coincidencia siguiente" aria-label="Coincidencia siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+      </span>
       <span class="separador-vertical"></span>
       <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
       <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
@@ -575,6 +604,7 @@
       <table class="tabla-atajos">
         <tr><td>Ctrl+O</td><td>Abrir archivos</td></tr>
         <tr><td>Ctrl+S</td><td>Guardar PDF</td></tr>
+        <tr><td>Ctrl+F</td><td>Buscar una palabra en todas las hojas · Enter pasa a la siguiente</td></tr>
         <tr><td>Ctrl+Z / Ctrl+Y</td><td>Deshacer / Rehacer</td></tr>
         <tr><td>Ctrl+A</td><td>Seleccionar todas las páginas</td></tr>
         <tr><td>Ctrl+D</td><td>Duplicar páginas</td></tr>
@@ -599,10 +629,11 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260922a"></script>
-<script src="assets/office.js?v=20260922a"></script>
-<script src="assets/expedientes.js?v=20260922a"></script>
-<script src="assets/firmas.js?v=20260922a"></script>
-<script src="assets/app.js?v=20260922a"></script>
+<script src="assets/core.js?v=20260922b"></script>
+<script src="assets/buscar.js?v=20260922b"></script>
+<script src="assets/office.js?v=20260922b"></script>
+<script src="assets/expedientes.js?v=20260922b"></script>
+<script src="assets/firmas.js?v=20260922b"></script>
+<script src="assets/app.js?v=20260922b"></script>
 </body>
 </html>
