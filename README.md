@@ -77,9 +77,14 @@ libre con `{n}` y `{t}`. Los folios se recalculan al reordenar y se mantienen al
 dividir el expediente.
 
 ### Revisar hoja por hoja
-**Ver en grande** (tecla `V`) abre el expediente a pantalla completa: las hojas
-una debajo de otra, con sus firmas y folios ya puestos. Desde ahí puedes girar,
-firmar o eliminar la hoja que estás mirando.
+**Ver en grande** (tecla `V`) abre el expediente en grande en el sitio de las
+hojas: una debajo de otra, con sus firmas y folios ya puestos. Desde ahí puedes
+girar, firmar o eliminar la hoja que estás mirando.
+
+El panel, el riel y los botones de arriba siguen a mano: puedes foliar,
+sellar, buscar o guardar sin cerrar las hojas en grande, y lo que hagas se ve
+en ellas al momento. La hoja que pulsas queda seleccionada, así que lo que
+hagas desde el panel va a esa hoja.
 
 ### Buscar dentro del expediente
 **Buscar** en el panel (o `Ctrl+F`) encuentra una palabra en todas las hojas:
