@@ -831,3 +831,31 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
   font-size:12px;color:var(--texto-2);max-width:200px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;font-variant-numeric:tabular-nums;
 }
+
+/* ---------- revisar: hojas en blanco, de lado o torcidas ---------- */
+.revisar-estado{font-variant-numeric:tabular-nums}
+.revisar-grupo{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.revisar-titulo{margin:0;font-size:12.5px;font-weight:700;color:var(--texto)}
+.revisar-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.revisar-li{display:flex;align-items:center;gap:4px}
+.revisar-fila{
+  flex:1;min-width:0;display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;
+  padding:6px 8px;border-radius:var(--radio-s);background:var(--fondo);border:1px solid var(--borde-suave);
+}
+.revisar-fila:hover{border-color:var(--texto-3)}
+.revisar-fila input{margin:0;flex:none;accent-color:var(--acento)}
+.revisar-fila span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.revisar-fila strong{font-variant-numeric:tabular-nums}
+.revisar-fila.fuera{opacity:.55}
+.revisar-fila.fuera span{text-decoration:line-through}
+.revisar-fila.solo-aviso{cursor:default}
+.revisar-li .btn-mini{flex:none}
+.revisar-botones{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+/* en la miniatura: qué le pasa a la hoja */
+.pag-revision{
+  position:absolute;left:6px;bottom:32px;z-index:2;pointer-events:none;max-width:calc(100% - 12px);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;
+  background:#2f6fed;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);
+}
+.pag-revision.blanca{background:#5c6472}

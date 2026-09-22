@@ -6,7 +6,7 @@
 <title>Grapa · Taller de PDF</title>
 <meta name="description" content="Grapa: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260922b">
+<link rel="stylesheet" href="assets/styles.css?v=20260922c">
 </head>
 <body>
 
@@ -35,6 +35,7 @@
   <g id="i-externo"><path d="M15 3h6v6"/><path d="M10.5 13.5 21 3"/><path d="M18 13.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5.5"/></g>
   <g id="i-guardar"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M3.5 17v2a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2"/></g>
   <g id="i-comparar"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></g>
+  <g id="i-revisar"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="m9 12.5 2 2 4-4.5"/></g>
   <g id="i-lupa"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></g>
   <g id="i-girar-izq"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3.5v5h5"/></g>
   <g id="i-girar-der"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3.5v5h-5"/></g>
@@ -103,6 +104,9 @@
       <button class="riel-btn" data-va="buscar" type="button" title="Buscar una palabra en todas las hojas (Ctrl+F)">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg></span><span class="riel-txt">Buscar</span><em class="riel-marca" id="marcaBuscar" hidden>0</em>
       </button>
+      <button class="riel-btn" data-va="revisar" type="button" title="Hojas en blanco, de lado, de cabeza o torcidas">
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg></span><span class="riel-txt">Revisar</span><em class="riel-marca" id="marcaRevisar" hidden>0</em>
+      </button>
       <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
       </button>
@@ -165,6 +169,31 @@
         <p class="nota buscar-estado" id="buscarEstado" aria-live="polite">Busca en el texto de todas las hojas. Da igual si escribes con tildes o mayúsculas.</p>
         <button class="btn btn-suave ancho" id="buscarMarcar" type="button" hidden>Marcar estas hojas</button>
         <ol class="lista-hallazgos" id="listaHallazgos"></ol>
+      </div>
+    </section>
+
+    <section class="bloque" data-bloque="revisar">
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg> Hojas en blanco y de lado</button>
+      <div class="bloque-cuerpo">
+        <p class="nota">Encuentra los reversos en blanco que deja el escáner a doble cara y las hojas que entraron de lado, de cabeza o torcidas. No cambia nada hasta que lo pidas.</p>
+        <button class="btn btn-primario ancho" id="btnRevisar" type="button">Revisar las hojas</button>
+        <p class="nota revisar-estado" id="revisarEstado" aria-live="polite"></p>
+        <div class="revisar-grupo" id="revisarBlancas" hidden>
+          <p class="revisar-titulo" id="revisarBlancasTitulo"></p>
+          <ul class="revisar-lista" id="revisarBlancasLista"></ul>
+          <div class="revisar-botones">
+            <button class="btn btn-suave" id="revisarBlancasMarcar" type="button">Marcarlas</button>
+            <button class="btn btn-suave btn-peligro-suave" id="revisarBlancasBorrar" type="button">Borrarlas</button>
+          </div>
+        </div>
+        <div class="revisar-grupo" id="revisarGiradas" hidden>
+          <p class="revisar-titulo" id="revisarGiradasTitulo"></p>
+          <ul class="revisar-lista" id="revisarGiradasLista"></ul>
+          <div class="revisar-botones">
+            <button class="btn btn-suave" id="revisarGiradasMarcar" type="button">Marcarlas</button>
+            <button class="btn btn-primario" id="revisarGiradasEnderezar" type="button">Enderezarlas</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -595,6 +624,7 @@
       <ol>
         <li><strong>Abre</strong> el PDF que escaneaste y, encima, los anexos (indagación de mercado, cotizaciones, etc.).</li>
         <li><strong>Ordena</strong> arrastrando las miniaturas. El color del borde te dice de qué archivo viene cada página.</li>
+        <li><strong>Revisa</strong>: en «Hojas en blanco y de lado», Grapa encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
         <li><strong>Guarda</strong> el PDF final, o divídelo si necesitas archivos separados.</li>
@@ -629,11 +659,12 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260922b"></script>
-<script src="assets/buscar.js?v=20260922b"></script>
-<script src="assets/office.js?v=20260922b"></script>
-<script src="assets/expedientes.js?v=20260922b"></script>
-<script src="assets/firmas.js?v=20260922b"></script>
-<script src="assets/app.js?v=20260922b"></script>
+<script src="assets/core.js?v=20260922c"></script>
+<script src="assets/buscar.js?v=20260922c"></script>
+<script src="assets/revisar.js?v=20260922c"></script>
+<script src="assets/office.js?v=20260922c"></script>
+<script src="assets/expedientes.js?v=20260922c"></script>
+<script src="assets/firmas.js?v=20260922c"></script>
+<script src="assets/app.js?v=20260922c"></script>
 </body>
 </html>

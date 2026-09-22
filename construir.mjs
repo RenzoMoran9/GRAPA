@@ -2,7 +2,8 @@
  * Arma Grapa.html: un solo archivo con todo dentro (interfaz, programa y
  * librerías) para repartir por correo, USB o carpeta compartida.
  *
- *   node construir.mjs
+ *   node construir.mjs                 → Grapa.html, al lado de index.html
+ *   node construir.mjs /otra/Grapa.html
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +29,7 @@ const CREDITOS = `<!--
 const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
-  'assets/core.js', 'assets/buscar.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
+  'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
   'assets/app.js',
 ];
 
@@ -53,5 +54,7 @@ for (const ruta of GUIONES) {
 
 const doc = partes.join('\n\n') + '\n';
 if (doc.includes('�')) throw new Error('quedaron caracteres de reemplazo sin escapar');
-writeFileSync(RAIZ + 'Grapa.html', doc);
+// sin argumento queda al lado de index.html; las pruebas lo piden en otra carpeta
+const destino = process.argv[2] || RAIZ + 'Grapa.html';
+writeFileSync(destino, doc);
 console.log('Grapa.html listo ·', Math.round(doc.length / 1024), 'KB');

@@ -598,6 +598,9 @@
     const capaHallazgos = nodoHallazgos(pagina);
     if (capaHallazgos) { marco.appendChild(capaHallazgos); el.classList.add('hallada'); }
 
+    const avisoRevision = nodoRevision(pagina);
+    if (avisoRevision) marco.appendChild(avisoRevision);
+
     const num = document.createElement('span');
     num.className = 'pag-num';
     num.textContent = indice + 1;
@@ -751,6 +754,7 @@
     afinarVisibles();
     programarAutoguardado();
     seguirBusquedaTrasPintar();
+    pintarRevision();
   }
   G.pintar = pintar;
 
@@ -3001,6 +3005,8 @@
     if (!lista || !lista.length) return null;
     const capa = document.createElement('div');
     capa.className = 'pag-hallazgos';
+    // la hoja enderezada se dibuja girada esos grados: la palabra también
+    if (pagina.enderezo) capa.style.transform = `rotate(${pagina.enderezo}deg)`;
     lista.forEach(({ caja, n }) => {
       const c = G.girarCaja(caja, pagina.giro);
       const m = document.createElement('mark');
@@ -3379,6 +3385,217 @@
         ? 'Hoja marcada. Ahora puedes bajarla, moverla o sacarla a un PDF aparte.'
         : `${uids.size} hojas marcadas. Ahora puedes bajarlas, moverlas o sacarlas a un PDF aparte.`);
     });
+  }
+
+  /* ---------------- revisar: hojas en blanco, de lado o torcidas ----------------
+     «Revisar» mira cada hoja (revisar.js) y deja apuntado qué le pasa. Lo
+     que se enseña se calcula siempre sobre cómo están ahora las hojas: si
+     una se endereza, se gira a mano o se borra, su aviso desaparece solo, y
+     con Ctrl+Z vuelve. Nada se toca hasta pulsar «Borrarlas» o
+     «Enderezarlas», y solo lo que siga con la casilla puesta. */
+  const revision = {
+    hechas: new Map(),   // uid -> { r, giro, enderezo } · la hoja tal como se miró
+    fuera: new Set(),    // 'b:uid' o 'g:uid' · lo que se quitó de la lista a mano
+    corriendo: null,     // { cancelada } mientras revisa
+    revisadas: 0,        // cuántas se miraron la última vez
+  };
+
+  /** Lo que queda por hacer, con las hojas como están ahora. */
+  function avisosRevision() {
+    const blancas = [], giradas = [];
+    E.paginas.forEach((p, i) => {
+      const h = revision.hechas.get(p.uid);
+      if (!h) return;
+      if (h.r.blanca) { blancas.push({ p, num: i + 1 }); return; }
+      // si la hoja se giró o se enderezó después de mirarla, ya no vale
+      if (G.norm(p.giro) !== h.giro || (p.enderezo || 0) !== h.enderezo) return;
+      if (h.r.giro || h.r.torcida || h.r.deLadoSinSentido) giradas.push({ p, num: i + 1, r: h.r });
+    });
+    return { blancas, giradas };
+  }
+
+  function textoGirada(r) {
+    const partes = [];
+    if (r.deLadoSinSentido) partes.push('de lado: gírala a mano');
+    else if (r.giro === 180) partes.push('de cabeza');
+    else if (r.giro) partes.push('de lado');
+    if (r.torcida) partes.push(`torcida ${String(Math.abs(r.torcida)).replace('.', ',')}°`);
+    return partes.join(' y ');
+  }
+
+  /** La etiqueta de la miniatura. */
+  function nodoRevision(pagina) {
+    const h = revision.hechas.get(pagina.uid);
+    if (!h) return null;
+    let texto = '', clase = '';
+    if (h.r.blanca) { texto = 'En blanco'; clase = ' blanca'; }
+    else if (G.norm(pagina.giro) === h.giro && (pagina.enderezo || 0) === h.enderezo
+             && (h.r.giro || h.r.torcida || h.r.deLadoSinSentido)) {
+      texto = textoGirada(h.r);
+      texto = texto.charAt(0).toUpperCase() + texto.slice(1);
+    }
+    if (!texto) return null;
+    const el = document.createElement('span');
+    el.className = 'pag-revision' + clase;
+    el.textContent = texto;
+    return el;
+  }
+
+  const activosEn = (lista, letra) => lista.filter((x) => !revision.fuera.has(letra + ':' + x.p.uid));
+
+  function filaRevision(item, letra, texto, conCasilla) {
+    const li = document.createElement('li');
+    li.className = 'revisar-li';
+    const fila = document.createElement('label');
+    const clave = letra + ':' + item.p.uid;
+    fila.className = 'revisar-fila' + (revision.fuera.has(clave) ? ' fuera' : '') + (conCasilla ? '' : ' solo-aviso');
+    if (conCasilla) {
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      c.checked = !revision.fuera.has(clave);
+      c.title = 'Quítale la marca si esta hoja está bien';
+      c.addEventListener('change', () => {
+        if (c.checked) revision.fuera.delete(clave); else revision.fuera.add(clave);
+        pintarRevision();
+      });
+      fila.appendChild(c);
+    }
+    const sp = document.createElement('span');
+    const num = document.createElement('strong');
+    num.textContent = 'Hoja ' + item.num;
+    sp.append(num, ' · ' + texto);
+    fila.appendChild(sp);
+    const ver = document.createElement('button');
+    ver.type = 'button';
+    ver.className = 'btn btn-mini';
+    ver.innerHTML = icono('lupa');
+    ver.title = 'Ver esta hoja en grande';
+    ver.setAttribute('aria-label', 'Ver la hoja ' + item.num + ' en grande');
+    ver.addEventListener('click', () => abrirLector(item.p));
+    li.append(fila, ver);
+    return li;
+  }
+
+  function pintarRevision() {
+    const { blancas, giradas } = avisosRevision();
+    const boton = $('#btnRevisar');
+    const estado = $('#revisarEstado');
+    if (revision.corriendo) {
+      boton.textContent = 'Detener';
+    } else {
+      const faltan = E.paginas.filter((p) => !revision.hechas.has(p.uid)).length;
+      boton.textContent = !revision.hechas.size || faltan === E.paginas.length
+        ? 'Revisar las hojas'
+        : faltan ? `Revisar también las ${faltan} nuevas` : 'Volver a revisar';
+      boton.disabled = !E.paginas.length;
+      if (!revision.hechas.size) estado.textContent = '';
+      else if (!blancas.length && !giradas.length) {
+        estado.textContent = 'Todo en orden: ninguna hoja en blanco, de lado ni torcida.';
+      } else estado.textContent = '';
+    }
+
+    const grupo = (id, lista, letra, titulo, texto, botones) => {
+      $(id).hidden = !lista.length;
+      $(id + 'Titulo').textContent = titulo;
+      const ul = $(id + 'Lista');
+      ul.innerHTML = '';
+      lista.forEach((x) => ul.appendChild(filaRevision(x, letra, texto(x), !x.r || !x.r.deLadoSinSentido)));
+      const n = activosEn(lista, letra).filter((x) => !x.r || !x.r.deLadoSinSentido).length;
+      botones(n);
+    };
+    grupo('#revisarBlancas', blancas, 'b',
+      blancas.length === 1 ? '1 hoja en blanco' : `${blancas.length} hojas en blanco`,
+      () => 'en blanco', (n) => {
+        $('#revisarBlancasBorrar').disabled = $('#revisarBlancasMarcar').disabled = !n;
+        $('#revisarBlancasBorrar').textContent = n === 1 ? 'Borrar 1 hoja' : `Borrar ${n} hojas`;
+      });
+    grupo('#revisarGiradas', giradas, 'g',
+      giradas.length === 1 ? '1 hoja por enderezar' : `${giradas.length} hojas por enderezar`,
+      (x) => textoGirada(x.r), (n) => {
+        $('#revisarGiradasEnderezar').disabled = $('#revisarGiradasMarcar').disabled = !n;
+        $('#revisarGiradasEnderezar').textContent = n === 1 ? 'Enderezar 1 hoja' : `Enderezar ${n} hojas`;
+      });
+    pintarMarcaRiel('#marcaRevisar', blancas.length + giradas.length);
+  }
+
+  async function revisarHojas() {
+    if (revision.corriendo) { revision.corriendo.cancelada = true; return; }
+    if (!E.paginas.length) return;
+    const tarea = (revision.corriendo = { cancelada: false });
+    const estado = $('#revisarEstado');
+    pintarRevision();
+    const lista = E.paginas.slice();
+    const t0 = performance.now();
+    try {
+      for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
+        const p = lista[i];
+        if (!E.paginas.includes(p)) continue;
+        estado.textContent = `Revisando hoja ${i + 1} de ${lista.length}…`;
+        const foto = { giro: G.norm(p.giro), enderezo: p.enderezo || 0 };
+        let r;
+        try { r = await G.revisarHoja(p); } catch (e) { console.error(e); continue; }
+        revision.hechas.set(p.uid, Object.assign({ r }, foto));
+        // una hoja revisada otra vez vuelve a salir aunque antes se quitara a mano
+        revision.fuera.delete('b:' + p.uid);
+        revision.fuera.delete('g:' + p.uid);
+      }
+    } finally {
+      revision.corriendo = null;
+    }
+    pintar();
+    if (tarea.cancelada) {
+      estado.textContent = 'Revisión detenida. Lo que se alcanzó a revisar está abajo.';
+      return;
+    }
+    const { blancas, giradas } = avisosRevision();
+    if (blancas.length || giradas.length) {
+      const partes = [];
+      if (blancas.length) partes.push(blancas.length === 1 ? '1 en blanco' : `${blancas.length} en blanco`);
+      if (giradas.length) partes.push(giradas.length === 1 ? '1 por enderezar' : `${giradas.length} por enderezar`);
+      estado.textContent = `Revisadas ${lista.length} hojas en ${Math.max(1, Math.round((performance.now() - t0) / 1000))} s: `
+        + partes.join(' y ') + '. Quita la marca a las que estén bien.';
+    }
+  }
+
+  function marcarLasDeRevision(lista) {
+    if (!lista.length) return;
+    vista = 'hojas';
+    paqueteAbierto = null;
+    E.seleccion = new Set(lista.map((x) => x.p.uid));
+    pintar();
+    G.aviso(lista.length === 1 ? 'Hoja marcada.' : `${lista.length} hojas marcadas.`, 'ok');
+  }
+
+  function borrarBlancas() {
+    const lista = activosEn(avisosRevision().blancas, 'b');
+    if (!lista.length) return;
+    marcar();
+    eliminar(lista.map((x) => x.p));
+    G.aviso((lista.length === 1 ? 'Se borró 1 hoja en blanco.' : `Se borraron ${lista.length} hojas en blanco.`)
+      + ' Ctrl+Z la(s) devuelve.', 'ok');
+  }
+
+  function enderezarGiradas() {
+    const lista = activosEn(avisosRevision().giradas, 'g').filter((x) => !x.r.deLadoSinSentido);
+    if (!lista.length) return;
+    marcar();
+    lista.forEach(({ p, r }) => {
+      p.giro = G.norm(p.giro + r.giro);
+      const e = Math.round(((p.enderezo || 0) + r.torcida) * 100) / 100;
+      if (Math.abs(e) < 0.05) delete p.enderezo; else p.enderezo = e;
+    });
+    pintar();
+    G.aviso((lista.length === 1 ? '1 hoja enderezada.' : `${lista.length} hojas enderezadas.`)
+      + ' Ctrl+Z lo deshace.', 'ok');
+  }
+
+  function conectarRevisar() {
+    $('#btnRevisar').addEventListener('click', revisarHojas);
+    $('#revisarBlancasMarcar').addEventListener('click', () => marcarLasDeRevision(activosEn(avisosRevision().blancas, 'b')));
+    $('#revisarGiradasMarcar').addEventListener('click', () => marcarLasDeRevision(
+      activosEn(avisosRevision().giradas, 'g').filter((x) => !x.r.deLadoSinSentido)));
+    $('#revisarBlancasBorrar').addEventListener('click', borrarBlancas);
+    $('#revisarGiradasEnderezar').addEventListener('click', enderezarGiradas);
   }
 
   /* ---------------- atajos de teclado ---------------- */
@@ -3917,6 +4134,7 @@
 
     ponerBotonesDePaso();
     conectarBuscador();
+    conectarRevisar();
 
     iniciarEditorFirma();
     G.iniciarFirmasUI();

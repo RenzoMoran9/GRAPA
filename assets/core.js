@@ -77,6 +77,19 @@
     }
   };
 
+  /**
+   * Enderezar una hoja torcida: girarla unos pocos grados alrededor de su
+   * centro. «grados» va a favor del reloj, como se ve en la pantalla. Para
+   * dibujarla en un lienzo de W × H devuelve la matriz que pide pdf.js, o
+   * undefined si no hay nada que enderezar.
+   */
+  G.matrizEnderezo = function (grados, W, H) {
+    if (!grados) return undefined;
+    const r = (grados * Math.PI) / 180, co = Math.cos(r), si = Math.sin(r);
+    const cx = W / 2, cy = H / 2;
+    return [co, si, -si, co, cx - co * cx + si * cy, cy - si * cx - co * cy];
+  };
+
   /* ---------- carga de archivos ---------- */
   G.esPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
   G.esImagen = (f) => /^image\/(png|jpeg|jpg|webp)$/i.test(f.type) || /\.(png|jpe?g|webp)$/i.test(f.name);
@@ -260,7 +273,8 @@
     }
   }
 
-  const clave = (pagina, nivel) => `${pagina.fuenteId}:${pagina.indice}:${G.norm(pagina.giro)}:${nivel}`;
+  const clave = (pagina, nivel) =>
+    `${pagina.fuenteId}:${pagina.indice}:${G.norm(pagina.giro)}:${pagina.enderezo || 0}:${nivel}`;
 
   /** La mejor versión ya dibujada que no pase del nivel pedido, o null. */
   G.miniaturaCacheada = function (pagina, nivelTope) {
@@ -314,7 +328,8 @@
       const ctx = lienzo.getContext('2d');
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, lienzo.width, lienzo.height);
-      await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+      await pag.render({ canvasContext: ctx, viewport: vp,
+        transform: G.matrizEnderezo(pagina.enderezo, lienzo.width, lienzo.height) }).promise;
       // más calidad en los niveles altos: ahí es donde se va a leer el texto
       const url = lienzo.toDataURL('image/jpeg', n >= 620 ? 0.9 : 0.85);
       guardarCache(k, url);
@@ -335,7 +350,8 @@
     const ctx = lienzo.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, lienzo.width, lienzo.height);
-    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    await pag.render({ canvasContext: ctx, viewport: vp,
+      transform: G.matrizEnderezo(pagina.enderezo, lienzo.width, lienzo.height) }).promise;
     return lienzo;
   };
 
@@ -669,6 +685,19 @@
       const caja = pag.getCropBox ? pag.getCropBox() : { x: 0, y: 0, width: pag.getWidth(), height: pag.getHeight() };
       const W = caja.width, H = caja.height, OX = caja.x, OY = caja.y;
       const vis = G.cajaVisible(W, H, R);
+
+      // Enderezar una hoja torcida: se gira lo que ya traía la hoja, y nada
+      // más. Los folios y las firmas se ponen después, derechos. En el PDF el
+      // giro va contra el reloj, porque ahí el eje «y» sube.
+      if (est.enderezo) {
+        const r = (-est.enderezo * Math.PI) / 180, co = Math.cos(r), si = Math.sin(r);
+        const cx = OX + W / 2, cy = OY + H / 2;
+        pag.node.normalize();
+        const antes = salida.context.register(pag.createContentStream(pushGraphicsState(),
+          concatTransformationMatrix(co, si, -si, co, cx - co * cx + si * cy, cy - si * cx - co * cy)));
+        const despues = salida.context.register(pag.createContentStream(popGraphicsState()));
+        pag.node.wrapContentStreams(antes, despues);
+      }
 
       const dibujaEn = (px, py) => {
         const p = G.aPuntoPdf(px, py, W, H, R);

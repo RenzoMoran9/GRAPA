@@ -104,6 +104,36 @@ Solo se puede buscar en las hojas que **tienen texto**. Las escaneadas son
 una foto del papel: Grapa dice cuáles son para que sepas dónde no ha podido
 mirar.
 
+### Hojas en blanco, de lado, de cabeza o torcidas
+**Revisar** en el panel mira todas las hojas de una vez y dice cuáles son
+los reversos en blanco que deja el escáner a doble cara y cuáles entraron
+de lado, de cabeza o torcidas. Cada una sale en una lista y con una
+etiqueta en su miniatura. **No cambia nada hasta que lo pides**:
+
+- **Borrar N hojas** quita las que están en blanco; **Enderezar N hojas**
+  gira las de lado y las de cabeza y endereza las torcidas. `Ctrl+Z` lo
+  deshace, y la hoja vuelve a salir en la lista.
+- Si alguna está bien, quítale la marca de la casilla y no se toca.
+  **Marcarlas** las deja marcadas en el taller, para mirarlas o moverlas.
+- Una hoja en blanco es la que no tiene nada escrito. No cuentan la letra
+  del otro lado que se trasluce, la sombra o la raya del borde del escáner
+  ni una mota; un «V° B°» con una rúbrica ya **no** es una hoja en blanco.
+- La hoja torcida se endereza dentro del PDF que sale, girando lo que trae
+  la hoja; los folios y las firmas que pongas van derechos, como siempre.
+- Cada hoja escaneada tarda menos de medio segundo en revisarse; las que
+  traen texto, casi nada.
+
+Qué no hace todavía:
+
+- En una hoja escaneada **toda en mayúsculas** no sabe si está de cabeza
+  (se fija en las letras que sobresalen, como la «b» o la «p»), y en una
+  escaneada que está acostada sin letra clara dice «de lado: gírala a mano».
+  Antes de equivocarse, se calla.
+- Una hoja con fotos, un plano o un cuadro sin renglones no la marca como
+  torcida aunque lo esté, y no endereza más de 10 grados.
+- Las hojas que traen texto de verdad dicen hacia dónde se leen, pero no se
+  miran torcidas: un PDF hecho en la computadora no se tuerce.
+
 ### Bajarle el peso al PDF
 
 En **Archivo de salida · Peso del archivo**, cuatro maneras:
@@ -288,6 +318,7 @@ assets/
   styles.css          tema claro y oscuro
   core.js             estado, lectura de PDF, miniaturas, geometría y armado final
   buscar.js           el texto de cada hoja: qué palabra está dónde
+  revisar.js          hojas en blanco, de lado, de cabeza o torcidas
   expedientes.js      guardado del trabajo (IndexedDB) y carpeta de salida
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
