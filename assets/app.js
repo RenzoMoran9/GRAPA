@@ -2800,6 +2800,13 @@
     let t = leidas === 1 ? 'Listo: 1 hoja escaneada ya se puede buscar.'
       : `Listo: ${leidas} hojas escaneadas ya se pueden buscar.`;
     if (vacias) t += vacias === 1 ? ' En 1 no se reconoció ninguna palabra.' : ` En ${vacias} no se reconoció ninguna palabra.`;
+    // lo que hizo el editor por su cuenta, que su pestaña ya no enseña
+    const enderezadas = Number(d.enderezadas) || 0;
+    if (enderezadas) t += enderezadas === 1 ? ' 1 hoja estaba torcida y se enderezó.' : ` ${enderezadas} hojas estaban torcidas y se enderezaron.`;
+    const corr = d.corregidos && typeof d.corregidos === 'object' ? d.corregidos : {};
+    const nCorr = Object.values(corr).reduce((a, n) => a + (Number(n) || 0), 0);
+    if (nCorr) t += ` Se corrigieron ${nCorr} errores típicos de lectura (`
+      + Object.entries(corr).map(([k, n]) => `${String(k).slice(0, 4)} ×${Number(n) || 0}`).join(', ') + ').';
     G.aviso(t, 'ok');
     // se vuelve a buscar lo que estuviera escrito, ahora también en esas hojas
     leerTextoQueFalta().then(() => {
