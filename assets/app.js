@@ -1658,15 +1658,24 @@
   function frasePeso() {
     const d = ultimoInforme;
     if (!d || !d.antes) return '';
+    // lo que Grapa no supo achicar: así se sabe dónde queda el peso
+    const quedan = d.sinSaber && d.sinSaber.n
+      ? ` Quedaron ${d.sinSaber.n === 1 ? '1 imagen' : d.sinSaber.n + ' imágenes'} en un formato que Grapa no sabe achicar (${enMb(d.sinSaber.peso)}).`
+      : '';
     if (d.sinMejora) {
-      return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).`;
+      return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).${quedan}`;
     }
-    if (!d.aligeradas) return '';
+    if (!d.aligeradas) {
+      // todo el documento son hojas de texto: solo cuentan sus imágenes
+      if (!d.imagenes && !quedan) return '';
+      return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: todas las hojas conservan su texto`
+        + (d.imagenes ? ` y se achicaron ${d.imagenes === 1 ? '1 imagen' : d.imagenes + ' imágenes'}` : '') + '.' + quedan;
+    }
     const img = d.imagenes === 1 ? '1 imagen' : d.imagenes + ' imágenes';
     const intactas = !d.intactas ? ''
       : (d.intactas === 1 ? '. La otra tiene texto de verdad: lo conserva' : `. Las otras ${d.intactas} tienen texto de verdad: lo conservan`)
         + (d.imagenes ? `, y se achicaron sus ${img}` : '');
-    return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: se aligeraron ${d.aligeradas} hoja(s)${intactas}.`;
+    return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: se aligeraron ${d.aligeradas} hoja(s)${intactas}.${quedan}`;
   }
 
   /* ---------- peso máximo ----------

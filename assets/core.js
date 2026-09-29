@@ -839,18 +839,16 @@
   const CLAVES_QUE_CAMBIAN = new Set(['Filter', 'DecodeParms', 'Length', 'Width', 'Height', 'ColorSpace', 'BitsPerComponent', 'Decode', 'Type', 'Subtype']);
 
   /** Achica las imágenes que se dibujan en estas hojas. Devuelve cuántas. */
-  async function achicarImagenes(salida, hojas, comp, avisar) {
+  /** Achica una imagen (`u`: su referencia y a qué tamaño se ve). true si se
+   *  cambió; si no se sabe leer, lo que pesa (número); si no, false. */
+  async function achicarImagen(salida, u, comp) {
     const ctx = salida.context;
-    const usos = [...medirImagenes(ctx, hojas).values()];
-    let hechas = 0, vistas = 0;
-    for (const u of usos) {
-      vistas++;
-      if (usos.length > 3) avisar(`Achicando las imágenes de las hojas con texto: ${vistas} de ${usos.length}…`);
+    {
       const obj = ctx.lookup(u.ref);
-      if (!(obj instanceof PDFRawStream) || obj.contents.length < 12 * 1024) continue;
+      if (!(obj instanceof PDFRawStream) || obj.contents.length < 12 * 1024) return false;
       let lienzo = null;
       try { lienzo = await imagenALienzo(ctx, obj); } catch (e) { lienzo = null; }
-      if (!lienzo) continue;
+      if (!lienzo) return obj.contents.length;   // no se sabe leer: lo que pesa, para decirlo
       const W = lienzo.width, H = lienzo.height;
       // a la resolución a la que se ve en la hoja, nunca más grande que la original
       const ppp = comp.ppp;
@@ -888,13 +886,12 @@
       }
       chico.width = chico.height = 0;
       // solo si de verdad pesa menos
-      if (nuevo.datos.length >= obj.contents.length * 0.85) continue;
+      if (nuevo.datos.length >= obj.contents.length * 0.85) return false;
       const dic = ctx.obj(Object.assign({ Type: 'XObject', Subtype: 'Image', Width: nuevo.W || nw, Height: nuevo.H || nh, Length: nuevo.datos.length }, nuevo.dic));
       for (const [clave, valor] of obj.dict.entries()) if (!CLAVES_QUE_CAMBIAN.has(nombreDe(clave))) dic.set(clave, valor);
       ctx.assign(u.ref, PDFRawStream.of(dic, nuevo.datos));
-      hechas++;
+      return true;
     }
-    return hechas;
   }
 
   /* ---------- lo repetido, una sola vez ----------
@@ -968,19 +965,31 @@
       items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
     }
 
-    // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada
-    let hechas = 0;
+    // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada. El
+    //     avance cuenta TODAS las hojas: las escaneadas se redibujan y a las
+    //     de texto se les achican las imágenes, cada una en su turno.
     const porAligerar = aligerar.size;
-    // las demás son hojas de texto de verdad: se dice, para que no parezca
-    // que faltan hojas (a esas se les achican las imágenes después)
     const tal = paginas.length - porAligerar;
-    const yLasOtras = !tal ? '' : tal === 1 ? ' · la otra tiene texto de verdad: va después'
-      : ` · las otras ${tal} tienen texto de verdad: van después`;
-    const talCual = [];   // hojas copiadas: se les achican las imágenes
+    // a qué tamaño se ve cada imagen, contando todas las hojas donde aparece
+    const usos = comp ? medirImagenes(salida.context, paginas.map((_, i) => copiadas[i]).filter(Boolean)) : new Map();
+    const hechasImg = new Set();
+    let imagenesAchicadas = 0;
+    const sinSaber = { n: 0, peso: 0 };   // imágenes que no se saben leer
     for (let i = 0; i < paginas.length; i++) {
-      if (!aligerar.has(i)) { talCual.push(salida.addPage(copiadas[i])); continue; }
-      hechas++;
-      if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…${yLasOtras}`);
+      if (comp && paginas.length > 3) avisar(`Comprimiendo hoja ${i + 1} de ${paginas.length}…`);
+      if (!aligerar.has(i)) {
+        salida.addPage(copiadas[i]);
+        if (comp) {
+          for (const clave of medirImagenes(salida.context, [copiadas[i]]).keys()) {
+            if (hechasImg.has(clave) || !usos.has(clave)) continue;
+            hechasImg.add(clave);
+            const r = await achicarImagen(salida, usos.get(clave), comp);
+            if (r === true) imagenesAchicadas++;
+            else if (typeof r === 'number') { sinSaber.n++; sinSaber.peso += r; }
+          }
+        }
+        continue;
+      }
       let bn = null;
       if (comp.bn) {
         try { bn = await hojaEnUnBit(paginas[i], comp.ppp); }
@@ -1003,13 +1012,8 @@
     }
 
 
-    // 1d. en las hojas copiadas, las imágenes a la resolución a la que se
-    //     ven, y lo repetido una sola vez
-    let imagenesAchicadas = 0;
-    if (comp) {
-      if (talCual.length) imagenesAchicadas = await achicarImagenes(salida, talCual, comp, avisar);
-      juntarRepetidos(salida);
-    }
+    // 1d. lo repetido entre archivos, una sola vez
+    if (comp) juntarRepetidos(salida);
 
     // 2. recursos compartidos
     const imgsFirma = new Map();
@@ -1148,7 +1152,7 @@
       }));
       if (opciones.informe) {
         opciones.informe({
-          aligeradas: 0, intactas: paginas.length, sinMejora: true,
+          aligeradas: 0, intactas: paginas.length, sinMejora: true, sinSaber,
           antes: Math.round(antes), despues: limpio.length,
         });
       }
@@ -1157,7 +1161,7 @@
 
     if (opciones.informe) {
       opciones.informe({
-        aligeradas: porAligerar, intactas: tal, imagenes: imagenesAchicadas,
+        aligeradas: porAligerar, intactas: tal, imagenes: imagenesAchicadas, sinSaber,
         sinMejora: false, antes: Math.round(antes), despues: bytes.length,
       });
     }
