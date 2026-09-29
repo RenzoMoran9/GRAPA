@@ -7,6 +7,7 @@
 
   const G = (window.Grapa = window.Grapa || {});
   const { PDFDocument, StandardFonts, degrees, rgb, PDFRawStream, PDFName, PDFDict, PDFStream,
+          PDFArray, PDFRef, PDFNumber, decodePDFRawStream,
           pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
@@ -595,12 +596,10 @@
   /* ---------- hojas escaneadas CON texto buscable ----------
 
      Un escaneo que pasó por un reconocedor de texto (el del escáner, o
-     «Hacer buscables») lleva debajo la foto de la hoja y encima el texto,
-     invisible. Pesa como un escaneo, pero tiene texto: antes se copiaba tal
-     cual y «Ligero» y «Blanco y negro» no lo achicaban nada. Ahora se le
-     cambia solo la foto: se dibuja la hoja más liviana como fondo y encima
-     va lo que tenía la hoja SIN sus imágenes —el texto buscable, las rayas—,
-     así que se sigue pudiendo buscar y copiar. */
+     «Hacer buscables») lleva la foto de la hoja y encima el texto,
+     invisible. Pesa como un escaneo, pero tiene texto: no se vuelve foto
+     entera (se perdería el texto); se le achica la foto por dentro, como a
+     cualquier imagen de una hoja con texto (ver «achicar las imágenes»). */
   const PESO_ESCANEO = 40 * 1024;   // imágenes de más de esto en una hoja: pesa por ellas
 
   /** Recorre las imágenes que dibuja una hoja, también las de dentro de un
@@ -638,28 +637,296 @@
     return n;
   }
 
-  /** Quita las imágenes de una hoja copiada (se dibujan vacías) y las borra
-   *  del archivo de salida, para que no sigan pesando. */
-  function quitarImagenes(salida, hoja) {
-    const ctx = salida.context;
-    const vacia = ctx.register(ctx.stream('', { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 1, 1] }));
-    const borrar = [];
-    recorrerImagenes(ctx, hoja.node.Resources(), (xo, nombre, ref, img) => {
-      xo.set(nombre, vacia);
-      borrar.push(ref, img.dict.get(PDFName.of('SMask')));
-    });
-    for (const r of borrar) if (r && r.objectNumber != null) ctx.delete(r);
+  /* ---------- achicar las imágenes de las hojas con texto ----------
+
+     Como hacen los compresores de PDF (PDF24, Acrobat): no se toca el texto;
+     se entra en cada IMAGEN —la foto de una ficha técnica, el logo, el
+     sello— y se guarda a la resolución a la que de verdad se ve en la hoja.
+     Una foto de 1600 puntos de ancho dibujada en 15 cm está a 270 ppp: a
+     150 ppp se ve igual en pantalla y pesa la cuarta parte.
+
+     Para saber a qué tamaño se ve cada imagen se lee el contenido de la hoja
+     (las órdenes «cm», «q», «Q» y «Do»), también dentro de los formularios.
+     Una imagen que no se sabe leer —JBIG2, CCITT, JPEG 2000, CMYK— se deja
+     como está: esas ya vienen comprimidas. */
+
+  const BLANCOS = new Set([0, 9, 10, 12, 13, 32]);
+  const DELIM = new Set([40, 41, 60, 62, 91, 93, 123, 125, 47, 37]);
+
+  /** Recorre las órdenes de un contenido de hoja: `alOrden(op, operandos)`. */
+  function leerOrdenes(b, alOrden) {
+    const n = b.length;
+    let i = 0, ops = [];
+    const leerPalabra = () => { const ini = i; while (i < n && !BLANCOS.has(b[i]) && !DELIM.has(b[i])) i++; return String.fromCharCode.apply(null, b.subarray(ini, i)); };
+    while (i < n) {
+      const c = b[i];
+      if (BLANCOS.has(c)) { i++; continue; }
+      if (c === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue; }            // %
+      if (c === 40) {                                                                        // ( … )
+        let prof = 1; i++;
+        while (i < n && prof) { if (b[i] === 92) i++; else if (b[i] === 40) prof++; else if (b[i] === 41) prof--; i++; }
+        ops.push(null); continue;
+      }
+      if (c === 60) {                                                                        // < … > o <<
+        if (b[i + 1] === 60) { i += 2; continue; }
+        while (i < n && b[i] !== 62) i++;
+        i++; ops.push(null); continue;
+      }
+      if (c === 62 || c === 91 || c === 93 || c === 123 || c === 125) { i += (c === 62 && b[i + 1] === 62) ? 2 : 1; continue; }
+      if (c === 47) { i++; ops.push({ nombre: leerPalabra().replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))) }); continue; }
+      const p = leerPalabra();
+      if (!p) { i++; continue; }
+      if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(p)) { ops.push(parseFloat(p)); continue; }
+      if (p === 'BI') {
+        // imagen dentro del contenido: se salta hasta su «EI»
+        while (i < n && !(BLANCOS.has(b[i]) && b[i + 1] === 69 && b[i + 2] === 73 && (i + 3 >= n || BLANCOS.has(b[i + 3]) || DELIM.has(b[i + 3])))) i++;
+        i += 3; ops = []; continue;
+      }
+      alOrden(p, ops);
+      ops = [];
+    }
   }
 
-  /** Dibuja una imagen como fondo de la hoja, debajo de todo lo que ya tiene. */
-  function ponerFondo(salida, hoja, ref, caja) {
-    hoja.node.normalize();
-    const nombre = hoja.node.newXObject('Fondo', ref);
-    const antes = salida.context.register(hoja.createContentStream(
-      pushGraphicsState(), concatTransformationMatrix(caja.ancho, 0, 0, caja.alto, caja.x, caja.y),
-      drawObject(nombre), popGraphicsState(), pushGraphicsState()));
-    const despues = salida.context.register(hoja.createContentStream(popGraphicsState()));
-    hoja.node.wrapContentStreams(antes, despues);
+  const porMatriz = (m, t) => [
+    m[0] * t[0] + m[1] * t[2], m[0] * t[1] + m[1] * t[3],
+    m[2] * t[0] + m[3] * t[2], m[2] * t[1] + m[3] * t[3],
+    m[4] * t[0] + m[5] * t[2] + t[4], m[4] * t[1] + m[5] * t[3] + t[5],
+  ];
+
+  function bytesDeFlujo(obj) {
+    if (obj instanceof PDFRawStream) return decodePDFRawStream(obj).decode();
+    if (obj && typeof obj.getContents === 'function') return obj.getContents();
+    return new Uint8Array(0);
+  }
+
+  /** A qué tamaño (en puntos) se dibuja cada imagen de estas hojas. */
+  function medirImagenes(context, hojas) {
+    const usos = new Map();
+    const visitar = (contenidos, recursos, ctm0, prof) => {
+      if (prof > 12) return;
+      const res = context.lookup(recursos);
+      const xo = res instanceof PDFDict ? context.lookup(res.get(PDFName.of('XObject'))) : null;
+      let ctm = ctm0.slice();
+      const pila = [];
+      for (const bytes of contenidos) {
+        leerOrdenes(bytes, (op, a) => {
+          if (op === 'q') pila.push(ctm);
+          else if (op === 'Q') ctm = pila.length ? pila.pop() : ctm0.slice();
+          else if (op === 'cm' && a.length >= 6 && a.slice(-6).every((x) => typeof x === 'number')) ctm = porMatriz(a.slice(-6), ctm);
+          else if (op === 'Do' && a.length && a[a.length - 1] && a[a.length - 1].nombre && xo instanceof PDFDict) {
+            const ref = xo.get(PDFName.of(a[a.length - 1].nombre));
+            const obj = context.lookup(ref);
+            if (!(obj instanceof PDFStream)) return;
+            const tipo = obj.dict.get(PDFName.of('Subtype'));
+            if (tipo === PDFName.of('Image') && ref instanceof PDFRef) {
+              const w = Math.hypot(ctm[0], ctm[1]), h = Math.hypot(ctm[2], ctm[3]);
+              const u = usos.get(ref.toString()) || { ref, w: 0, h: 0 };
+              u.w = Math.max(u.w, w); u.h = Math.max(u.h, h);
+              usos.set(ref.toString(), u);
+            } else if (tipo === PDFName.of('Form')) {
+              const mat = context.lookup(obj.dict.get(PDFName.of('Matrix')));
+              const m = mat instanceof PDFArray && mat.size() === 6
+                ? [0, 1, 2, 3, 4, 5].map((k) => { const v = context.lookup(mat.get(k)); return v instanceof PDFNumber ? v.asNumber() : 0; })
+                : [1, 0, 0, 1, 0, 0];
+              let bytes = null;
+              try { bytes = bytesDeFlujo(obj); } catch (e) { bytes = null; }
+              if (bytes) visitar([bytes], obj.dict.get(PDFName.of('Resources')) || recursos, porMatriz(m, ctm), prof + 1);
+            }
+          }
+        });
+      }
+    };
+    for (const hoja of hojas) {
+      const c = hoja.node.Contents();
+      const flujos = c instanceof PDFArray ? c.asArray().map((r) => context.lookup(r)) : [c];
+      const contenidos = [];
+      for (const f of flujos) { try { if (f) contenidos.push(bytesDeFlujo(f)); } catch (e) { /* ilegible: se salta */ } }
+      visitar(contenidos, hoja.node.Resources(), [1, 0, 0, 1, 0, 0], 0);
+    }
+    return usos;
+  }
+
+  const nombreDe = (v) => (v instanceof PDFName ? v.asString().replace(/^\//, '') : null);
+  const numeroDe = (context, v) => { const x = context.lookup(v); return x instanceof PDFNumber ? x.asNumber() : null; };
+
+  /** Deshace el «predictor PNG» con que se guardan muchas imágenes. */
+  function sinPredictor(datos, colores, columnas) {
+    const fila = colores * columnas, filas = Math.floor(datos.length / (fila + 1));
+    const out = new Uint8Array(fila * filas);
+    for (let y = 0; y < filas; y++) {
+      const tipo = datos[y * (fila + 1)], ent = y * (fila + 1) + 1, sal = y * fila;
+      for (let x = 0; x < fila; x++) {
+        const v = datos[ent + x];
+        const a = x >= colores ? out[sal + x - colores] : 0;
+        const b = y ? out[sal - fila + x] : 0;
+        const c = x >= colores && y ? out[sal - fila + x - colores] : 0;
+        let p = 0;
+        if (tipo === 1) p = a; else if (tipo === 2) p = b; else if (tipo === 3) p = (a + b) >> 1;
+        else if (tipo === 4) { const q = a + b - c, pa = Math.abs(q - a), pb = Math.abs(q - b), pc = Math.abs(q - c); p = pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+        out[sal + x] = (v + p) & 255;
+      }
+    }
+    return out;
+  }
+
+  /** Los puntos de una imagen del PDF, en un lienzo; null si no se sabe leer. */
+  async function imagenALienzo(context, obj) {
+    const d = obj.dict;
+    const W = numeroDe(context, d.get(PDFName.of('Width'))), H = numeroDe(context, d.get(PDFName.of('Height')));
+    if (!W || !H || W * H > 40e6) return null;
+    if (d.get(PDFName.of('ImageMask')) || d.get(PDFName.of('Mask')) || d.get(PDFName.of('Decode'))) return null;
+    let filtro = context.lookup(d.get(PDFName.of('Filter')));
+    if (filtro instanceof PDFArray) filtro = filtro.size() === 1 ? context.lookup(filtro.get(0)) : null;
+    filtro = nombreDe(filtro);
+    // el espacio de color: gris, RGB o una paleta de ellos
+    let cs = context.lookup(d.get(PDFName.of('ColorSpace')));
+    let comps = 0, paleta = null;
+    const compsDe = (x) => {
+      const n = nombreDe(x);
+      if (n === 'DeviceGray' || n === 'CalGray') return 1;
+      if (n === 'DeviceRGB' || n === 'CalRGB') return 3;
+      if (x instanceof PDFArray) {
+        const t = nombreDe(context.lookup(x.get(0)));
+        if (t === 'CalGray') return 1;
+        if (t === 'CalRGB') return 3;
+        if (t === 'ICCBased') { const icc = context.lookup(x.get(1)); const k = icc instanceof PDFStream ? numeroDe(context, icc.dict.get(PDFName.of('N'))) : 0; return k === 1 || k === 3 ? k : 0; }
+      }
+      return 0;
+    };
+    if (cs instanceof PDFArray && nombreDe(context.lookup(cs.get(0))) === 'Indexed') {
+      const base = compsDe(context.lookup(cs.get(1)));
+      const tabla = context.lookup(cs.get(3));
+      let t = null;
+      if (tabla instanceof PDFStream) { try { t = bytesDeFlujo(tabla); } catch (e) { t = null; } }
+      else if (tabla && typeof tabla.asBytes === 'function') t = tabla.asBytes();
+      if (!base || !t) return null;
+      paleta = { base, t }; comps = 1;
+    } else comps = compsDe(cs);
+    if (!comps) return null;
+
+    const lienzo = document.createElement('canvas');
+    lienzo.width = W; lienzo.height = H;
+    const ctx = lienzo.getContext('2d');
+    if (filtro === 'DCTDecode') {
+      if (paleta) return null;
+      const bmp = await createImageBitmap(new Blob([obj.contents], { type: 'image/jpeg' }));
+      if (bmp.width !== W || bmp.height !== H) { bmp.close(); return null; }
+      ctx.drawImage(bmp, 0, 0); bmp.close();
+      return lienzo;
+    }
+    if (filtro !== 'FlateDecode') return null;
+    if (numeroDe(context, d.get(PDFName.of('BitsPerComponent'))) !== 8) return null;
+    let datos = decodePDFRawStream(obj).decode();
+    const parms = context.lookup(d.get(PDFName.of('DecodeParms')));
+    const pred = parms instanceof PDFDict ? numeroDe(context, parms.get(PDFName.of('Predictor'))) || 1 : 1;
+    if (pred >= 10) datos = sinPredictor(datos, comps, W);
+    else if (pred !== 1) return null;
+    if (datos.length < W * H * comps) return null;
+    const img = ctx.createImageData(W, H), px = img.data;
+    for (let k = 0, j = 0; k < W * H; k++, j += 4) {
+      if (paleta) {
+        const e = datos[k] * paleta.base;
+        if (paleta.base === 1) px[j] = px[j + 1] = px[j + 2] = paleta.t[e];
+        else { px[j] = paleta.t[e]; px[j + 1] = paleta.t[e + 1]; px[j + 2] = paleta.t[e + 2]; }
+      } else if (comps === 1) px[j] = px[j + 1] = px[j + 2] = datos[k];
+      else { px[j] = datos[k * 3]; px[j + 1] = datos[k * 3 + 1]; px[j + 2] = datos[k * 3 + 2]; }
+      px[j + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return lienzo;
+  }
+
+  const CLAVES_QUE_CAMBIAN = new Set(['Filter', 'DecodeParms', 'Length', 'Width', 'Height', 'ColorSpace', 'BitsPerComponent', 'Decode', 'Type', 'Subtype']);
+
+  /** Achica las imágenes que se dibujan en estas hojas. Devuelve cuántas. */
+  async function achicarImagenes(salida, hojas, comp, avisar) {
+    const ctx = salida.context;
+    const usos = [...medirImagenes(ctx, hojas).values()];
+    let hechas = 0, vistas = 0;
+    for (const u of usos) {
+      vistas++;
+      if (usos.length > 3) avisar(`Achicando las imágenes de las hojas con texto: ${vistas} de ${usos.length}…`);
+      const obj = ctx.lookup(u.ref);
+      if (!(obj instanceof PDFRawStream) || obj.contents.length < 12 * 1024) continue;
+      let lienzo = null;
+      try { lienzo = await imagenALienzo(ctx, obj); } catch (e) { lienzo = null; }
+      if (!lienzo) continue;
+      const W = lienzo.width, H = lienzo.height;
+      // a la resolución a la que se ve en la hoja, nunca más grande que la original
+      const ppp = comp.ppp;
+      const quiere = Math.max((u.w / 72) * ppp / W, (u.h / 72) * ppp / H);
+      const k = Math.min(1, quiere > 0 ? quiere : 1);
+      const nw = Math.max(1, Math.round(W * k)), nh = Math.max(1, Math.round(H * k));
+      const chico = document.createElement('canvas');
+      chico.width = nw; chico.height = nh;
+      const c2 = chico.getContext('2d', { willReadFrequently: !!comp.bn });
+      c2.fillStyle = '#fff'; c2.fillRect(0, 0, nw, nh);
+      c2.imageSmoothingQuality = 'high';
+      c2.drawImage(lienzo, 0, 0, nw, nh);
+      lienzo.width = lienzo.height = 0;
+      let nuevo = null;
+      if (comp.bn && typeof CompressionStream === 'function') {
+        const pppImg = u.w > 0 ? nw / (u.w / 72) : ppp;
+        const bits = aBlancoYNegro(c2.getImageData(0, 0, nw, nh).data, nw, nh, pppImg);
+        if (bits) nuevo = { datos: await desinflar(bits), dic: { ColorSpace: 'DeviceGray', BitsPerComponent: 1, Filter: 'FlateDecode' } };
+      }
+      if (!nuevo) {
+        // una foto de verdad: en JPEG. En «Blanco y negro», como las hojas
+        // que son fotos, a 150 ppp para que no pese más que en «Ligero».
+        let fuente = chico;
+        if (comp.bn) {
+          const k2 = Math.min(1, 150 / ppp);
+          fuente = document.createElement('canvas');
+          fuente.width = Math.max(1, Math.round(nw * k2)); fuente.height = Math.max(1, Math.round(nh * k2));
+          const c3 = fuente.getContext('2d');
+          c3.imageSmoothingQuality = 'high';
+          c3.drawImage(chico, 0, 0, fuente.width, fuente.height);
+        }
+        nuevo = { datos: G.dataUrlABytes(fuente.toDataURL('image/jpeg', comp.calidad || 0.7)), W: fuente.width, H: fuente.height,
+          dic: { ColorSpace: 'DeviceRGB', BitsPerComponent: 8, Filter: 'DCTDecode' } };
+        if (fuente !== chico) fuente.width = fuente.height = 0;
+      }
+      chico.width = chico.height = 0;
+      // solo si de verdad pesa menos
+      if (nuevo.datos.length >= obj.contents.length * 0.85) continue;
+      const dic = ctx.obj(Object.assign({ Type: 'XObject', Subtype: 'Image', Width: nuevo.W || nw, Height: nuevo.H || nh, Length: nuevo.datos.length }, nuevo.dic));
+      for (const [clave, valor] of obj.dict.entries()) if (!CLAVES_QUE_CAMBIAN.has(nombreDe(clave))) dic.set(clave, valor);
+      ctx.assign(u.ref, PDFRawStream.of(dic, nuevo.datos));
+      hechas++;
+    }
+    return hechas;
+  }
+
+  /* ---------- lo repetido, una sola vez ----------
+     Al unir PDF de varios archivos, cada uno trae sus letras y sus logos:
+     la misma letra puede ir guardada diez veces. Se deja una y las demás
+     apuntan a ella («deduplicar», lo llaman los compresores). */
+  function juntarRepetidos(salida) {
+    const ctx = salida.context;
+    const huella = (b) => { let h = 2166136261; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 16777619); } return h >>> 0; };
+    const iguales = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+    const primero = new Map(), cambio = new Map();
+    for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFRawStream) || obj.contents.length < 512) continue;
+      const clave = obj.dict.toString() + '|' + obj.contents.length + '|' + huella(obj.contents);
+      const ya = primero.get(clave);
+      if (ya && iguales(ctx.lookup(ya).contents, obj.contents)) cambio.set(ref.toString(), ya);
+      else if (!ya) primero.set(clave, ref);
+    }
+    if (!cambio.size) return 0;
+    const cambiar = (v) => {
+      if (v instanceof PDFRef) return cambio.get(v.toString()) || null;
+      if (v instanceof PDFDict) { for (const [k, x] of v.entries()) { const n = cambiar(x); if (n) v.set(k, n); } }
+      else if (v instanceof PDFArray) { for (let i = 0; i < v.size(); i++) { const n = cambiar(v.get(i)); if (n) v.set(i, n); } }
+      else if (v instanceof PDFStream) cambiar(v.dict);
+      return null;
+    };
+    for (const [, obj] of ctx.enumerateIndirectObjects()) cambiar(obj);
+    for (const r of cambio.keys()) {
+      const [num, gen] = r.split(' ');
+      ctx.delete(PDFRef.of(parseInt(num, 10), parseInt(gen, 10)));
+    }
+    return cambio.size;
   }
 
   /**
@@ -675,67 +942,43 @@
     // 1a. decidir qué hoja se copia tal cual y cuál se vuelve a dibujar más
     //     liviana. Las que llevan texto de verdad se copian siempre en el
     //     modo ligero: rasterizarlas dejaría el texto sin poder seleccionar.
-    //     Las escaneadas que además tienen texto buscable (`conFondo`) no se
-    //     vuelven foto: se les cambia solo la imagen de fondo.
-    const aligerar = new Set(), conFondo = new Map();
+    //     Las que tienen texto se copian y luego se les achican las
+    //     imágenes (1d); en «Mínimo» también se redibujan, salvo las que
+    //     pesan por sus imágenes —un escaneo con texto buscable, una ficha
+    //     con fotos—, que así conservan su texto.
+    const aligerar = new Set();
     if (comp) {
       for (let i = 0; i < paginas.length; i++) {
         if (!(await G.tieneTexto(paginas[i]))) { aligerar.add(i); continue; }
-        const pesoImg = await pesoImagenes(paginas[i]).catch(() => 0);
-        if (pesoImg > PESO_ESCANEO) conFondo.set(i, pesoImg);
-        else if (comp.tambienConTexto) aligerar.add(i);
+        if (comp.tambienConTexto && (await pesoImagenes(paginas[i]).catch(() => 0)) <= PESO_ESCANEO) aligerar.add(i);
       }
     }
 
-    // 1b. copiar del origen las que no se aligeran, agrupando por documento.
-    //     Las de fondo van en otra tanda: a esas se les quitan las imágenes,
-    //     y no pueden compartirlas con una hoja que se copia tal cual.
+    // 1b. copiar del origen las que no se aligeran, agrupando por documento
+    const porFuente = new Map();
+    paginas.forEach((p, i) => {
+      if (aligerar.has(i)) return;
+      if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
+      porFuente.get(p.fuenteId).push({ indice: p.indice, destino: i });
+    });
     const copiadas = new Array(paginas.length);
-    const copiar = async (cuales) => {
-      const porFuente = new Map();
-      paginas.forEach((p, i) => {
-        if (!cuales(i)) return;
-        if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
-        porFuente.get(p.fuenteId).push({ indice: p.indice, destino: i });
-      });
-      for (const [fuenteId, items] of porFuente) {
-        const src = await docPdfLib(fuenteId);
-        const paginasCopiadas = await salida.copyPages(src, items.map((it) => it.indice));
-        items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
-      }
-    };
-    await copiar((i) => !aligerar.has(i) && !conFondo.has(i));
-    await copiar((i) => conFondo.has(i));
-    conFondo.forEach((_, i) => quitarImagenes(salida, copiadas[i]));
+    for (const [fuenteId, items] of porFuente) {
+      const src = await docPdfLib(fuenteId);
+      const paginasCopiadas = await salida.copyPages(src, items.map((it) => it.indice));
+      items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
+    }
 
     // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada
     let hechas = 0;
-    const porAligerar = aligerar.size + conFondo.size;
-    // las que no se tocan son hojas de texto de verdad: se dice, para que
-    // no parezca que faltan hojas
+    const porAligerar = aligerar.size;
+    // las demás son hojas de texto de verdad: se dice, para que no parezca
+    // que faltan hojas (a esas se les achican las imágenes después)
     const tal = paginas.length - porAligerar;
-    const yLasOtras = !tal ? '' : tal === 1 ? ' · la otra tiene texto de verdad y va tal cual'
-      : ` · las otras ${tal} tienen texto de verdad y van tal cual`;
+    const yLasOtras = !tal ? '' : tal === 1 ? ' · la otra tiene texto de verdad: va después'
+      : ` · las otras ${tal} tienen texto de verdad: van después`;
+    const talCual = [];   // hojas copiadas: se les achican las imágenes
     for (let i = 0; i < paginas.length; i++) {
-      if (conFondo.has(i)) {
-        hechas++;
-        if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…${yLasOtras}`);
-        let bn = null, jpeg = null;
-        if (comp.bn) { try { bn = await hojaEnUnBit(paginas[i], comp.ppp); } catch (e) { bn = null; } }
-        if (!bn) jpeg = comp.bn ? await hojaEnJpeg(paginas[i], 150, 0.7) : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
-        const nuevo = bn ? bn.datos.length : jpeg.bytes.length;
-        if (nuevo >= conFondo.get(i)) {
-          // la foto que traía ya era más liviana: la hoja va tal cual
-          const [tal] = await salida.copyPages(await docPdfLib(paginas[i].fuenteId), [paginas[i].indice]);
-          salida.addPage(tal);
-          continue;
-        }
-        const hoja = salida.addPage(copiadas[i]);
-        const ref = bn ? refUnBit(salida, bn) : (await salida.embedJpg(jpeg.bytes)).ref;
-        ponerFondo(salida, hoja, ref, bn || jpeg);
-        continue;
-      }
-      if (!aligerar.has(i)) { salida.addPage(copiadas[i]); continue; }
+      if (!aligerar.has(i)) { talCual.push(salida.addPage(copiadas[i])); continue; }
       hechas++;
       if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…${yLasOtras}`);
       let bn = null;
@@ -759,6 +1002,14 @@
       hoja.drawImage(img, { x: 0, y: 0, width: jpeg.ancho, height: jpeg.alto });
     }
 
+
+    // 1d. en las hojas copiadas, las imágenes a la resolución a la que se
+    //     ven, y lo repetido una sola vez
+    let imagenesAchicadas = 0;
+    if (comp) {
+      if (talCual.length) imagenesAchicadas = await achicarImagenes(salida, talCual, comp, avisar);
+      juntarRepetidos(salida);
+    }
 
     // 2. recursos compartidos
     const imgsFirma = new Map();
@@ -905,26 +1156,8 @@
     }
 
     if (opciones.informe) {
-      // cuánto pesan, juntas, las hojas que fueron tal cual: así se ve si el
-      // peso que queda está en ellas o no
-      let pesoIntactas = 0;
-      if (tal && porAligerar) {
-        try {
-          const solo = await PDFDocument.create();
-          const porFuente = new Map();
-          paginas.forEach((p, i) => {
-            if (aligerar.has(i) || conFondo.has(i)) return;
-            if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
-            porFuente.get(p.fuenteId).push(p.indice);
-          });
-          for (const [fuenteId, indices] of porFuente) {
-            for (const h of await solo.copyPages(await docPdfLib(fuenteId), indices)) solo.addPage(h);
-          }
-          pesoIntactas = (await solo.save({ useObjectStreams: true })).length;
-        } catch (e) { pesoIntactas = 0; }
-      }
       opciones.informe({
-        aligeradas: porAligerar, intactas: tal, pesoIntactas,
+        aligeradas: porAligerar, intactas: tal, imagenes: imagenesAchicadas,
         sinMejora: false, antes: Math.round(antes), despues: bytes.length,
       });
     }

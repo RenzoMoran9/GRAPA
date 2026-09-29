@@ -162,8 +162,8 @@ En **Archivo de salida · Peso del archivo**, cuatro maneras:
 | | Qué hace | Una cotización escaneada de 1,2 MB |
 |---|---|---|
 | **Original** | No toca nada | 1216 KB |
-| **Ligero** | Redibuja a 150 ppp solo las hojas escaneadas | 131 KB |
-| **Mínimo** | Baja a 100 ppp **todas** las hojas, en color | 65 KB |
+| **Ligero** | Redibuja a 150 ppp las hojas escaneadas; en las de texto, achica las fotos | 131 KB |
+| **Mínimo** | Baja a 100 ppp **todo**, en color | 65 KB |
 | **Blanco y negro** | Las escaneadas a un bit, a 200 ppp | **30 KB** |
 
 **Blanco y negro** es el más chico y, a la vez, el que menos pierde:
@@ -172,18 +172,23 @@ En **Archivo de salida · Peso del archivo**, cuatro maneras:
   mejor, no peor. Una hoja de papel escrito es casi todo blanco con unas pocas
   letras negras: guardarla a un bit —cada píxel es tinta o papel— y comprimirla
   sin pérdida es lo que hace cualquier escáner en modo «documento».
-- Las hojas que llevan **texto de verdad no se tocan**, así que conservan su
-  texto. «Mínimo» las rasteriza y lo pierde.
+- Las hojas que llevan **texto de verdad** conservan su texto: solo se
+  achican sus imágenes. «Mínimo» vuelve foto las que no tienen imágenes y
+  les quita el texto.
 - Lo que se pierde es el **color**. Y si una hoja es una **fotografía** de
   verdad —no un papel escaneado— se guarda a color igual, porque a un bit se
   destrozaría.
 
-**Escaneos que ya tienen texto buscable** (el que pone el escáner, o
-«Hacer buscables»): llevan la foto de la hoja y, encima, el texto invisible.
-Pesan como un escaneo, así que se achican como un escaneo en los tres
-ajustes, pero **solo se cambia la foto**: el texto buscable queda encima, y
-el PDF se sigue pudiendo buscar y copiar. Si la foto que traía ya pesaba
-menos que la nueva, la hoja va tal cual.
+**Hojas con texto de verdad** (correos impresos, fichas técnicas, cartas,
+escaneos con texto buscable): no se vuelven foto, para no perder el texto.
+Como hacen los compresores de PDF, se entra en **cada imagen** de la hoja
+—la foto de la ficha, el logo, el escaneo que va debajo del texto— y se
+guarda a la resolución a la que de verdad se ve (150 ppp en Ligero, 100 en
+Mínimo; en Blanco y negro, el papel escrito a un bit y las fotos a 150).
+Una foto de 1600 puntos dibujada en 15 cm pasa a 886 y pesa la cuarta parte.
+Además, lo que viene **repetido** de varios archivos (las mismas letras, el
+mismo logo) se guarda una sola vez. Todo en la computadora: el documento no
+se sube a ningún servidor, como sí hacen PDF24 o iLovePDF.
 
 Para decidir qué es tinta no vale un umbral único: los escaneos traen sombras y
 una cabecera de color saldría entera negra. El papel se mide **por zonas**, y se

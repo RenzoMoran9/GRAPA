@@ -1639,16 +1639,15 @@
 
   const NOTAS_PESO = {
     original: 'Deja el PDF tal cual, con todo el detalle de los originales.',
-    ligero: 'Vuelve a dibujar a 150 ppp solo las hojas escaneadas, que son las que pesan. '
-      + 'Las que llevan texto de verdad no se tocan; en un escaneo con texto buscable se achica la foto '
-      + 'y el texto se queda. No se pierde ninguna hoja, ni las firmas ni los folios.',
-    minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. '
-      + 'El texto de las hojas de texto deja de poder seleccionarse: queda como una foto '
-      + '(el de un escaneo con texto buscable, no: ese se queda). Conserva el color.',
+    ligero: 'Las hojas escaneadas se vuelven a dibujar a 150 ppp. En las que tienen texto de verdad '
+      + '(correos, fichas, escaneos con texto buscable) el texto no se toca: se achican sus fotos y logos '
+      + 'a 150 ppp. Lo repetido entre archivos se guarda una sola vez. No se pierde ninguna hoja, ni las firmas ni los folios.',
+    minimo: 'Todo a 100 ppp y con más compresión. Las hojas de texto sin fotos se vuelven foto y su texto deja de '
+      + 'poder seleccionarse; las que tienen fotos o son escaneos con texto buscable lo conservan. Conserva el color.',
     bn: 'Las hojas escaneadas pasan a blanco y negro, a 200 ppp: pesan la mitad que en «Mínimo» '
-      + 'y se leen mejor, porque van al doble de resolución. Las hojas con texto de verdad no se '
-      + 'tocan, así que conservan su texto. Se pierde el color, y una hoja que sea una fotografía '
-      + 'se guarda a color igual, para no estropearla.',
+      + 'y se leen mejor. En las hojas con texto de verdad el texto no se toca: sus imágenes de papel escrito '
+      + 'pasan a blanco y negro y sus fotos se achican a 150 ppp. Se pierde el color, y una hoja que sea una '
+      + 'fotografía se guarda a color igual, para no estropearla.',
   };
   function pintarNotaPeso() {
     const v = $('#pesoSalida').value;
@@ -1663,12 +1662,10 @@
       return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).`;
     }
     if (!d.aligeradas) return '';
+    const img = d.imagenes === 1 ? '1 imagen' : d.imagenes + ' imágenes';
     const intactas = !d.intactas ? ''
-      : d.intactas === 1
-        ? '. La otra tiene texto de verdad y va tal cual, para no perderlo'
-          + (d.pesoIntactas ? `: pesa ${enMb(d.pesoIntactas)}` : '')
-        : `. Las otras ${d.intactas} tienen texto de verdad y van tal cual, para no perderlo`
-          + (d.pesoIntactas ? `: entre todas pesan ${enMb(d.pesoIntactas)}` : '');
+      : (d.intactas === 1 ? '. La otra tiene texto de verdad: lo conserva' : `. Las otras ${d.intactas} tienen texto de verdad: lo conservan`)
+        + (d.imagenes ? `, y se achicaron sus ${img}` : '');
     return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: se aligeraron ${d.aligeradas} hoja(s)${intactas}.`;
   }
 
