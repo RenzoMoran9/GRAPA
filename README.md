@@ -178,6 +178,13 @@ En **Archivo de salida · Peso del archivo**, cuatro maneras:
   verdad —no un papel escaneado— se guarda a color igual, porque a un bit se
   destrozaría.
 
+**Escaneos que ya tienen texto buscable** (el que pone el escáner, o
+«Hacer buscables»): llevan la foto de la hoja y, encima, el texto invisible.
+Pesan como un escaneo, así que se achican como un escaneo en los tres
+ajustes, pero **solo se cambia la foto**: el texto buscable queda encima, y
+el PDF se sigue pudiendo buscar y copiar. Si la foto que traía ya pesaba
+menos que la nueva, la hoja va tal cual.
+
 Para decidir qué es tinta no vale un umbral único: los escaneos traen sombras y
 una cabecera de color saldría entera negra. El papel se mide **por zonas**, y se
 exige **contraste**: en una zona lisa no hay letra por mucho que sea más oscura

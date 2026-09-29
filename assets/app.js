@@ -1640,9 +1640,11 @@
   const NOTAS_PESO = {
     original: 'Deja el PDF tal cual, con todo el detalle de los originales.',
     ligero: 'Vuelve a dibujar a 150 ppp solo las hojas escaneadas, que son las que pesan. '
-      + 'Las que llevan texto de verdad no se tocan. No se pierde ninguna hoja, ni las firmas ni los folios.',
+      + 'Las que llevan texto de verdad no se tocan; en un escaneo con texto buscable se achica la foto '
+      + 'y el texto se queda. No se pierde ninguna hoja, ni las firmas ni los folios.',
     minimo: 'Baja a 100 ppp TODAS las hojas, también las de texto. '
-      + 'El texto deja de poder seleccionarse: queda como una foto. Conserva el color.',
+      + 'El texto de las hojas de texto deja de poder seleccionarse: queda como una foto '
+      + '(el de un escaneo con texto buscable, no: ese se queda). Conserva el color.',
     bn: 'Las hojas escaneadas pasan a blanco y negro, a 200 ppp: pesan la mitad que en «Mínimo» '
       + 'y se leen mejor, porque van al doble de resolución. Las hojas con texto de verdad no se '
       + 'tocan, así que conservan su texto. Se pierde el color, y una hoja que sea una fotografía '

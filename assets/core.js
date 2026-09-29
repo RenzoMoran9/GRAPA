@@ -6,7 +6,7 @@
   'use strict';
 
   const G = (window.Grapa = window.Grapa || {});
-  const { PDFDocument, StandardFonts, degrees, rgb, PDFRawStream,
+  const { PDFDocument, StandardFonts, degrees, rgb, PDFRawStream, PDFName, PDFDict, PDFStream,
           pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
@@ -550,19 +550,21 @@
     lienzo.width = lienzo.height = 0;
     const bits = aBlancoYNegro(img, W, H, ppp);
     if (!bits) return null;
-    return { datos: await desinflar(bits), W, H, ancho: base.width, alto: base.height };
+    return { datos: await desinflar(bits), W, H, ancho: base.width, alto: base.height, x: pag.view[0], y: pag.view[1] };
   }
 
   /** Mete la imagen de un bit en la hoja, a pelo: pdf-lib solo sabe de
    *  JPEG y PNG, y lo que hace falta aquí es un flujo con su diccionario. */
-  function dibujarUnBit(salida, hoja, bn) {
+  function refUnBit(salida, bn) {
     const dic = salida.context.obj({
       Type: 'XObject', Subtype: 'Image', Width: bn.W, Height: bn.H,
       ColorSpace: 'DeviceGray', BitsPerComponent: 1,
       Filter: 'FlateDecode', Length: bn.datos.length,
     });
-    const ref = salida.context.register(PDFRawStream.of(dic, bn.datos));
-    const nombre = hoja.node.newXObject('Image', ref);
+    return salida.context.register(PDFRawStream.of(dic, bn.datos));
+  }
+  function dibujarUnBit(salida, hoja, bn) {
+    const nombre = hoja.node.newXObject('Image', refUnBit(salida, bn));
     hoja.pushOperators(
       pushGraphicsState(),
       concatTransformationMatrix(bn.ancho, 0, 0, bn.alto, 0, 0),
@@ -587,7 +589,77 @@
     await pag.render({ canvasContext: ctx, viewport: vp }).promise;
     const url = lienzo.toDataURL('image/jpeg', calidad);
     lienzo.width = lienzo.height = 0;   // suelta la memoria del lienzo
-    return { bytes: G.dataUrlABytes(url), ancho: base.width, alto: base.height };
+    return { bytes: G.dataUrlABytes(url), ancho: base.width, alto: base.height, x: pag.view[0], y: pag.view[1] };
+  }
+
+  /* ---------- hojas escaneadas CON texto buscable ----------
+
+     Un escaneo que pasó por un reconocedor de texto (el del escáner, o
+     «Hacer buscables») lleva debajo la foto de la hoja y encima el texto,
+     invisible. Pesa como un escaneo, pero tiene texto: antes se copiaba tal
+     cual y «Ligero» y «Blanco y negro» no lo achicaban nada. Ahora se le
+     cambia solo la foto: se dibuja la hoja más liviana como fondo y encima
+     va lo que tenía la hoja SIN sus imágenes —el texto buscable, las rayas—,
+     así que se sigue pudiendo buscar y copiar. */
+  const PESO_ESCANEO = 40 * 1024;   // imágenes de más de esto en una hoja: pesa por ellas
+
+  /** Recorre las imágenes que dibuja una hoja, también las de dentro de un
+   *  formulario. `hacer(dicXObject, nombre, ref, flujo)` por cada una. */
+  function recorrerImagenes(context, recursos, hacer, vistos = new Set()) {
+    const res = context.lookup(recursos);
+    if (!(res instanceof PDFDict)) return;
+    const xo = context.lookup(res.get(PDFName.of('XObject')));
+    if (!(xo instanceof PDFDict)) return;
+    for (const [nombre, ref] of xo.entries()) {
+      const obj = context.lookup(ref);
+      if (!(obj instanceof PDFStream)) continue;
+      const tipo = obj.dict.get(PDFName.of('Subtype'));
+      if (tipo === PDFName.of('Image')) hacer(xo, nombre, ref, obj);
+      else if (tipo === PDFName.of('Form') && !vistos.has(obj)) {
+        vistos.add(obj);
+        recorrerImagenes(context, obj.dict.get(PDFName.of('Resources')), hacer, vistos);
+      }
+    }
+  }
+
+  /** Cuánto pesan las imágenes de una hoja del documento original. */
+  async function pesoImagenes(pagina) {
+    const src = await docPdfLib(pagina.fuenteId);
+    const nodo = src.getPage(pagina.indice).node;
+    let n = 0;
+    const contadas = new Set();
+    recorrerImagenes(src.context, nodo.Resources(), (xo, nombre, ref, img) => {
+      if (contadas.has(img)) return;
+      contadas.add(img);
+      n += img.getContentsSize();
+      const mascara = src.context.lookup(img.dict.get(PDFName.of('SMask')));
+      if (mascara instanceof PDFStream) n += mascara.getContentsSize();
+    });
+    return n;
+  }
+
+  /** Quita las imágenes de una hoja copiada (se dibujan vacías) y las borra
+   *  del archivo de salida, para que no sigan pesando. */
+  function quitarImagenes(salida, hoja) {
+    const ctx = salida.context;
+    const vacia = ctx.register(ctx.stream('', { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 1, 1] }));
+    const borrar = [];
+    recorrerImagenes(ctx, hoja.node.Resources(), (xo, nombre, ref, img) => {
+      xo.set(nombre, vacia);
+      borrar.push(ref, img.dict.get(PDFName.of('SMask')));
+    });
+    for (const r of borrar) if (r && r.objectNumber != null) ctx.delete(r);
+  }
+
+  /** Dibuja una imagen como fondo de la hoja, debajo de todo lo que ya tiene. */
+  function ponerFondo(salida, hoja, ref, caja) {
+    hoja.node.normalize();
+    const nombre = hoja.node.newXObject('Fondo', ref);
+    const antes = salida.context.register(hoja.createContentStream(
+      pushGraphicsState(), concatTransformationMatrix(caja.ancho, 0, 0, caja.alto, caja.x, caja.y),
+      drawObject(nombre), popGraphicsState(), pushGraphicsState()));
+    const despues = salida.context.register(hoja.createContentStream(popGraphicsState()));
+    hoja.node.wrapContentStreams(antes, despues);
   }
 
   /**
@@ -603,33 +675,64 @@
     // 1a. decidir qué hoja se copia tal cual y cuál se vuelve a dibujar más
     //     liviana. Las que llevan texto de verdad se copian siempre en el
     //     modo ligero: rasterizarlas dejaría el texto sin poder seleccionar.
-    const aligerar = new Set();
+    //     Las escaneadas que además tienen texto buscable (`conFondo`) no se
+    //     vuelven foto: se les cambia solo la imagen de fondo.
+    const aligerar = new Set(), conFondo = new Map();
     if (comp) {
       for (let i = 0; i < paginas.length; i++) {
-        if (comp.tambienConTexto || !(await G.tieneTexto(paginas[i]))) aligerar.add(i);
+        if (!(await G.tieneTexto(paginas[i]))) { aligerar.add(i); continue; }
+        const pesoImg = await pesoImagenes(paginas[i]).catch(() => 0);
+        if (pesoImg > PESO_ESCANEO) conFondo.set(i, pesoImg);
+        else if (comp.tambienConTexto) aligerar.add(i);
       }
     }
 
-    // 1b. copiar del origen las que no se aligeran, agrupando por documento
-    const porFuente = new Map();
-    paginas.forEach((p, i) => {
-      if (aligerar.has(i)) return;
-      if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
-      porFuente.get(p.fuenteId).push({ indice: p.indice, destino: i });
-    });
+    // 1b. copiar del origen las que no se aligeran, agrupando por documento.
+    //     Las de fondo van en otra tanda: a esas se les quitan las imágenes,
+    //     y no pueden compartirlas con una hoja que se copia tal cual.
     const copiadas = new Array(paginas.length);
-    for (const [fuenteId, items] of porFuente) {
-      const src = await docPdfLib(fuenteId);
-      const paginasCopiadas = await salida.copyPages(src, items.map((it) => it.indice));
-      items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
-    }
+    const copiar = async (cuales) => {
+      const porFuente = new Map();
+      paginas.forEach((p, i) => {
+        if (!cuales(i)) return;
+        if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
+        porFuente.get(p.fuenteId).push({ indice: p.indice, destino: i });
+      });
+      for (const [fuenteId, items] of porFuente) {
+        const src = await docPdfLib(fuenteId);
+        const paginasCopiadas = await salida.copyPages(src, items.map((it) => it.indice));
+        items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
+      }
+    };
+    await copiar((i) => !aligerar.has(i) && !conFondo.has(i));
+    await copiar((i) => conFondo.has(i));
+    conFondo.forEach((_, i) => quitarImagenes(salida, copiadas[i]));
 
     // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada
     let hechas = 0;
+    const porAligerar = aligerar.size + conFondo.size;
     for (let i = 0; i < paginas.length; i++) {
+      if (conFondo.has(i)) {
+        hechas++;
+        if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…`);
+        let bn = null, jpeg = null;
+        if (comp.bn) { try { bn = await hojaEnUnBit(paginas[i], comp.ppp); } catch (e) { bn = null; } }
+        if (!bn) jpeg = comp.bn ? await hojaEnJpeg(paginas[i], 150, 0.7) : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
+        const nuevo = bn ? bn.datos.length : jpeg.bytes.length;
+        if (nuevo >= conFondo.get(i)) {
+          // la foto que traía ya era más liviana: la hoja va tal cual
+          const [tal] = await salida.copyPages(await docPdfLib(paginas[i].fuenteId), [paginas[i].indice]);
+          salida.addPage(tal);
+          continue;
+        }
+        const hoja = salida.addPage(copiadas[i]);
+        const ref = bn ? refUnBit(salida, bn) : (await salida.embedJpg(jpeg.bytes)).ref;
+        ponerFondo(salida, hoja, ref, bn || jpeg);
+        continue;
+      }
       if (!aligerar.has(i)) { salida.addPage(copiadas[i]); continue; }
       hechas++;
-      if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${aligerar.size}…`);
+      if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…`);
       let bn = null;
       if (comp.bn) {
         try { bn = await hojaEnUnBit(paginas[i], comp.ppp); }
@@ -798,7 +901,7 @@
 
     if (opciones.informe) {
       opciones.informe({
-        aligeradas: aligerar.size, intactas: paginas.length - aligerar.size,
+        aligeradas: porAligerar, intactas: paginas.length - porAligerar,
         sinMejora: false, antes: Math.round(antes), despues: bytes.length,
       });
     }
