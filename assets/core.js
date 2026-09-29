@@ -711,10 +711,15 @@
     // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada
     let hechas = 0;
     const porAligerar = aligerar.size + conFondo.size;
+    // las que no se tocan son hojas de texto de verdad: se dice, para que
+    // no parezca que faltan hojas
+    const tal = paginas.length - porAligerar;
+    const yLasOtras = !tal ? '' : tal === 1 ? ' · la otra tiene texto de verdad y va tal cual'
+      : ` · las otras ${tal} tienen texto de verdad y van tal cual`;
     for (let i = 0; i < paginas.length; i++) {
       if (conFondo.has(i)) {
         hechas++;
-        if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…`);
+        if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…${yLasOtras}`);
         let bn = null, jpeg = null;
         if (comp.bn) { try { bn = await hojaEnUnBit(paginas[i], comp.ppp); } catch (e) { bn = null; } }
         if (!bn) jpeg = comp.bn ? await hojaEnJpeg(paginas[i], 150, 0.7) : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
@@ -732,7 +737,7 @@
       }
       if (!aligerar.has(i)) { salida.addPage(copiadas[i]); continue; }
       hechas++;
-      if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…`);
+      if (paginas.length > 3) avisar(`Aligerando hoja ${hechas} de ${porAligerar}…${yLasOtras}`);
       let bn = null;
       if (comp.bn) {
         try { bn = await hojaEnUnBit(paginas[i], comp.ppp); }
@@ -900,8 +905,26 @@
     }
 
     if (opciones.informe) {
+      // cuánto pesan, juntas, las hojas que fueron tal cual: así se ve si el
+      // peso que queda está en ellas o no
+      let pesoIntactas = 0;
+      if (tal && porAligerar) {
+        try {
+          const solo = await PDFDocument.create();
+          const porFuente = new Map();
+          paginas.forEach((p, i) => {
+            if (aligerar.has(i) || conFondo.has(i)) return;
+            if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, []);
+            porFuente.get(p.fuenteId).push(p.indice);
+          });
+          for (const [fuenteId, indices] of porFuente) {
+            for (const h of await solo.copyPages(await docPdfLib(fuenteId), indices)) solo.addPage(h);
+          }
+          pesoIntactas = (await solo.save({ useObjectStreams: true })).length;
+        } catch (e) { pesoIntactas = 0; }
+      }
       opciones.informe({
-        aligeradas: porAligerar, intactas: paginas.length - porAligerar,
+        aligeradas: porAligerar, intactas: tal, pesoIntactas,
         sinMejora: false, antes: Math.round(antes), despues: bytes.length,
       });
     }

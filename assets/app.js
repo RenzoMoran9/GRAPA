@@ -1663,7 +1663,12 @@
       return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).`;
     }
     if (!d.aligeradas) return '';
-    const intactas = d.intactas ? `, y ${d.intactas} con texto quedaron intactas` : '';
+    const intactas = !d.intactas ? ''
+      : d.intactas === 1
+        ? '. La otra tiene texto de verdad y va tal cual, para no perderlo'
+          + (d.pesoIntactas ? `: pesa ${enMb(d.pesoIntactas)}` : '')
+        : `. Las otras ${d.intactas} tienen texto de verdad y van tal cual, para no perderlo`
+          + (d.pesoIntactas ? `: entre todas pesan ${enMb(d.pesoIntactas)}` : '');
     return ` Pasó de ${enMb(d.antes)} a ${enMb(d.despues)}: se aligeraron ${d.aligeradas} hoja(s)${intactas}.`;
   }
 
