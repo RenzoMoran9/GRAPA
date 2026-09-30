@@ -1,5 +1,5 @@
 /**
- * Servidor local mínimo para Grapa.
+ * Servidor local mínimo para Pdflash.
  * Uso:  node servidor.mjs   ->  http://localhost:4180
  *
  * No hace falta para usar la herramienta (basta con abrir index.html),
@@ -46,5 +46,5 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('No encontrado');
   }
 }).listen(PUERTO, () => {
-  console.log(`\n  Grapa está en  http://localhost:${PUERTO}\n  (Ctrl+C para detener)\n`);
+  console.log(`\n  Pdflash está en  http://localhost:${PUERTO}\n  (Ctrl+C para detener)\n`);
 });

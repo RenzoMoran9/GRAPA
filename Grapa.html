@@ -1,5 +1,5 @@
 <!--
-  Grapa · Taller de PDF
+  Pdflash · Taller de PDF
   Une, ordena, divide, folia y firma PDF. Todo ocurre dentro de este
   navegador: no hay servidor y no necesita conexión a internet.
 
@@ -11,7 +11,7 @@
     · SheetJS 0.18.5 — Apache-2.0 — https://github.com/SheetJS/sheetjs
     · html2canvas 1.4.1 — MIT — https://github.com/niklasvh/html2canvas
 -->
-<title>Grapa</title>
+<title>Pdflash</title>
 
 <style>
 /* ===========================================================
@@ -961,7 +961,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
       <svg viewBox="0 0 32 32"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7" /></svg>
     </div>
     <div class="marca-texto">
-      <strong>Grapa</strong>
+      <strong>Pdflash</strong>
       <span>Taller de PDF · une, ordena y firma</span>
     </div>
   </div>
@@ -1210,7 +1210,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
         </label>
         <button class="btn btn-suave ancho" id="btnVerPeso" type="button">¿Cabe? Calcular el peso</button>
         <ul class="pesos-lista" id="pesosLista" hidden></ul>
-        <p class="nota" id="pesoMaxNota">Si donde lo subes hay un límite —el SGD, un correo—, escríbelo: Grapa te dice si cabe y con qué peso, y te avisa antes de guardar uno que no cabe.</p>
+        <p class="nota" id="pesoMaxNota">Si donde lo subes hay un límite —el SGD, un correo—, escríbelo: Pdflash te dice si cabe y con qué peso, y te avisa antes de guardar uno que no cabe.</p>
         <label class="campo">Título del PDF <input type="text" id="metaTitulo" placeholder="(opcional)"></label>
         <label class="campo">Autor <input type="text" id="metaAutor" placeholder="(opcional)"></label>
         <label class="campo">Carpeta de destino</label>
@@ -1223,11 +1223,11 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
         <label class="campo">Editor de texto
           <input type="text" id="editorTextoUrl" placeholder="GrapaEditor.html" autocomplete="off">
         </label>
-        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</strong> abre <strong>Grapa Editor</strong> en otra pestaña y le pasa el PDF <strong>en memoria</strong>: no se guarda en disco ni sale de tu computadora. Guárdalo en la misma carpeta que Grapa y no hace falta tocar esto. Con Grapa abierta desde la web, si el editor no está al lado se usa el publicado.</p>
+        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</strong> abre <strong>Pdflash Editor</strong> en otra pestaña y le pasa el PDF <strong>en memoria</strong>: no se guarda en disco ni sale de tu computadora. Guárdalo en la misma carpeta que Pdflash y no hace falta tocar esto. Con Pdflash abierto desde la web, si el editor no está al lado se usa el publicado.</p>
         <label class="campo">Editor externo
           <input type="url" id="editorUrl" placeholder="https://pdfguru.com/app/account" autocomplete="off">
         </label>
-        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a…</strong> guarda el PDF en Descargas y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>No es el editor de texto de Grapa</strong>, que corrige el PDF sin que salga de tu computadora. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Grapa.</p>
+        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a…</strong> guarda el PDF en Descargas y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>No es el editor de texto de Pdflash</strong>, que corrige el PDF sin que salga de tu computadora. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Pdflash.</p>
       </div>
     </section>
     </div>
@@ -1456,7 +1456,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
         </div>
         <label class="campo">Nombre <input type="text" id="recorteNombre" placeholder="Ej. Firma y sello"></label>
         <button class="btn btn-primario ancho" id="btnRecorteGuardar">Guardar en mis firmas</button>
-        <p class="nota">Grapa calcula sola el tono del papel, así que también sirve con fotos del sello tomadas con el celular.</p>
+        <p class="nota">Pdflash calcula sola el tono del papel, así que también sirve con fotos del sello tomadas con el celular.</p>
       </div>
     </div>
   </div>
@@ -1523,14 +1523,14 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 <div class="modal" id="modalAyuda" hidden>
   <div class="modal-caja">
     <header class="modal-cabecera">
-      <h3>Cómo se usa Grapa</h3>
+      <h3>Cómo se usa Pdflash</h3>
       <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </header>
     <div class="modal-cuerpo ayuda">
       <ol>
         <li><strong>Abre</strong> el PDF que escaneaste y, encima, los anexos (indagación de mercado, cotizaciones, etc.).</li>
         <li><strong>Ordena</strong> arrastrando las miniaturas. El color del borde te dice de qué archivo viene cada página.</li>
-        <li><strong>Revisa</strong>: en «Hojas en blanco y de lado», Grapa encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
+        <li><strong>Revisa</strong>: en «Hojas en blanco y de lado», Pdflash encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
         <li><strong>Guarda</strong> el PDF final, o divídelo si necesitas archivos separados.</li>
@@ -1551,7 +1551,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
         <tr><td>Clic + Shift</td><td>Seleccionar un rango</td></tr>
         <tr><td>Clic + Ctrl</td><td>Añadir o quitar de la selección</td></tr>
       </table>
-      <p class="nota nota-privacidad">Grapa funciona 100 % dentro de tu navegador. No hay servidor, no hay subidas y funciona sin internet.</p>
+      <p class="nota nota-privacidad">Pdflash funciona 100 % dentro de tu navegador. No hay servidor, no hay subidas y funciona sin internet.</p>
     </div>
   </div>
 </div>
@@ -1709,7 +1709,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/core.js -->
 <script>
 /* ===========================================================
-   Grapa · núcleo: estado, carga de PDF, miniaturas y geometría
+   Pdflash · núcleo: estado, carga de PDF, miniaturas y geometría
    Todo ocurre en el navegador. Ningún archivo sale del equipo.
    =========================================================== */
 (function () {
@@ -2842,8 +2842,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
     if (opciones.titulo) salida.setTitle(opciones.titulo);
     if (opciones.autor) salida.setAuthor(opciones.autor);
-    salida.setProducer('Grapa · taller de PDF');
-    salida.setCreator('Grapa');
+    salida.setProducer('Pdflash · taller de PDF');
+    salida.setCreator('Pdflash');
     const bytes = await salida.save({ useObjectStreams: true });
 
     // Lo que pesaban esas hojas en los archivos que abriste, para poder decir
@@ -2887,7 +2887,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     return out;
   };
 
-  /* Cuando Grapa corre publicada como página de Claude, el marco no deja que
+  /* Cuando Pdflash corre publicada como página de Claude, el marco no deja que
      la página descargue por su cuenta: hay que pedirle al visor que guarde el
      archivo. En local no existe esa capacidad y usamos el enlace de siempre. */
   let capDescargas;   // undefined = sin consultar · null = no disponible
@@ -3023,7 +3023,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/buscar.js -->
 <script>
 /* ===========================================================
-   Grapa · buscar dentro del expediente
+   Pdflash · buscar dentro del expediente
    Lee el texto de cada hoja una sola vez y encuentra en qué hojas
    aparece una palabra, y en qué sitio de la hoja, para resaltarla.
    Todo en el navegador, como el resto.
@@ -3174,7 +3174,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   G.buscadorListo = (paginas) => paginas.every((p) => indice.has(claveDe(p)));
 
   /**
-   * Lee las hojas que falten. De a una: pdf.js sin worker (con Grapa abierta
+   * Lee las hojas que falten. De a una: pdf.js sin worker (con Pdflash abierto
    * con doble clic) trabaja en el hilo de la página, y así la interfaz sigue
    * respondiendo entre hoja y hoja.
    */
@@ -3297,7 +3297,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   /**
    * Gira una caja guardada sin girar para la hoja tal como se ve. El giro es
-   * el de la hoja en Grapa, que es absoluto: el mismo que usa la miniatura.
+   * el de la hoja en Pdflash, que es absoluto: el mismo que usa la miniatura.
    */
   G.girarCaja = function (c, giro) {
     switch (G.norm(giro || 0)) {
@@ -3322,7 +3322,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/revisar.js -->
 <script>
 /* ===========================================================
-   Grapa · revisar hojas: en blanco, de lado, al revés o torcidas
+   Pdflash · revisar hojas: en blanco, de lado, al revés o torcidas
    Mira cada hoja como se ve ahora y dice qué le pasa. No toca nada:
    quien decide borrar o enderezar es el taller, con lo que diga esto.
    Todo en el navegador, como el resto.
@@ -3659,7 +3659,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/expedientes.js -->
 <script>
 /* ===========================================================
-   Grapa · guardado del trabajo y carpeta de salida
+   Pdflash · guardado del trabajo y carpeta de salida
    Los expedientes a medio armar viven en la base de datos del
    navegador; nada se envía a ningún servidor.
    =========================================================== */
@@ -3797,7 +3797,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   let carpeta = null;
 
   G.carpeta = {
-    // Dentro de un marco (por ejemplo, Grapa abierta desde el enlace publicado)
+    // Dentro de un marco (por ejemplo, Pdflash abierto desde el enlace publicado)
     // el navegador no deja elegir carpetas: hace falta el archivo local.
     soportado: () => typeof window.showDirectoryPicker === 'function' && window.self === window.top,
     actual: () => carpeta,
@@ -3868,7 +3868,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/firmas.js -->
 <script>
 /* ===========================================================
-   Grapa · firmas y sellos
+   Pdflash · firmas y sellos
    Creación de firmas transparentes a partir de escaneos,
    imágenes o trazos hechos a mano.
    =========================================================== */
@@ -4462,7 +4462,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/office.js -->
 <script>
 /**
- * Grapa · Word y Excel
+ * Pdflash · Word y Excel
  *
  * Convierte .docx / .xlsx / .xls / .csv a PDF sin salir del navegador: el
  * documento se compone en una caja fuera de pantalla, se fotografía hoja por
@@ -4714,7 +4714,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 <!-- assets/app.js -->
 <script>
 /* ===========================================================
-   Grapa · interfaz del taller
+   Pdflash · interfaz del taller
    =========================================================== */
 (function () {
   'use strict';
@@ -5698,7 +5698,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   /* ---------------- reordenar arrastrando ---------------- */
   // Tipo propio: viaja dentro del arrastre y dice que la carga es una hoja de
-  // Grapa. Sobrevive aunque el estado se haya limpiado antes de que el evento
+  // Pdflash. Sobrevive aunque el estado se haya limpiado antes de que el evento
   // termine de subir, así que es el guardia fiable contra tratarla como
   // archivo que llega de fuera.
   const TIPO_HOJA = 'application/x-grapa-hoja';
@@ -6373,9 +6373,9 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   function frasePeso() {
     const d = ultimoInforme;
     if (!d || !d.antes) return '';
-    // lo que Grapa no supo achicar: así se sabe dónde queda el peso
+    // lo que Pdflash no supo achicar: así se sabe dónde queda el peso
     const quedan = d.sinSaber && d.sinSaber.n
-      ? ` Quedaron ${d.sinSaber.n === 1 ? '1 imagen' : d.sinSaber.n + ' imágenes'} en un formato que Grapa no sabe achicar (${enMb(d.sinSaber.peso)}).`
+      ? ` Quedaron ${d.sinSaber.n === 1 ? '1 imagen' : d.sinSaber.n + ' imágenes'} en un formato que Pdflash no sabe achicar (${enMb(d.sinSaber.peso)}).`
       : '';
     if (d.sinMejora) {
       return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).${quedan}`;
@@ -6395,7 +6395,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   /* ---------- peso máximo ----------
      Muchos sistemas no aceptan más de tantos MB. Se escribe el máximo y
-     Grapa arma el PDF DE VERDAD con cada ajuste de peso, del que menos
+     Pdflash arma el PDF DE VERDAD con cada ajuste de peso, del que menos
      pierde al que más, hasta dar con el primero que cabe: no es una
      estimación, es lo que pesará. Y al guardar, si el ajuste elegido no
      cabe, lo dice antes, con el que sí cabe ya armado.
@@ -7353,10 +7353,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     });
   }
 
-  /* ---------------- editor de texto (Grapa Editor) ----------------
-     Grapa no lleva el motor de edición dentro: abre Grapa Editor en otra
+  /* ---------------- editor de texto (Pdflash Editor) ----------------
+     Pdflash no lleva el motor de edición dentro: abre Pdflash Editor en otra
      pestaña y le pasa el documento en memoria. Por eso siguen siendo dos
-     programas independientes, y Grapa no hereda su licencia.            */
+     programas independientes, y Pdflash no hereda su licencia.            */
   const EDITOR_AL_LADO = 'GrapaEditor.html';
   const EDITOR_PUBLICADO = 'https://renzomoran9.github.io/HERRAMIENTA-PDF/';
   const CLAVE_EDITOR_TEXTO = 'grapa.editor.texto';
@@ -7415,7 +7415,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    * Comprimir vuelve cada hoja una foto —con «Mínimo», también las de
    * texto—, y entonces al editor no le llega ni una letra que corregir;
    * además rasterizar un expediente entero tarda minutos con la pantalla
-   * bloqueada. Y los folios y las firmas los vuelve a poner Grapa al
+   * bloqueada. Y los folios y las firmas los vuelve a poner Pdflash al
    * guardar, así que si viajaran pegados a la hoja saldrían por duplicado:
    * se quedan aquí y se le devuelven a la hoja corregida cuando vuelve.
    */
@@ -7435,7 +7435,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const v = window.open('', 'grapa-editor');
     if (!v) {
       G.aviso('El navegador bloqueó la ventana del editor. Permite las ventanas '
-        + 'emergentes para Grapa y vuelve a intentarlo.', 'error');
+        + 'emergentes para Pdflash y vuelve a intentarlo.', 'error');
       return;
     }
     puente.ventana = v;
@@ -7453,7 +7453,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       // Ahí no hay ningún editor: la pestaña solo estorba, y un 404 no explica nada.
       try { if (puente.ventana && !puente.ventana.closed) puente.ventana.close(); } catch (e) {}
       G.aviso('Ahí no hay ningún editor, así que cerré la pestaña. Guarda '
-        + '«GrapaEditor.html» en la misma carpeta que Grapa, o escribe dónde está '
+        + '«GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
         + 'en «Archivo de salida» → «Editor de texto».', 'error');
     }, 12000);
 
@@ -7478,7 +7478,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   /* Lo que llega de la otra pestaña. Solo se atiende a la ventana que abrimos
      nosotros: cualquier otra pestaña que mande mensajes se ignora. Comparar el
-     origen no serviría, porque abriendo Grapa desde el disco el origen es
+     origen no serviría, porque abriendo Pdflash desde el disco el origen es
      «null» para todos. */
   window.addEventListener('message', (ev) => {
     const d = ev.data;
@@ -7616,7 +7616,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       $('#carpetaBotones').hidden = true;
       est.textContent = 'Los PDF van a tu carpeta de Descargas.';
       est.classList.remove('vinculada');
-      nota.textContent = 'Elegir una carpeta de destino solo funciona en Chrome o Edge, con Grapa abierta desde tu computadora.';
+      nota.textContent = 'Elegir una carpeta de destino solo funciona en Chrome o Edge, con Pdflash abierto desde tu computadora.';
       return;
     }
     const c = G.carpeta.actual();
@@ -7625,7 +7625,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     est.classList.toggle('vinculada', !!c);
     est.textContent = c ? c.name : 'Los PDF van a tu carpeta de Descargas.';
     nota.textContent = c
-      ? 'Lo que guardes se escribe aquí directamente. Si ya hay un archivo con ese nombre, Grapa añade (2) en vez de pisarlo.'
+      ? 'Lo que guardes se escribe aquí directamente. Si ya hay un archivo con ese nombre, Pdflash añade (2) en vez de pisarlo.'
       : 'Si vinculas una carpeta, el PDF terminado se escribe ahí, sin pasar por Descargas.';
   }
 
@@ -8801,7 +8801,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     // tema
     const temaGuardado = (() => { try { return localStorage.getItem('grapa.tema'); } catch (e) { return null; } })();
     if (temaGuardado) document.documentElement.dataset.tema = temaGuardado;
-    // Sin preferencia propia, Grapa hereda el tema de quien la muestra.
+    // Sin preferencia propia, Pdflash hereda el tema de quien la muestra.
     const temaEfectivo = () => {
       const propio = document.documentElement.dataset.tema;
       if (propio) return propio;
@@ -9058,7 +9058,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       } catch (e) {
         if (e && e.name === 'AbortError') return;   // el usuario cerró el diálogo
         G.aviso(e && (e.name === 'SecurityError' || e.name === 'NotAllowedError')
-          ? 'Para elegir carpeta, abre Grapa desde el archivo de tu computadora, no desde el enlace.'
+          ? 'Para elegir carpeta, abre Pdflash desde el archivo de tu computadora, no desde el enlace.'
           : 'No se pudo vincular la carpeta: ' + e.message, 'error');
       }
     });

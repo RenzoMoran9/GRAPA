@@ -1,5 +1,5 @@
 /* ===========================================================
-   Grapa · núcleo: estado, carga de PDF, miniaturas y geometría
+   Pdflash · núcleo: estado, carga de PDF, miniaturas y geometría
    Todo ocurre en el navegador. Ningún archivo sale del equipo.
    =========================================================== */
 (function () {
@@ -1132,8 +1132,8 @@
 
     if (opciones.titulo) salida.setTitle(opciones.titulo);
     if (opciones.autor) salida.setAuthor(opciones.autor);
-    salida.setProducer('Grapa · taller de PDF');
-    salida.setCreator('Grapa');
+    salida.setProducer('Pdflash · taller de PDF');
+    salida.setCreator('Pdflash');
     const bytes = await salida.save({ useObjectStreams: true });
 
     // Lo que pesaban esas hojas en los archivos que abriste, para poder decir
@@ -1177,7 +1177,7 @@
     return out;
   };
 
-  /* Cuando Grapa corre publicada como página de Claude, el marco no deja que
+  /* Cuando Pdflash corre publicada como página de Claude, el marco no deja que
      la página descargue por su cuenta: hay que pedirle al visor que guarde el
      archivo. En local no existe esa capacidad y usamos el enlace de siempre. */
   let capDescargas;   // undefined = sin consultar · null = no disponible

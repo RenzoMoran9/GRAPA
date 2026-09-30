@@ -1,5 +1,5 @@
 /* ===========================================================
-   Grapa · interfaz del taller
+   Pdflash · interfaz del taller
    =========================================================== */
 (function () {
   'use strict';
@@ -983,7 +983,7 @@
 
   /* ---------------- reordenar arrastrando ---------------- */
   // Tipo propio: viaja dentro del arrastre y dice que la carga es una hoja de
-  // Grapa. Sobrevive aunque el estado se haya limpiado antes de que el evento
+  // Pdflash. Sobrevive aunque el estado se haya limpiado antes de que el evento
   // termine de subir, así que es el guardia fiable contra tratarla como
   // archivo que llega de fuera.
   const TIPO_HOJA = 'application/x-grapa-hoja';
@@ -1658,9 +1658,9 @@
   function frasePeso() {
     const d = ultimoInforme;
     if (!d || !d.antes) return '';
-    // lo que Grapa no supo achicar: así se sabe dónde queda el peso
+    // lo que Pdflash no supo achicar: así se sabe dónde queda el peso
     const quedan = d.sinSaber && d.sinSaber.n
-      ? ` Quedaron ${d.sinSaber.n === 1 ? '1 imagen' : d.sinSaber.n + ' imágenes'} en un formato que Grapa no sabe achicar (${enMb(d.sinSaber.peso)}).`
+      ? ` Quedaron ${d.sinSaber.n === 1 ? '1 imagen' : d.sinSaber.n + ' imágenes'} en un formato que Pdflash no sabe achicar (${enMb(d.sinSaber.peso)}).`
       : '';
     if (d.sinMejora) {
       return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).${quedan}`;
@@ -1680,7 +1680,7 @@
 
   /* ---------- peso máximo ----------
      Muchos sistemas no aceptan más de tantos MB. Se escribe el máximo y
-     Grapa arma el PDF DE VERDAD con cada ajuste de peso, del que menos
+     Pdflash arma el PDF DE VERDAD con cada ajuste de peso, del que menos
      pierde al que más, hasta dar con el primero que cabe: no es una
      estimación, es lo que pesará. Y al guardar, si el ajuste elegido no
      cabe, lo dice antes, con el que sí cabe ya armado.
@@ -2638,10 +2638,10 @@
     });
   }
 
-  /* ---------------- editor de texto (Grapa Editor) ----------------
-     Grapa no lleva el motor de edición dentro: abre Grapa Editor en otra
+  /* ---------------- editor de texto (Pdflash Editor) ----------------
+     Pdflash no lleva el motor de edición dentro: abre Pdflash Editor en otra
      pestaña y le pasa el documento en memoria. Por eso siguen siendo dos
-     programas independientes, y Grapa no hereda su licencia.            */
+     programas independientes, y Pdflash no hereda su licencia.            */
   const EDITOR_AL_LADO = 'GrapaEditor.html';
   const EDITOR_PUBLICADO = 'https://renzomoran9.github.io/HERRAMIENTA-PDF/';
   const CLAVE_EDITOR_TEXTO = 'grapa.editor.texto';
@@ -2700,7 +2700,7 @@
    * Comprimir vuelve cada hoja una foto —con «Mínimo», también las de
    * texto—, y entonces al editor no le llega ni una letra que corregir;
    * además rasterizar un expediente entero tarda minutos con la pantalla
-   * bloqueada. Y los folios y las firmas los vuelve a poner Grapa al
+   * bloqueada. Y los folios y las firmas los vuelve a poner Pdflash al
    * guardar, así que si viajaran pegados a la hoja saldrían por duplicado:
    * se quedan aquí y se le devuelven a la hoja corregida cuando vuelve.
    */
@@ -2720,7 +2720,7 @@
     const v = window.open('', 'grapa-editor');
     if (!v) {
       G.aviso('El navegador bloqueó la ventana del editor. Permite las ventanas '
-        + 'emergentes para Grapa y vuelve a intentarlo.', 'error');
+        + 'emergentes para Pdflash y vuelve a intentarlo.', 'error');
       return;
     }
     puente.ventana = v;
@@ -2738,7 +2738,7 @@
       // Ahí no hay ningún editor: la pestaña solo estorba, y un 404 no explica nada.
       try { if (puente.ventana && !puente.ventana.closed) puente.ventana.close(); } catch (e) {}
       G.aviso('Ahí no hay ningún editor, así que cerré la pestaña. Guarda '
-        + '«GrapaEditor.html» en la misma carpeta que Grapa, o escribe dónde está '
+        + '«GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
         + 'en «Archivo de salida» → «Editor de texto».', 'error');
     }, 12000);
 
@@ -2763,7 +2763,7 @@
 
   /* Lo que llega de la otra pestaña. Solo se atiende a la ventana que abrimos
      nosotros: cualquier otra pestaña que mande mensajes se ignora. Comparar el
-     origen no serviría, porque abriendo Grapa desde el disco el origen es
+     origen no serviría, porque abriendo Pdflash desde el disco el origen es
      «null» para todos. */
   window.addEventListener('message', (ev) => {
     const d = ev.data;
@@ -2901,7 +2901,7 @@
       $('#carpetaBotones').hidden = true;
       est.textContent = 'Los PDF van a tu carpeta de Descargas.';
       est.classList.remove('vinculada');
-      nota.textContent = 'Elegir una carpeta de destino solo funciona en Chrome o Edge, con Grapa abierta desde tu computadora.';
+      nota.textContent = 'Elegir una carpeta de destino solo funciona en Chrome o Edge, con Pdflash abierto desde tu computadora.';
       return;
     }
     const c = G.carpeta.actual();
@@ -2910,7 +2910,7 @@
     est.classList.toggle('vinculada', !!c);
     est.textContent = c ? c.name : 'Los PDF van a tu carpeta de Descargas.';
     nota.textContent = c
-      ? 'Lo que guardes se escribe aquí directamente. Si ya hay un archivo con ese nombre, Grapa añade (2) en vez de pisarlo.'
+      ? 'Lo que guardes se escribe aquí directamente. Si ya hay un archivo con ese nombre, Pdflash añade (2) en vez de pisarlo.'
       : 'Si vinculas una carpeta, el PDF terminado se escribe ahí, sin pasar por Descargas.';
   }
 
@@ -4086,7 +4086,7 @@
     // tema
     const temaGuardado = (() => { try { return localStorage.getItem('grapa.tema'); } catch (e) { return null; } })();
     if (temaGuardado) document.documentElement.dataset.tema = temaGuardado;
-    // Sin preferencia propia, Grapa hereda el tema de quien la muestra.
+    // Sin preferencia propia, Pdflash hereda el tema de quien la muestra.
     const temaEfectivo = () => {
       const propio = document.documentElement.dataset.tema;
       if (propio) return propio;
@@ -4343,7 +4343,7 @@
       } catch (e) {
         if (e && e.name === 'AbortError') return;   // el usuario cerró el diálogo
         G.aviso(e && (e.name === 'SecurityError' || e.name === 'NotAllowedError')
-          ? 'Para elegir carpeta, abre Grapa desde el archivo de tu computadora, no desde el enlace.'
+          ? 'Para elegir carpeta, abre Pdflash desde el archivo de tu computadora, no desde el enlace.'
           : 'No se pudo vincular la carpeta: ' + e.message, 'error');
       }
     });

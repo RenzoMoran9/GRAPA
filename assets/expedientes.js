@@ -1,5 +1,5 @@
 /* ===========================================================
-   Grapa · guardado del trabajo y carpeta de salida
+   Pdflash · guardado del trabajo y carpeta de salida
    Los expedientes a medio armar viven en la base de datos del
    navegador; nada se envía a ningún servidor.
    =========================================================== */
@@ -137,7 +137,7 @@
   let carpeta = null;
 
   G.carpeta = {
-    // Dentro de un marco (por ejemplo, Grapa abierta desde el enlace publicado)
+    // Dentro de un marco (por ejemplo, Pdflash abierto desde el enlace publicado)
     // el navegador no deja elegir carpetas: hace falta el archivo local.
     soportado: () => typeof window.showDirectoryPicker === 'function' && window.self === window.top,
     actual: () => carpeta,

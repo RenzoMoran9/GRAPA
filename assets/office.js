@@ -1,5 +1,5 @@
 /**
- * Grapa · Word y Excel
+ * Pdflash · Word y Excel
  *
  * Convierte .docx / .xlsx / .xls / .csv a PDF sin salir del navegador: el
  * documento se compone en una caja fuera de pantalla, se fotografía hoja por

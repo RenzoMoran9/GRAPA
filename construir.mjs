@@ -12,7 +12,7 @@ const RAIZ = fileURLToPath(new URL('.', import.meta.url));
 const leer = (r) => readFileSync(RAIZ + r, 'utf8');
 
 const CREDITOS = `<!--
-  Grapa · Taller de PDF
+  Pdflash · Taller de PDF
   Une, ordena, divide, folia y firma PDF. Todo ocurre dentro de este
   navegador: no hay servidor y no necesita conexión a internet.
 
@@ -43,7 +43,7 @@ const css = leer('assets/styles.css') +
   '\n/* la envoltura del visor limita las imágenes; los sellos se miden solos */\n' +
   '.sello-mini{max-width:none}\n';
 
-const partes = [CREDITOS + '<title>Grapa</title>', '<style>\n' + css + '\n</style>', cuerpo];
+const partes = [CREDITOS + '<title>Pdflash</title>', '<style>\n' + css + '\n</style>', cuerpo];
 for (const ruta of GUIONES) {
   let js = leer(ruta);
   if (/<\/script/i.test(js)) throw new Error('cierre de script dentro de ' + ruta);

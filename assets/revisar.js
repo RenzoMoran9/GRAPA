@@ -1,5 +1,5 @@
 /* ===========================================================
-   Grapa · revisar hojas: en blanco, de lado, al revés o torcidas
+   Pdflash · revisar hojas: en blanco, de lado, al revés o torcidas
    Mira cada hoja como se ve ahora y dice qué le pasa. No toca nada:
    quien decide borrar o enderezar es el taller, con lo que diga esto.
    Todo en el navegador, como el resto.

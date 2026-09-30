@@ -1,10 +1,10 @@
-# Grapa · Taller de PDF
+# Pdflash · Taller de PDF
 
 **Une, ordena, divide, folia y firma tus PDF sin que ningún documento salga de tu computadora.**
 
 👉 **Usarla ahora: https://renzomoran9.github.io/GRAPA/**
 
-Grapa nació para el trabajo diario con un sistema de gestión documental:
+Pdflash nació para el trabajo diario con un sistema de gestión documental:
 escaneas un documento, te llegan anexos sueltos (la indagación de mercado,
 cotizaciones, informes) y tienes que armar un solo expediente ordenado,
 foliado y con tu firma y sello donde corresponde. Todo eso se hace aquí, en
@@ -50,15 +50,15 @@ Funciona en Chrome, Edge y Firefox actuales.
 - Selección múltiple con `Ctrl` y `Shift`, y **deshacer / rehacer**.
 
 ### Firmar y sellar
-1. Escanea tu firma y sello sobre una hoja y abre ese PDF en Grapa.
+1. Escanea tu firma y sello sobre una hoja y abre ese PDF en Pdflash.
 2. **Firmas y sellos → Desde escaneo**: encierra la firma en un recuadro y
-   Grapa **le quita el fondo**, dejándola transparente y recortada.
+   Pdflash **le quita el fondo**, dejándola transparente y recortada.
 3. Guárdala con un nombre. Queda en **ese navegador**: no se sube a ningún lado.
 4. Para usarla, el botón **✍** de cualquier página: la arrastras al sitio
    exacto, la agrandas desde la esquina y la aplicas a esa página, a las
    seleccionadas, a todas o solo a la última.
 
-Grapa **estima el tono del papel zona por zona**, así que funciona igual con una
+Pdflash **estima el tono del papel zona por zona**, así que funciona igual con una
 hoja blanca escaneada que con una foto del sello tomada con el celular, con
 papel gris y sombras. Dos controles separados afinan el resultado: *limpieza del
 fondo* borra más papel, *intensidad del trazo* rescata las líneas finas; mover
@@ -107,7 +107,7 @@ hojas donde no está, para que las otras salten a la vista.
 
 ### Hacer buscables las hojas escaneadas
 Las hojas escaneadas son una foto del papel: por dentro no tienen letras, y
-el buscador no puede mirar ahí. Al abrir **Buscar**, Grapa dice cuántas son y
+el buscador no puede mirar ahí. Al abrir **Buscar**, Pdflash dice cuántas son y
 ofrece **Hacer buscables las N hojas**:
 
 1. Se abre el editor en otra pestaña y lee todas las escaneadas seguidas, con
@@ -120,7 +120,7 @@ ofrece **Hacer buscables las N hojas**:
    buscar y copiar en cualquier otro programa.
 
 Las hojas que ya tienen texto no viajan. Todo pasa en tu computadora, como
-**Editar texto**: en la página pública el editor se abre solo, y con Grapa
+**Editar texto**: en la página pública el editor se abre solo, y con Pdflash
 guardada en tu equipo hace falta `GrapaEditor.html` en la misma carpeta. El
 reconocimiento puede equivocarse en alguna letra, sobre todo en escaneos
 borrosos: lo que no lea bien, no se encontrará.
@@ -198,7 +198,7 @@ que el papel.
 ### Peso máximo: «que no pase de 10 MB»
 
 Si donde subes el PDF hay un límite —el sistema de gestión documental, un correo—, escríbelo en **Peso
-máximo** y pulsa **¿Cabe? Calcular el peso**. Grapa arma el PDF **de verdad**
+máximo** y pulsa **¿Cabe? Calcular el peso**. Pdflash arma el PDF **de verdad**
 con cada ajuste, del que menos pierde al que más (Original → Ligero → Blanco y
 negro → Mínimo), y para en el primero que cabe: no es una estimación, es lo que
 va a pesar. Te dice cuál cabe y el botón **Usar** lo deja elegido.
@@ -215,14 +215,14 @@ va a pesar. Te dice cuál cabe y el botón **Usar** lo deja elegido.
   compara con el máximo.
 
 ### Guardar el trabajo a medio hacer
-Grapa **autoguarda** lo que estás armando: si cierras el navegador por error, al
+Pdflash **autoguarda** lo que estás armando: si cierras el navegador por error, al
 volver te ofrece continuar. Y puedes guardar expedientes con nombre para
 retomarlos otro día. Todo se queda en tu equipo.
 
 ### Carpeta de destino
 Si eliges una carpeta, el PDF terminado se escribe ahí directamente, sin pasar
 por Descargas, y al dividir se escriben todos los archivos de una. Si ya existe
-un archivo con ese nombre, Grapa añade `(2)` en vez de pisarlo.
+un archivo con ese nombre, Pdflash añade `(2)` en vez de pisarlo.
 Requiere Chrome o Edge.
 
 ### Dividir
@@ -273,18 +273,18 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
   configures en *Archivo de salida*. Viene puesto PDF Guru, pero se cambia por
   el que quieras y el botón se renombra solo.
 
-  Un enlace no puede entregarle el archivo a otra web: por eso Grapa lo guarda y
+  Un enlace no puede entregarle el archivo a otra web: por eso Pdflash lo guarda y
   abre la pestaña, y tú lo arrastras ahí. Y ten presente que **lo que subas a un
   editor en línea sale de tu computadora**; eso ya depende de esa web.
 
 ## Corregir el texto de un PDF
 
-Grapa arma el expediente; para **corregir una palabra dentro de un PDF** está
-**Grapa Editor**, un programa aparte:
+Pdflash arma el expediente; para **corregir una palabra dentro de un PDF** está
+**Pdflash Editor**, un programa aparte:
 <https://github.com/RenzoMoran9/HERRAMIENTA-PDF>
 
 Descarga su `GrapaEditor.html` y guárdalo **en la misma carpeta que
-`Grapa.html`**. Con Grapa abierta desde la web, si el editor no está al lado se
+`Grapa.html`**. Con Pdflash abierto desde la web, si el editor no está al lado se
 usa el publicado.
 
 **Para corregir una hoja suelta** —que es lo normal— usa la **T** de esa hoja,
@@ -292,25 +292,25 @@ o ábrela en grande y pulsa la **T** de la barra del lector. El botón **T Edita
 texto** de arriba manda las hojas marcadas, o el expediente entero si no hay
 ninguna marcada.
 
-Al terminar, **Devolver a Grapa** trae lo corregido **a su sitio**: cada hoja
+Al terminar, **Devolver a Pdflash** trae lo corregido **a su sitio**: cada hoja
 sustituye a la suya, en la misma posición y el mismo paquete, y **recupera sus
 folios y firmas**. Si vuelven más o menos hojas de las que se mandaron, entra
 como documento aparte y no se toca el expediente.
 
 Lo que viaja al editor va **sin comprimir y sin sellos**. Comprimir volvería la
 hoja una foto —con «Mínimo», también las de texto— y entonces no habría ni una
-letra que corregir; y los folios y firmas los vuelve a poner Grapa al guardar,
+letra que corregir; y los folios y firmas los vuelve a poner Pdflash al guardar,
 así que si viajaran pegados saldrían por duplicado.
 
 **El documento viaja de una pestaña a otra en memoria**: no se guarda en disco,
 no pasa por ninguna red y no hace falta internet. Si el editor no está al lado,
-Grapa lo dice y no pasa nada más.
+Pdflash lo dice y no pasa nada más.
 
 No corrige texto de escaneos: ahí no hay letras, hay una foto.
 
-> **Por qué son dos programas y no uno.** Grapa Editor usa MuPDF, que es libre
+> **Por qué son dos programas y no uno.** Pdflash Editor usa MuPDF, que es libre
 > pero con licencia AGPL: todo programa que lo lleve *dentro* queda sujeto a esa
-> licencia. Grapa no lo lleva dentro, solo lo abre en otra pestaña, así que
+> licencia. Pdflash no lo lleva dentro, solo lo abre en otra pestaña, así que
 > sigue siendo un programa independiente. Por eso el editor vive en su propio
 > repositorio.
 
@@ -351,7 +351,7 @@ salga tal como se ve.
 
 ## Privacidad
 
-Grapa **no tiene servidor**. Los PDF se leen y se rearman dentro del navegador,
+Pdflash **no tiene servidor**. Los PDF se leen y se rearman dentro del navegador,
 con `pdf.js` para dibujar las páginas y `pdf-lib` para escribir el archivo
 final. Nada se sube, nada se guarda fuera de tu equipo y funciona sin conexión.
 
@@ -388,7 +388,7 @@ node construir.mjs
 
 ### Nota técnica sobre `file://`
 
-Los navegadores no dejan crear *Web Workers* desde `file://`. Cuando Grapa
+Los navegadores no dejan crear *Web Workers* desde `file://`. Cuando Pdflash
 detecta ese caso, carga `pdf.worker.min.js` como script normal y pdf.js trabaja
 en el hilo principal: por eso funciona con doble clic. Servida por web usa el
 worker de verdad y va más rápido con documentos largos.

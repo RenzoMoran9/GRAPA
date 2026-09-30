@@ -1,5 +1,5 @@
 /* ===========================================================
-   Grapa · firmas y sellos
+   Pdflash · firmas y sellos
    Creación de firmas transparentes a partir de escaneos,
    imágenes o trazos hechos a mano.
    =========================================================== */

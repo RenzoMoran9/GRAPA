@@ -1,5 +1,5 @@
 /* ===========================================================
-   Grapa · buscar dentro del expediente
+   Pdflash · buscar dentro del expediente
    Lee el texto de cada hoja una sola vez y encuentra en qué hojas
    aparece una palabra, y en qué sitio de la hoja, para resaltarla.
    Todo en el navegador, como el resto.
@@ -150,7 +150,7 @@
   G.buscadorListo = (paginas) => paginas.every((p) => indice.has(claveDe(p)));
 
   /**
-   * Lee las hojas que falten. De a una: pdf.js sin worker (con Grapa abierta
+   * Lee las hojas que falten. De a una: pdf.js sin worker (con Pdflash abierto
    * con doble clic) trabaja en el hilo de la página, y así la interfaz sigue
    * respondiendo entre hoja y hoja.
    */
@@ -273,7 +273,7 @@
 
   /**
    * Gira una caja guardada sin girar para la hoja tal como se ve. El giro es
-   * el de la hoja en Grapa, que es absoluto: el mismo que usa la miniatura.
+   * el de la hoja en Pdflash, que es absoluto: el mismo que usa la miniatura.
    */
   G.girarCaja = function (c, giro) {
     switch (G.norm(giro || 0)) {
