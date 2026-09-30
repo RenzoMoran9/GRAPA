@@ -3413,27 +3413,38 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const B = 32;
     const bx = Math.ceil(W / B), by = Math.ceil(H / B);
     const fondo = new Uint8Array(bx * by);
-    const m = [];
+    // el tono que deja por debajo el 90 % del bloque: se cuenta por tonos
+    // (256 casillas) en vez de ordenar los puntos; sale el mismo número
+    const cuenta = new Uint32Array(256);
     for (let cy = 0; cy < by; cy++) {
       for (let cx = 0; cx < bx; cx++) {
-        m.length = 0;
+        cuenta.fill(0);
+        let n = 0;
         for (let y = cy * B; y < Math.min(H, (cy + 1) * B); y += 2) {
-          for (let x = cx * B; x < Math.min(W, (cx + 1) * B); x += 2) m.push(gris[y * W + x]);
+          for (let x = cx * B; x < Math.min(W, (cx + 1) * B); x += 2) { cuenta[gris[y * W + x]]++; n++; }
         }
-        m.sort((a, b) => a - b);
-        fondo[cy * bx + cx] = m.length ? m[Math.floor(m.length * 0.9)] : 255;
+        if (!n) { fondo[cy * bx + cx] = 255; continue; }
+        const k = Math.floor(n * 0.9);
+        let v = 0, acum = cuenta[0];
+        while (acum <= k) acum += cuenta[++v];
+        fondo[cy * bx + cx] = v;
       }
     }
     // el papel de toda la hoja: un bloque que es todo tinta no pone el listón
     const orden = Array.from(fondo).sort((a, b) => a - b);
     const papel = orden[Math.floor(orden.length * 0.75)] || 255;
     const es = new Uint8Array(W * H);
+    const suelo = papel * 0.7;
     for (let y = 0; y < H; y++) {
       const fy = Math.floor(y / B) * bx;
-      for (let x = 0; x < W; x++) {
-        const f = Math.max(fondo[fy + Math.floor(x / B)], papel * 0.7);
-        const v = gris[y * W + x];
-        if (v < f * 0.6 && v < 170) es[y * W + x] = 1;
+      for (let cx = 0; cx < bx; cx++) {
+        // el listón de todo el bloque, una sola vez
+        const f = Math.max(fondo[fy + cx], suelo) * 0.6;
+        const fin = Math.min(W, (cx + 1) * B);
+        for (let x = cx * B, i = y * W + cx * B; x < fin; x++, i++) {
+          const v = gris[i];
+          if (v < f && v < 170) es[i] = 1;
+        }
       }
     }
     return es;
@@ -3490,7 +3501,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         xs.push(x - W / 2); ys.push(y - H / 2);
       }
     }
-    return { xs: Float32Array.from(xs), ys: Float32Array.from(ys) };
+    // lo más lejos del centro que puede quedar un punto, gire como gire
+    return { xs: Float32Array.from(xs), ys: Float32Array.from(ys), radio: Math.ceil(Math.hypot(W, H) / 2) + 2 };
   }
 
   /**
@@ -3500,20 +3512,24 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    */
   function nitidez(p, grados, acostada) {
     const r = (grados * Math.PI) / 180, co = Math.cos(r), si = Math.sin(r);
-    const h = new Map();
+    // tras girar: y' = x·sen + y·cos · x' = x·cos − y·sen. De 3 en 3
+    // píxeles: así no cuenta el vaivén de una letra a otra, solo el de un
+    // renglón al siguiente. Los puntos están centrados en la hoja, así que
+    // caben en ± p.radio: se cuenta en una tabla fija en vez de un mapa.
+    const n = p.xs.length, xs = p.xs, ys = p.ys;
+    const desde = Math.floor(-p.radio / 3) - 1;
+    const h = p.tabla || (p.tabla = new Int32Array(Math.ceil((2 * p.radio) / 3) + 4));
+    h.fill(0);
     let min = Infinity, max = -Infinity;
-    for (let i = 0; i < p.xs.length; i++) {
-      const x = p.xs[i], y = p.ys[i];
-      // tras girar: y' = x·sen + y·cos · x' = x·cos − y·sen. De 3 en 3
-      // píxeles: así no cuenta el vaivén de una letra a otra, solo el de
-      // un renglón al siguiente
-      const v = Math.floor((acostada ? x * co - y * si : x * si + y * co) / 3);
-      h.set(v, (h.get(v) || 0) + 1);
+    const a = acostada ? co : si, b = acostada ? -si : co;
+    for (let i = 0; i < n; i++) {
+      const v = Math.floor((xs[i] * a + ys[i] * b) / 3);
+      h[v - desde]++;
       if (v < min) min = v;
       if (v > max) max = v;
     }
     let s = 0;
-    for (const n of h.values()) s += n * n;
+    for (let k = min - desde; k <= max - desde; k++) s += h[k] * h[k];
     // 1 si la tinta se reparte pareja; tanto más cuanto más se amontona en
     // renglones con papel entre medio. Así no importa si la hoja es más
     // alta que ancha.
@@ -8486,14 +8502,27 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     pintarRevision();
     const lista = E.paginas.slice();
     const t0 = performance.now();
+    // De a dos: mientras se hacen las cuentas de una hoja, la siguiente se
+    // va leyendo del archivo (eso lo hace pdf.js aparte). El resultado de
+    // cada hoja es el mismo; solo se espera menos.
+    const enCurso = new Map();
+    const lanzar = (j) => {
+      if (j >= lista.length || enCurso.has(j) || !E.paginas.includes(lista[j])) return;
+      const q = lista[j];
+      const foto = { giro: G.norm(q.giro), enderezo: q.enderezo || 0 };
+      enCurso.set(j, G.revisarHoja(q).then((r) => ({ r, foto }), (e) => ({ e, foto })));
+    };
     try {
       for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
         const p = lista[i];
-        if (!E.paginas.includes(p)) continue;
+        lanzar(i); lanzar(i + 1);
+        if (!enCurso.has(i)) continue;
         estado.textContent = `Revisando hoja ${i + 1} de ${lista.length}…`;
-        const foto = { giro: G.norm(p.giro), enderezo: p.enderezo || 0 };
-        let r;
-        try { r = await G.revisarHoja(p); } catch (e) { console.error(e); continue; }
+        const hecho = await enCurso.get(i);
+        enCurso.delete(i);
+        const foto = hecho.foto;
+        if (hecho.e) { console.error(hecho.e); continue; }
+        const r = hecho.r;
         revision.hechas.set(p.uid, Object.assign({ r }, foto));
         // una hoja revisada otra vez vuelve a salir aunque antes se quitara a mano
         revision.fuera.delete('b:' + p.uid);

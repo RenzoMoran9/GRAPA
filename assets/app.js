@@ -3771,14 +3771,27 @@
     pintarRevision();
     const lista = E.paginas.slice();
     const t0 = performance.now();
+    // De a dos: mientras se hacen las cuentas de una hoja, la siguiente se
+    // va leyendo del archivo (eso lo hace pdf.js aparte). El resultado de
+    // cada hoja es el mismo; solo se espera menos.
+    const enCurso = new Map();
+    const lanzar = (j) => {
+      if (j >= lista.length || enCurso.has(j) || !E.paginas.includes(lista[j])) return;
+      const q = lista[j];
+      const foto = { giro: G.norm(q.giro), enderezo: q.enderezo || 0 };
+      enCurso.set(j, G.revisarHoja(q).then((r) => ({ r, foto }), (e) => ({ e, foto })));
+    };
     try {
       for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
         const p = lista[i];
-        if (!E.paginas.includes(p)) continue;
+        lanzar(i); lanzar(i + 1);
+        if (!enCurso.has(i)) continue;
         estado.textContent = `Revisando hoja ${i + 1} de ${lista.length}…`;
-        const foto = { giro: G.norm(p.giro), enderezo: p.enderezo || 0 };
-        let r;
-        try { r = await G.revisarHoja(p); } catch (e) { console.error(e); continue; }
+        const hecho = await enCurso.get(i);
+        enCurso.delete(i);
+        const foto = hecho.foto;
+        if (hecho.e) { console.error(hecho.e); continue; }
+        const r = hecho.r;
         revision.hechas.set(p.uid, Object.assign({ r }, foto));
         // una hoja revisada otra vez vuelve a salir aunque antes se quitara a mano
         revision.fuera.delete('b:' + p.uid);
