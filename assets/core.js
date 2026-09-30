@@ -288,6 +288,113 @@
     return null;
   };
 
+  /* ---------- miniatura rápida de una hoja escaneada ----------
+     Una hoja escaneada es una foto de la página. Para dibujar su miniatura,
+     pdf.js descomprime la foto ENTERA (a 300 ppp, con su propio decodificador,
+     lento) y luego la achica: unos 350 ms por hoja. El navegador sabe
+     descomprimir un JPEG ya en chico, y mucho más rápido (unos 80 ms).
+
+     Solo se hace cuando la hoja no tiene NADA más que fotos JPEG corrientes
+     (y, como mucho, texto invisible, el de «Hacer buscables»): nada de texto
+     visible, rayas, rellenos, recortes, formularios ni anotaciones. Ante
+     cualquier otra cosa, o ante la duda, se dibuja con pdf.js como siempre,
+     para que la miniatura nunca salga distinta de la hoja. */
+  const ORDENES_DE_ESTADO = new Set(['q', 'Q', 'cm', 'w', 'J', 'j', 'M', 'd', 'ri', 'i',
+    'g', 'G', 'rg', 'RG', 'k', 'K', 'cs', 'CS', 'sc', 'SC', 'scn', 'SCN',
+    'BT', 'ET', 'Tc', 'Tw', 'Tz', 'TL', 'Tf', 'Tr', 'Ts', 'Td', 'TD', 'Tm', 'T*', 'BX', 'EX', 'BMC', 'BDC', 'EMC', 'MP', 'DP']);
+  const ORDENES_DE_TEXTO = new Set(['Tj', 'TJ', "'", '"']);
+
+  /** ¿Es una foto JPEG que el navegador dibuja igual que pdf.js? */
+  function jpegCorriente(context, obj) {
+    if (!(obj instanceof PDFRawStream)) return false;
+    const d = obj.dict;
+    let filtro = context.lookup(d.get(PDFName.of('Filter')));
+    if (filtro instanceof PDFArray) filtro = filtro.size() === 1 ? context.lookup(filtro.get(0)) : null;
+    if (nombreDe(filtro) !== 'DCTDecode') return false;
+    if (d.get(PDFName.of('SMask')) || d.get(PDFName.of('Mask')) || d.get(PDFName.of('Decode')) || d.get(PDFName.of('ImageMask'))) return false;
+    if (numeroDe(context, d.get(PDFName.of('BitsPerComponent'))) !== 8) return false;
+    const cs = context.lookup(d.get(PDFName.of('ColorSpace')));
+    const n = nombreDe(cs);
+    if (n === 'DeviceGray' || n === 'DeviceRGB') return true;
+    if (cs instanceof PDFArray && nombreDe(context.lookup(cs.get(0))) === 'ICCBased') {
+      const icc = context.lookup(cs.get(1));
+      const k = icc instanceof PDFStream ? numeroDe(context, icc.dict.get(PDFName.of('N'))) : 0;
+      return k === 1 || k === 3;
+    }
+    return false;
+  }
+
+  /** Las fotos de la hoja y dónde van, si la hoja no es más que eso; si no, null. */
+  async function soloFotos(pagina) {
+    const src = await docPdfLib(pagina.fuenteId);
+    const ctx = src.context;
+    const nodo = src.getPage(pagina.indice).node;
+    const anot = ctx.lookup(nodo.get(PDFName.of('Annots')));
+    if (anot instanceof PDFArray && anot.size()) return null;
+    const res = ctx.lookup(nodo.Resources());
+    const xo = res instanceof PDFDict ? ctx.lookup(res.get(PDFName.of('XObject'))) : null;
+    const c = nodo.Contents();
+    const flujos = c instanceof PDFArray ? c.asArray().map((r) => ctx.lookup(r)) : [c];
+    const fotos = [];
+    let ctm = [1, 0, 0, 1, 0, 0], modo = 0, vale = true;
+    const pila = [];
+    for (const f of flujos) {
+      if (!f || !vale) break;
+      leerOrdenes(bytesDeFlujo(f), (op, a) => {
+        if (!vale) return;
+        if (op === 'q') pila.push(ctm);
+        else if (op === 'Q') ctm = pila.length ? pila.pop() : [1, 0, 0, 1, 0, 0];
+        else if (op === 'cm') {
+          if (a.length < 6 || !a.slice(-6).every((x) => typeof x === 'number')) { vale = false; return; }
+          ctm = porMatriz(a.slice(-6), ctm);
+        } else if (op === 'Tr') modo = typeof a[a.length - 1] === 'number' ? a[a.length - 1] : 0;
+        else if (ORDENES_DE_TEXTO.has(op)) { if (modo !== 3) vale = false; }   // texto que se ve
+        else if (op === 'Do') {
+          const ref = xo instanceof PDFDict && a.length && a[a.length - 1] && a[a.length - 1].nombre
+            ? xo.get(PDFName.of(a[a.length - 1].nombre)) : null;
+          const obj = ref ? ctx.lookup(ref) : null;
+          if (!(obj instanceof PDFStream) || obj.dict.get(PDFName.of('Subtype')) !== PDFName.of('Image') || !jpegCorriente(ctx, obj)) { vale = false; return; }
+          fotos.push({ obj, m: ctm.slice() });
+        } else if (!ORDENES_DE_ESTADO.has(op)) vale = false;   // rayas, rellenos, recortes, formularios…
+      });
+    }
+    return vale && fotos.length ? fotos : null;
+  }
+
+  /** Dibuja la miniatura por el camino rápido. false si no se puede. */
+  async function miniaturaRapida(pagina, vp, lienzo) {
+    let fotos;
+    try { fotos = await soloFotos(pagina); } catch (e) { return false; }
+    if (!fotos) return false;
+    const bmps = [];
+    try {
+      for (const f of fotos) {
+        const w = Math.max(1, Math.round(Math.hypot(f.m[0], f.m[1]) * vp.scale));
+        const h = Math.max(1, Math.round(Math.hypot(f.m[2], f.m[3]) * vp.scale));
+        bmps.push(await createImageBitmap(new Blob([f.obj.contents], { type: 'image/jpeg' }),
+          { resizeWidth: w, resizeHeight: h, resizeQuality: 'high', imageOrientation: 'none' }));
+      }
+    } catch (e) { bmps.forEach((b) => b.close()); return false; }
+    const ctx = lienzo.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+    const endereza = G.matrizEnderezo(pagina.enderezo, lienzo.width, lienzo.height);
+    ctx.setTransform(...(endereza || [1, 0, 0, 1, 0, 0]));
+    ctx.transform(...vp.transform);
+    ctx.imageSmoothingQuality = 'high';
+    fotos.forEach((f, i) => {
+      ctx.save();
+      ctx.transform(...f.m);
+      ctx.transform(1, 0, 0, -1, 0, 1);   // la foto va de arriba abajo; el PDF, al revés
+      ctx.drawImage(bmps[i], 0, 0, 1, 1);
+      ctx.restore();
+      bmps[i].close();
+    });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return true;
+  }
+  G.miniaturaRapida = miniaturaRapida;   // para las pruebas
+
   let enCola = 0;
   const cola = [];
 
@@ -295,21 +402,36 @@
   // (al abrir el archivo con doble clic) conviene no atorar la interfaz.
   const limiteCola = () => (window.pdfjsWorker ? 2 : 4);
 
+  // Primero lo que se está viendo: una miniatura pedida al pasar por una
+  // hoja que ya salió de la pantalla no le quita el turno a las que están
+  // a la vista. Si cuando le toca ya no hace falta, se descarta (quien la
+  // pidió la vuelve a pedir cuando la hoja vuelva a verse).
+  const FUERA = 'fuera de vista';
   function siguienteDeCola() {
-    if (enCola >= limiteCola() || !cola.length) return;
-    const tarea = cola.shift();
-    enCola++;
-    tarea().finally(() => { enCola--; siguienteDeCola(); });
+    while (enCola < limiteCola() && cola.length) {
+      let i = cola.findIndex((t) => !t.vigente || t.vigente() === 'ya');
+      if (i < 0) i = cola.findIndex((t) => t.vigente() !== false);
+      if (i < 0) { cola.splice(0).forEach((t) => t.descartar()); return; }
+      const [t] = cola.splice(i, 1);
+      enCola++;
+      t.correr().finally(() => { enCola--; siguienteDeCola(); });
+    }
   }
 
-  function encolar(fn) {
+  function encolar(fn, vigente) {
     return new Promise((res, rej) => {
-      cola.push(() => fn().then(res, rej));
+      cola.push({ vigente, correr: () => fn().then(res, rej), descartar: () => rej(new Error(FUERA)) });
       siguienteDeCola();
     });
   }
+  G.MINI_FUERA = FUERA;
 
-  G.miniatura = function (pagina, nivel) {
+  /**
+   * La miniatura de una hoja. `vigente`, si se da, dice si todavía hace
+   * falta: 'ya' (está a la vista, va primero), true (cerca) o false (lejos:
+   * se descarta).
+   */
+  G.miniatura = function (pagina, nivel, vigente) {
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
     if (!fuente) return Promise.reject(new Error('fuente ausente'));
     const n = nivel || G.NIVELES_MINI[0];
@@ -326,16 +448,18 @@
       const lienzo = document.createElement('canvas');
       lienzo.width = Math.max(1, Math.floor(vp.width));
       lienzo.height = Math.max(1, Math.floor(vp.height));
-      const ctx = lienzo.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, lienzo.width, lienzo.height);
-      await pag.render({ canvasContext: ctx, viewport: vp,
-        transform: G.matrizEnderezo(pagina.enderezo, lienzo.width, lienzo.height) }).promise;
+      if (!(await miniaturaRapida(pagina, vp, lienzo))) {
+        const ctx = lienzo.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+        await pag.render({ canvasContext: ctx, viewport: vp,
+          transform: G.matrizEnderezo(pagina.enderezo, lienzo.width, lienzo.height) }).promise;
+      }
       // más calidad en los niveles altos: ahí es donde se va a leer el texto
       const url = lienzo.toDataURL('image/jpeg', n >= 620 ? 0.9 : 0.85);
       guardarCache(k, url);
       return url;
-    });
+    }, vigente);
   };
 
   /** Render de una página a canvas, en grande (para el editor de firma / recorte). */

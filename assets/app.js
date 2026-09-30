@@ -310,6 +310,15 @@
   const refrescarNivel = () => (nivelActual = G.nivelPara(anchoTarjeta()));
   const nivelVigente = () => nivelActual || refrescarNivel();
 
+  /** ¿Sigue haciendo falta la miniatura de esta tarjeta? 'ya' si se ve,
+   *  true si está cerca (se va a ver al bajar un poco), false si no. */
+  const vigenciaDe = (el) => () => {
+    if (!el.isConnected) return false;
+    const c = el.getBoundingClientRect(), H = window.innerHeight;
+    if (c.bottom >= 0 && c.top <= H) return 'ya';
+    return c.bottom >= -500 && c.top <= H + 500;
+  };
+
   const observador = new IntersectionObserver((entradas) => {
     entradas.forEach((en) => {
       if (!en.isIntersecting) return;
@@ -319,13 +328,16 @@
       if (!pagina) return;
       // Primero la versión ligera, para que la hoja aparezca cuanto antes;
       // afinarVisibles() la vuelve a pedir con el detalle que pida el zoom.
-      G.miniatura(pagina, G.NIVELES_MINI[0]).then((url) => {
+      G.miniatura(pagina, G.NIVELES_MINI[0], vigenciaDe(en.target)).then((url) => {
         const img = en.target.querySelector('.mini');
         if (img && !img.src.startsWith('data:')) { img.src = url; img.style.display = 'block'; }
         const hueco = en.target.querySelector('.pag-cargando');
         if (hueco) hueco.remove();
         afinarVisibles();
-      }).catch(() => {});
+      }).catch((e) => {
+        // se pasó de largo: cuando vuelva a verse, se pide otra vez
+        if (e && e.message === G.MINI_FUERA && en.target.isConnected) observador.observe(en.target);
+      });
     });
   }, { rootMargin: '400px 0px' });
 
@@ -388,7 +400,7 @@
         const pagina = E.paginas.find((p) => p.uid === el.dataset.uid);
         const img = el.querySelector('.mini');
         if (!pagina || !img) return;
-        G.miniatura(pagina, nivel).then((url) => {
+        G.miniatura(pagina, nivel, vigenciaDe(el)).then((url) => {
           if (url && img.src !== url) { img.src = url; img.style.display = 'block'; }
           const hueco = el.querySelector('.pag-cargando');
           if (hueco) hueco.remove();
