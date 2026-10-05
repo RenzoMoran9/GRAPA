@@ -11,6 +11,40 @@
   const VERSION = 1;
   let promesaBd = null;
 
+  /* =========================================================
+     Avisos entre tableros y ventanas
+     Todo lo guardado vive en una sola base del navegador, así que los tres
+     tableros ven siempre lo mismo. Lo que sí hay que avisar es el CAMBIO:
+     otra ventana de Pdflash abierta a la vez no sabe que aquí se guardó,
+     se renombró o se borró un expediente. BroadcastChannel lo dice al
+     instante; el evento «storage» sirve de respaldo donde no existe.
+     ========================================================= */
+  const ID_VENTANA = 'v' + Math.random().toString(36).slice(2, 10);
+  const oyentes = [];
+  let canal = null;
+  try { if ('BroadcastChannel' in window) canal = new BroadcastChannel('pdflash-guardados'); } catch (e) { canal = null; }
+  const vistos = new Set();
+
+  function recibir(msg) {
+    if (!msg || msg.de === ID_VENTANA || vistos.has(msg.n)) return;
+    vistos.add(msg.n);
+    if (vistos.size > 200) vistos.clear();
+    oyentes.forEach((fn) => { try { fn(msg); } catch (e) { console.error(e); } });
+  }
+  if (canal) canal.onmessage = (ev) => recibir(ev.data);
+  window.addEventListener('storage', (ev) => {
+    if (ev.key !== 'pdflash.cambio' || !ev.newValue) return;
+    try { recibir(JSON.parse(ev.newValue)); } catch (e) {}
+  });
+
+  /** Dice a las demás ventanas qué cambió. Los autoguardados no se avisan: son de cada tablero. */
+  function avisarCambio(op, id, extra) {
+    if (String(id).startsWith('__auto')) return;
+    const msg = Object.assign({ op, id, de: ID_VENTANA, n: ID_VENTANA + ':' + Date.now() + ':' + Math.random().toString(36).slice(2, 6) }, extra || {});
+    try { if (canal) canal.postMessage(msg); } catch (e) {}
+    try { localStorage.setItem('pdflash.cambio', JSON.stringify(msg)); } catch (e) {}
+  }
+
   function abrir() {
     if (promesaBd) return promesaBd;
     promesaBd = new Promise((ok, no) => {
@@ -55,6 +89,17 @@
   G.bd = {
     disponible: async () => { try { await abrir(); return true; } catch (e) { return false; } },
 
+    /** Registra quién quiere enterarse cuando OTRA ventana guarda, renombra o borra. */
+    alCambiar(fn) { oyentes.push(fn); },
+
+    /** Los autoguardados (uno por tablero), del más reciente al más antiguo. */
+    async listarAutoguardados() {
+      return conTienda(['expedientes'], 'readonly', async (exp) => {
+        const todos = await pedir(exp.getAll());
+        return todos.filter((r) => String(r.id).startsWith('__auto')).sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+      });
+    },
+
     /**
      * Guarda la disposición y, si hace falta, los PDF que aún no estén dentro.
      * La consulta va en una transacción aparte: esperar dentro de una de
@@ -67,13 +112,14 @@
         exp.put(registro);
         fuentes.forEach((f) => { if (!yaEstan.has(f.id)) fue.put(f); });
       });
+      avisarCambio('guardar', registro.id, { nombre: registro.nombre });
     },
 
     listarExpedientes() {
       return conTienda(['expedientes'], 'readonly', async (exp) => {
         const todos = await pedir(exp.getAll());
         return todos
-          .filter((r) => r.id !== '__auto')
+          .filter((r) => !String(r.id).startsWith('__auto'))   // un autoguardado por tablero
           .sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
       });
     },
@@ -95,6 +141,7 @@
       if (!reg) return null;
       reg.nombre = nombre;
       await conTienda(['expedientes'], 'readwrite', (exp) => { exp.put(reg); });
+      avisarCambio('renombrar', id, { nombre });
       return reg;
     },
 
@@ -109,6 +156,7 @@
       if (sobran.length) {
         await conTienda(['fuentes'], 'readwrite', (fue) => { sobran.forEach((k) => fue.delete(k)); });
       }
+      avisarCambio('borrar', id);
     },
 
     async espacio() {

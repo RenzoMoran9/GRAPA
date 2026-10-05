@@ -284,7 +284,14 @@
     }
   };
 
-  G.olvidarBusqueda = () => { indice.clear(); enCurso.clear(); };
+  /** Sin argumento olvida todo; con una lista de ids, solo lo de esas fuentes. */
+  G.olvidarBusqueda = (fuenteIds) => {
+    if (!fuenteIds) { indice.clear(); enCurso.clear(); return; }
+    const ids = new Set(fuenteIds);
+    [indice, enCurso].forEach((m) => Array.from(m.keys()).forEach((k) => {
+      if (ids.has(k.slice(0, k.lastIndexOf(':')))) m.delete(k);
+    }));
+  };
 
   /** De las hojas ya leídas, las que son solo foto: sin texto en el que buscar. */
   G.hojasSinTexto = (paginas) => paginas.filter((p) => {

@@ -23,6 +23,7 @@
   --radio-s:7px;
   --panel-ancho:358px;
   --barra-alto:56px;
+  --tableros-alto:38px;
 }
 
 /* Modo oscuro en los tres estados posibles:
@@ -143,7 +144,7 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 .ancho{width:100%}
 
 /* ---------- estructura ---------- */
-.cuerpo{display:flex;height:calc(100% - var(--barra-alto));overflow:hidden}
+.cuerpo{display:flex;height:calc(100% - var(--barra-alto) - var(--tableros-alto));overflow:hidden}
 .panel{
   width:var(--panel-ancho);flex:none;background:var(--fondo-2);
   border-right:1px solid var(--borde);display:flex;min-height:0;
@@ -882,3 +883,77 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 /* hojas escaneadas en las que todavía no se puede buscar */
 .buscar-escaneadas{margin:6px 0 10px;padding:10px;border-radius:var(--radio-s);background:var(--fondo-3);border:1px solid var(--borde)}
 .buscar-escaneadas .nota{margin:0 0 8px}
+
+
+/* ---------- tableros: hasta tres expedientes a la vez ---------- */
+.tableros{
+  height:var(--tableros-alto);box-sizing:border-box;display:flex;align-items:flex-end;gap:6px;
+  padding:0 12px;background:var(--fondo-3);border-bottom:1px solid var(--borde);
+  position:relative;z-index:20;
+}
+.tableros-lista{display:flex;align-items:flex-end;gap:2px;min-width:0;flex:0 1 auto}
+.tablero{
+  --color-tablero:var(--acento);
+  position:relative;display:flex;align-items:center;gap:8px;height:34px;box-sizing:border-box;
+  min-width:150px;max-width:300px;padding:0 6px 0 12px;
+  border:1px solid transparent;border-bottom:0;border-radius:9px 9px 0 0;
+  color:var(--texto-2);font-size:13px;font-weight:500;cursor:pointer;user-select:none;
+  transition:background .12s,color .12s;
+}
+.tablero:hover{background:color-mix(in srgb,var(--fondo-2) 55%,transparent);color:var(--texto)}
+.tablero:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
+.tablero.activo{
+  background:var(--fondo-2);color:var(--texto);border-color:var(--borde);
+  height:35px;margin-bottom:-1px;
+}
+.tablero.activo::before{
+  content:"";position:absolute;left:-1px;right:-1px;top:-1px;height:2px;
+  background:var(--color-tablero);border-radius:9px 9px 0 0;
+}
+.tablero-punto{width:8px;height:8px;border-radius:50%;background:var(--color-tablero);flex:none}
+.tablero-nombre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tablero-meta{color:var(--texto-3);font-size:12px;font-weight:400;flex:none}
+.tablero-estado{display:none;width:7px;height:7px;border-radius:50%;background:var(--texto-2);margin-left:auto;flex:none}
+.tablero.nuevo .tablero-estado,.tablero.sucio .tablero-estado{display:block}
+.tablero-estado + .tablero-cerrar{margin-left:0}
+.tablero-cerrar{
+  margin-left:auto;width:22px;height:22px;display:grid;place-items:center;flex:none;padding:0;
+  border:0;border-radius:6px;background:transparent;color:var(--texto-3);cursor:pointer;opacity:0;
+}
+.tablero-cerrar .ico{width:13px;height:13px}
+.tablero:hover .tablero-cerrar,.tablero.activo .tablero-cerrar,.tablero:focus-within .tablero-cerrar{opacity:1}
+.tablero-cerrar:hover{background:var(--fondo-3);color:var(--rojo)}
+.tablero.recibe{animation:tableroRecibe 1.1s ease-out}
+@keyframes tableroRecibe{0%{background:var(--acento-tenue)}100%{background:transparent}}
+.tablero-nuevo{
+  align-self:center;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;margin-left:4px;
+  border:1px dashed var(--borde);border-radius:7px;background:transparent;color:var(--texto-2);
+  font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;
+}
+.tablero-nuevo:hover{border-style:solid;color:var(--texto);background:var(--fondo-2)}
+.tablero-nuevo .ico{width:14px;height:14px}
+.tablero-nuevo[hidden]{display:none}
+.tableros-cupo{align-self:center;margin-left:auto;font-size:12px;color:var(--texto-3)}
+.tableros-cupo.lleno{padding:3px 9px;border:1px dashed var(--borde);border-radius:7px}
+
+/* enviar hojas a otro tablero */
+.enviar-caja{position:relative;display:inline-flex}
+.menu-enviar{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:330px;padding:8px;
+  background:var(--fondo-2);border:1px solid var(--borde);border-radius:var(--radio);box-shadow:var(--sombra-fuerte);
+}
+.menu-enviar[hidden]{display:none}
+.menu-enviar-titulo{margin:2px 6px 8px;font-size:12px;font-weight:600;color:var(--texto-3)}
+.menu-enviar-fila{
+  --color-tablero:var(--acento);display:flex;align-items:center;gap:6px;padding:6px;border-radius:var(--radio-s);
+  border-left:3px solid var(--color-tablero);
+}
+.menu-enviar-fila:hover{background:var(--fondo-3)}
+.menu-enviar-nombre{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+
+/* lista de guardados: en qué tablero está abierto cada uno */
+.guardado-tablero{
+  --color-tablero:var(--acento);display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;
+  font-size:11px;font-weight:600;color:var(--color-tablero);
+  background:color-mix(in srgb,var(--color-tablero) 14%,transparent);
+}

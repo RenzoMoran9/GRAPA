@@ -85,6 +85,15 @@
   </div>
 </header>
 
+<!-- ============ TABLEROS ============
+     Hasta tres expedientes abiertos a la vez, cada uno en su pestaña. Las
+     pestañas las dibuja app.js; todo lo guardado se comparte entre ellas. -->
+<div class="tableros" id="tableros">
+  <div class="tableros-lista" id="tablerosLista" role="tablist" aria-label="Tableros abiertos"></div>
+  <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 3 a la vez. Alt+1, Alt+2 y Alt+3 cambian de tablero."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> Nuevo tablero</button>
+  <span class="tableros-cupo" id="tablerosCupo"></span>
+</div>
+
 <div class="cuerpo">
 
   <!-- ============ PANEL LATERAL ============ -->
@@ -360,6 +369,10 @@
         <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
         <button class="btn btn-mini" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Bajar selección</button>
         <button class="btn btn-mini" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-comparar"/></svg> Comparar marcadas</button>
+        <span class="enviar-caja">
+          <button class="btn btn-mini" id="btnEnviar" type="button" hidden title="Copia o mueve las hojas marcadas a otro tablero"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-fin"/></svg> Enviar a… <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+          <div class="menu-enviar" id="menuEnviar" hidden></div>
+        </span>
         <span class="separador-vertical"></span>
         <button class="btn btn-mini" id="btnLector" title="Ver las hojas en grande (V)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Ver en grande</button>
         <span class="separador-vertical"></span>

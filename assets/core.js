@@ -35,6 +35,9 @@
   let contadorColor = 0;
 
   G.estado = {
+    // Los PDF de origen son comunes a todos los tableros (cada hoja dice cuál es
+    // el suyo por id): así una lectura, una revisión o una miniatura en marcha
+    // sigue valiendo aunque cambies de tablero.
     fuentes: new Map(),  // id -> {id, nombre, bytes, color, paginas:[{w,h,giro}]}
     paginas: [],         // {uid, fuenteId, paqueteId, indice, giro, sellos:[], corte}
     paquetes: new Map(), // id -> {id, nombre, color}  ·  lo que entró de una vez
@@ -185,7 +188,8 @@
           }
         }
 
-        const id = 'f' + (G.estado.fuentes.size + nuevasFuentes.length + 1) + '-' + Date.now().toString(36);
+        const id = 'f' + (G.estado.fuentes.size + nuevasFuentes.length + 1) + '-' + Date.now().toString(36)
+          + Math.random().toString(36).slice(2, 5);
         const fuente = {
           id,
           nombre: file.name.replace(/\.[^.]+$/, ''),
