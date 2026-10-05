@@ -349,6 +349,51 @@ No corrige texto de escaneos: ahí no hay letras, hay una foto.
 > sigue siendo un programa independiente. Por eso el editor vive en su propio
 > repositorio.
 
+## Evaluar ofertas y copiar texto (también de escaneos)
+
+Pdflash trae su propio **lector de texto para escaneos** (Tesseract, en español),
+que corre dentro del navegador: sin servidor, sin internet y sin que ningún
+documento salga de tu computadora. Se carga solo la primera vez que hace falta
+(unos 4 MB en la web; en `Grapa.html` va dentro del archivo). Una hoja con texto
+de verdad se lee tal cual, sin reconocimiento; una escaneada se endereza, se le
+borran las rayas de las tablas y se lee. Si sale al revés o de lado, lo detecta
+y la gira.
+
+### Evaluar ofertas
+
+1. Marca las hojas del **Formato 1** (datos del postor) y del **Formato 5**
+   (oferta con los precios) de cada postor. Se pueden marcar de varios archivos.
+2. **Evaluar ofertas** (barra flotante, menú *Editar*, o desde «Comparar»).
+3. Sale el cuadro comparativo: razón social, RUC, domicilio, teléfono, correo,
+   representante, los ítems con su cantidad y precio, el total, el plazo de
+   entrega, la validez, la garantía y la forma de pago, y arriba el **menor
+   precio entre los que cumplen**, con la diferencia contra el siguiente.
+
+Cómo se agrupan las hojas en postores: cada archivo (o paquete) es un postor, y
+dentro de uno, un nuevo Formato 1 o un RUC distinto abre otro.
+
+Para no creerse un número mal leído:
+
+- cada ítem tiene que cuadrar (cantidad × precio unitario = total);
+- el total que escribió el postor se contrasta con la suma de sus ítems;
+- el RUC se comprueba con su dígito de control (no se «corrige» solo: se avisa);
+- lo dudoso sale en **Revisa antes de decidir**, y al lado se ve la hoja de
+  verdad para cotejar.
+
+El cuadro es **editable**: corrige una cifra o desmarca *Cumple* y el ganador se
+recalcula al instante. Cada dato se copia con su botón, y puedes llevarte el
+resultado como **Copiar cuadro** (para pegar en Excel), **Excel** o **Agregar
+hoja resumen** (una página con el cuadro, para dejar el sustento en el
+expediente). Gana el menor precio total; si se adjudica por ítem, mira
+«Comparación por ítem».
+
+### Copiar texto
+
+En «Ver en grande», **Copiar texto** (o la tecla `T`) deja marcar un recuadro
+sobre la hoja y copia su texto al portapapeles: para pasar una razón social, un
+RUC o un precio a otro programa sin escribirlos. Queda a la vista lo copiado,
+para corregirlo, y se puede unir todo en una sola línea. `Esc` lo apaga.
+
 ## Capturas
 
 En el lector, el botón **⬚ Capturar** deja marcar con el ratón cualquier trozo
@@ -380,6 +425,7 @@ salga tal como se ve.
 | `Ctrl+D` | Duplicar |
 | `Supr` | Eliminar |
 | `V` | Ver las hojas en grande |
+| `T` | (en grande) Copiar el texto de un recuadro |
 | `[` / `]` | Girar a la izquierda / derecha |
 | `Clic + Shift` | Seleccionar un rango |
 | `Clic + Ctrl` | Añadir o quitar de la selección |
@@ -407,11 +453,15 @@ assets/
   styles.css          tema claro y oscuro
   core.js             estado, lectura de PDF, miniaturas, geometría y armado final
   buscar.js           el texto de cada hoja: qué palabra está dónde
+  ocr.js              leer una hoja: texto de verdad o reconocimiento de un escaneo
+  ofertas.js          leer Formatos 1 y 5, armar postores y decidir el menor precio
+  cuadro.js           la pantalla de «Evaluar ofertas»
   revisar.js          hojas en blanco, de lado, de cabeza o torcidas
   expedientes.js      guardado del trabajo (IndexedDB) y carpeta de salida
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
 lib/                  pdf-lib, pdf.js y JSZip incluidos (ver lib/LICENCIAS.md)
+lib/ocr/              el lector de escaneos (tesseract-wasm y el idioma español)
 construir.mjs         arma Grapa.html, el archivo único
 servidor.mjs          servidor estático opcional, sin dependencias
 ```
@@ -434,5 +484,4 @@ worker de verdad y va más rápido con documentos largos.
 
 ## Ideas para más adelante
 
-- Reconocer texto (OCR) en escaneos, para poder buscar también en ellos.
 - Índice o carátula automática con la lista de documentos y sus folios.

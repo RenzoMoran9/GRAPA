@@ -6,6 +6,7 @@
  *   node construir.mjs /otra/Grapa.html
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = fileURLToPath(new URL('.', import.meta.url));
@@ -24,13 +25,15 @@ const CREDITOS = `<!--
     · SheetJS 0.18.5 — Apache-2.0 — https://github.com/SheetJS/sheetjs
     · html2canvas 1.4.1 — MIT — https://github.com/niklasvh/html2canvas
     · Inter 4 — SIL OFL 1.1 — https://github.com/rsms/inter
+    · tesseract-wasm 0.11 (Tesseract OCR y Leptonica) — BSD-2-Clause / Apache-2.0 — https://github.com/robertknight/tesseract-wasm
+    · Modelo de idioma español «tessdata_fast» — Apache-2.0 — https://github.com/tesseract-ocr/tessdata_fast
 -->
 `;
 
 const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
-  'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
+  'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/ofertas.js', 'assets/cuadro.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
   'assets/app.js',
 ];
 
@@ -54,6 +57,14 @@ for (const ruta of GUIONES) {
   // pdf-lib lleva el carácter de reemplazo literal dentro de cadenas
   js = js.replaceAll('�', '\\ufffd');
   partes.push(`<!-- ${ruta} -->\n<script>\n${js}\n</script>`);
+}
+
+// El lector de texto para escaneos (Tesseract) va dentro, comprimido, para que Grapa.html lo
+// tenga sin internet. Ocupa unos 2,7 MB y no se toca hasta que se pide leer un escaneo.
+const OCR = { lib: 'tesseract-wasm.js', worker: 'tesseract-worker.js', wasm: 'tesseract-core.wasm', modelo: 'spa.traineddata' };
+for (const [id, archivo] of Object.entries(OCR)) {
+  const gz = gzipSync(readFileSync(RAIZ + 'lib/ocr/' + archivo), { level: 9 }).toString('base64');
+  partes.push(`<script type="text/plain" id="ocr-${id}">${gz}</script>`);
 }
 
 const doc = partes.join('\n\n') + '\n';

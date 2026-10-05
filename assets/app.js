@@ -3155,6 +3155,22 @@
     }
   }
 
+  /** Para «Evaluar ofertas»: las hojas marcadas, en el orden del expediente. */
+  G.evaluacion = {
+    marcadas() {
+      return E.paginas.filter((p) => E.seleccion.has(p.uid)).map((p) => {
+        const paq = p.paqueteId && E.paquetes.get(p.paqueteId);
+        const fuente = E.fuentes.get(p.fuenteId);
+        return {
+          id: p.uid, pagina: p, grupo: p.paqueteId || p.fuenteId,
+          nombreGrupo: (paq && paq.nombre) || (fuente && fuente.nombre) || '',
+          numero: E.paginas.indexOf(p) + 1,
+        };
+      });
+    },
+    anadir: (archivos) => anadir(archivos, null),
+  };
+
   /** Abre en grande, una al lado de otra, solo las hojas marcadas. */
   function compararMarcadas() {
     const objs = hojasVisibles().filter((p) => E.seleccion.has(p.uid));
@@ -3270,19 +3286,31 @@
      ve.                                                                   */
   const ANCHO_CAPTURA = 2400;
   let capturando = false;
+  let modoCaptura = 'imagen';     // 'imagen' (se lleva como imagen) o 'texto' (se copia su texto)
   let arrastreCaptura = null;
 
   function pintarBotonCaptura() {
     const b = $('#lectorCapturar');
-    if (b) b.classList.toggle('activo', capturando);
+    if (b) b.classList.toggle('activo', capturando && modoCaptura === 'imagen');
+    const t = $('#lectorCopiarTexto');
+    if (t) t.classList.toggle('activo', capturando && modoCaptura === 'texto');
     document.body.classList.toggle('capturando', capturando);
   }
 
-  function alternarCaptura(si) {
+  function alternarCaptura(si, modo) {
+    const nuevo = modo || 'imagen';
+    // pulsar el otro botón no apaga: cambia de herramienta
+    if (si == null && capturando && modoCaptura !== nuevo) si = true;
     capturando = si == null ? !capturando : si;
+    modoCaptura = nuevo;
     quitarMarcoCaptura();
     pintarBotonCaptura();
-    if (capturando) G.aviso('Arrastra sobre la hoja para marcar el trozo que quieres.', '');
+    if (!capturando) cerrarTextoCopiado();
+    if (capturando) {
+      G.aviso(nuevo === 'texto'
+        ? 'Arrastra sobre la hoja para marcar el texto que quieres copiar.'
+        : 'Arrastra sobre la hoja para marcar el trozo que quieres.', '');
+    }
   }
 
   function quitarMarcoCaptura() {
@@ -3370,6 +3398,96 @@
     }
   }
 
+  /* ---------- copiar el texto de un trozo de hoja ----------
+     Marcas un recuadro y el texto que haya dentro queda en el portapapeles,
+     listo para pegarlo en otro programa. Si la hoja es un escaneo se lee con
+     el reconocimiento de texto; si trae texto de verdad, se usa ese. Siempre
+     queda a la vista lo que se copió, para corregirlo antes de pegar.      */
+  let textoLeido = [];          // los renglones de la última lectura
+  const preferencia = {
+    leer() { try { return localStorage.getItem('pdflash-texto-una-linea') === '1'; } catch (e) { return false; } },
+    poner(v) { try { localStorage.setItem('pdflash-texto-una-linea', v ? '1' : '0'); } catch (e) { /* sin almacenamiento */ } },
+  };
+
+  function cerrarTextoCopiado() {
+    const p = $('#textoCopiado');
+    if (p) p.hidden = true;
+  }
+
+  async function copiarAlPortapapeles(texto) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    } catch (e) {
+      // sin permiso o sin gesto reciente: se prueba por el camino antiguo
+      const caja = $('#textoCopiadoCaja');
+      try {
+        caja.focus();
+        caja.select();
+        return document.execCommand('copy');
+      } catch (e2) { return false; }
+    }
+  }
+
+  function textoParaCopiar() {
+    return G.unirLineas(textoLeido, $('#textoUnaLinea').checked);
+  }
+
+  async function copiarTextoLeido(desdeBoton) {
+    const caja = $('#textoCopiadoCaja');
+    const texto = caja.value;
+    if (!texto.trim()) return;
+    const ok = await copiarAlPortapapeles(texto);
+    const estado = $('#textoCopiadoEstado');
+    estado.textContent = ok ? 'Copiado: pégalo con Ctrl+V' : 'No se pudo copiar solo: pulsa «Copiar»';
+    estado.classList.toggle('ok', ok);
+    if (ok && desdeBoton) G.aviso('Texto copiado.', 'ok');
+  }
+
+  async function terminarTexto(pagina, f, marco) {
+    if (f.an < 0.006 || f.al < 0.004) { quitarMarcoCaptura(); return; }
+    if (marco) marco.classList.add('leyendo');
+    const baja = G.alEstadoOcr((t) => { if (t) G.progreso(t); });
+    G.cargando(true, 'Leyendo el texto…');
+    try {
+      const r = await G.textoDeZona(pagina, f);
+      textoLeido = r.lineas;
+      const texto = textoParaCopiar();
+      quitarMarcoCaptura();
+      if (!texto.trim()) {
+        cerrarTextoCopiado();
+        G.aviso('No se encontró texto en ese recuadro. Marca un poco más grande.', 'error');
+        return;
+      }
+      $('#textoCopiadoCaja').value = texto;
+      $('#textoCopiadoFuente').textContent = r.origen === 'ocr' ? 'leído de un escaneo: revisa las cifras' : 'texto del documento';
+      $('#textoCopiado').hidden = false;
+      await copiarTextoLeido(false);
+    } catch (e) {
+      console.error(e);
+      quitarMarcoCaptura();
+      G.aviso('No se pudo leer el texto: ' + e.message, 'error');
+    } finally {
+      baja();
+      G.cargando(false);
+    }
+  }
+
+  function conectarTextoCopiado() {
+    $('#textoCopiadoCopiar').addEventListener('click', () => copiarTextoLeido(true));
+    $('#textoCopiadoCerrar').addEventListener('click', cerrarTextoCopiado);
+    $('#textoUnaLinea').checked = preferencia.leer();
+    $('#textoUnaLinea').addEventListener('change', (ev) => {
+      preferencia.poner(ev.target.checked);
+      if (textoLeido.length) { $('#textoCopiadoCaja').value = textoParaCopiar(); copiarTextoLeido(false); }
+    });
+    // a mano también se puede corregir y volver a copiar
+    $('#textoCopiadoCaja').addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); copiarTextoLeido(true); }
+      ev.stopPropagation();
+    });
+  }
+
   function abrirCaptura(blob, an, al) {
     const url = URL.createObjectURL(blob);
     $('#capturaPrevia').src = url;
@@ -3438,8 +3556,9 @@
         al: Math.abs(y - a.y0) / a.caja.height,
       };
       const pagina = hojasLector()[Number(a.hoja.dataset.indice)];
-      if (pagina) terminarCaptura(pagina, f);
-      else quitarMarcoCaptura();
+      if (!pagina) quitarMarcoCaptura();
+      else if (modoCaptura === 'texto') terminarTexto(pagina, f, a.marco);
+      else terminarCaptura(pagina, f);
     });
   }
 
@@ -3953,6 +4072,7 @@
     if (!(indice >= 0)) indice = 0;
     lector.abierto = true;
     $('#lector').hidden = false;
+    $('#lectorEvaluar').hidden = !lector.soloMarcadas;
     construirLector();
     irAHoja(indice, true);
     pintarSegVista();
@@ -3960,6 +4080,7 @@
 
   function cerrarLector() {
     if (capturando) alternarCaptura(false);
+    cerrarTextoCopiado();
     lector.abierto = false;
     lector.soloMarcadas = false;
     lector.columnas = 1;
@@ -4704,6 +4825,7 @@
       }
       if (ev.key === 'Home') { ev.preventDefault(); irAHoja(0); return; }
       if (ev.key === 'End') { ev.preventDefault(); irAHoja(hojasLector().length - 1); return; }
+      if ((ev.key === 't' || ev.key === 'T') && !ctrl && !ev.altKey) { ev.preventDefault(); alternarCaptura(null, 'texto'); return; }
       if (ev.key === '[') { accionLector((p) => { p.giro = G.norm(p.giro - 90); }); return; }
       if (ev.key === ']') { accionLector((p) => { p.giro = G.norm(p.giro + 90); }); return; }
     }
@@ -5051,6 +5173,8 @@
     });
     $('#btnVerPeso').addEventListener('click', calcularPeso);
     $('#btnComparar').addEventListener('click', compararMarcadas);
+    $('#btnEvaluar').addEventListener('click', () => G.evaluarOfertas());
+    $('#lectorEvaluar').addEventListener('click', () => G.evaluarOfertas());
     $('#lectorColumnas').addEventListener('change', (ev) => {
       lector.columnas = Number(ev.target.value) || 1;
       aplicarZoomLector();
@@ -5218,8 +5342,10 @@
       const p = paginaActualLector();
       if (p) editarTexto([p]);
     });
-    $('#lectorCapturar').addEventListener('click', () => alternarCaptura());
+    $('#lectorCapturar').addEventListener('click', () => alternarCaptura(null, 'imagen'));
+    $('#lectorCopiarTexto').addEventListener('click', () => alternarCaptura(null, 'texto'));
     conectarCaptura();
+    conectarTextoCopiado();
     $('#lectorEliminar').addEventListener('click', () => {
       const p = paginaActualLector();
       if (!p) return;
