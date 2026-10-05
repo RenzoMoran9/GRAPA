@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20260930c">
+<link rel="stylesheet" href="assets/styles.css?v=20261005a">
 </head>
 <body>
 
@@ -66,22 +66,70 @@
     <div class="marca-logo" aria-hidden="true">
       <svg viewBox="0 0 32 32"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7" /></svg>
     </div>
-    <div class="marca-texto">
+    <div class="marca-texto" title="Pdflash · Taller de PDF: une, ordena y firma">
       <strong>Pdflash</strong>
-      <span>Taller de PDF · une, ordena y firma</span>
     </div>
   </div>
+
+  <!-- Menús: cada opción acciona el botón de siempre (data-clic), así no hay
+       dos maneras de hacer lo mismo que puedan separarse con el tiempo. -->
+  <nav class="menus" id="menus" aria-label="Menú">
+    <div class="menu">
+      <button class="menu-boton" type="button" aria-haspopup="true" aria-expanded="false">Archivo</button>
+      <div class="menu-lista" role="menu" hidden>
+        <button class="menu-item" role="menuitem" data-clic="#btnAbrir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir archivos<kbd>Ctrl+O</kbd></button>
+        <button class="menu-item" role="menuitem" id="btnNuevo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-nuevo"/></svg> <span id="txtNuevo">Nuevo tablero</span></button>
+        <span class="menu-sep" role="separator"></span>
+        <button class="menu-item" role="menuitem" data-clic="#btnGuardarExp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Guardar expediente<kbd>Ctrl+Mayús+S</kbd></button>
+        <button class="menu-item" role="menuitem" data-clic="#btnGuardar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF<kbd>Ctrl+S</kbd></button>
+        <span class="menu-sep" role="separator"></span>
+        <button class="menu-item" role="menuitem" data-clic="#btnEditarTexto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
+        <button class="menu-item" role="menuitem" id="btnEditorExterno" title="Guarda el PDF en Descargas y abre otra web para que lo subas ahí"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a otra web</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-boton" type="button" aria-haspopup="true" aria-expanded="false">Editar</button>
+      <div class="menu-lista" role="menu" hidden>
+        <button class="menu-item" role="menuitem" data-clic="#btnDeshacer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-deshacer"/></svg> Deshacer<kbd>Ctrl+Z</kbd></button>
+        <button class="menu-item" role="menuitem" data-clic="#btnRehacer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rehacer"/></svg> Rehacer<kbd>Ctrl+Y</kbd></button>
+        <span class="menu-sep" role="separator"></span>
+        <button class="menu-item" role="menuitem" data-clic="#btnSelTodo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg> Seleccionar todo<kbd>Ctrl+A</kbd></button>
+        <button class="menu-item" role="menuitem" data-clic="#btnSelNada"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg> Quitar la selección</button>
+        <button class="menu-item" role="menuitem" data-clic="#btnSelInvertir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recoger"/></svg> Invertir la selección</button>
+        <span class="menu-sep" role="separator"></span>
+        <button class="menu-item" role="menuitem" data-clic="#btnDuplicar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-duplicar"/></svg> Duplicar<kbd>Ctrl+D</kbd></button>
+        <button class="menu-item" role="menuitem" data-clic="#btnEliminar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg> Eliminar<kbd>Supr</kbd></button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-boton" type="button" aria-haspopup="true" aria-expanded="false">Ver</button>
+      <div class="menu-lista" role="menu" hidden>
+        <button class="menu-item" role="menuitem" data-vista="hojas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hojas"/></svg> Hojas</button>
+        <button class="menu-item" role="menuitem" data-vista="paquetes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paquete"/></svg> Paquetes</button>
+        <button class="menu-item" role="menuitem" data-clic="#btnLector"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Ver en grande<kbd>V</kbd></button>
+        <span class="menu-sep" role="separator"></span>
+        <button class="menu-item" role="menuitem" data-clic="#btnPanel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-panel"/></svg> Mostrar u ocultar el panel<kbd>P</kbd></button>
+        <button class="menu-item" role="menuitem" data-clic="#btnTema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg> Cambiar el tema</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-boton" type="button" aria-haspopup="true" aria-expanded="false">Ayuda</button>
+      <div class="menu-lista" role="menu" hidden>
+        <button class="menu-item" role="menuitem" data-clic="#btnAyuda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg> Cómo se usa y atajos</button>
+      </div>
+    </div>
+  </nav>
 
   <div class="barra-acciones">
     <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rehacer"/></svg></button>
     <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema" aria-label="Cambiar tema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg></button>
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos" aria-label="Ayuda y atajos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg></button>
-    <button class="btn btn-secundario" id="btnNuevo" title="Vacía el taller para armar otro expediente. No toca lo que ya guardaste.">Nuevo</button>
-    <button class="btn btn-secundario" id="btnAbrir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir archivos</button>
+    <span class="separador-vertical"></span>
+    <button class="btn btn-secundario" id="btnAbrir" title="Abrir archivos (Ctrl+O)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir</button>
     <button class="btn btn-secundario" id="btnEditarTexto" title="Abre el editor de texto y le pasa las hojas marcadas (o todas, si no hay ninguna marcada)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
-    <button class="btn btn-secundario" id="btnEditorExterno" title="Guarda el PDF en Descargas y abre otra web para que lo subas ahí"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a otra web</button>
-    <button class="btn btn-primario" id="btnGuardar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Guardar PDF</button>
+    <button class="btn btn-secundario" id="btnGuardarExp" title="Guarda este expediente para retomarlo otro día (Ctrl+Mayús+S). Se queda en este navegador."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Guardar</button>
+    <button class="btn btn-primario" id="btnGuardar" title="Arma el PDF terminado y lo baja (Ctrl+S)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF</button>
   </div>
 </header>
 
@@ -145,6 +193,10 @@
         </div>
         <p class="nota">Word y Excel se convierten a PDF aquí mismo, sin subirlos a ningún lado. Revisa cómo quedan: el reparto de líneas y hojas puede moverse un poco respecto a Office. También puedes pegarlos con Ctrl+V.</p>
         <ul class="lista-docs" id="listaDocs"></ul>
+        <div class="estado-exp" id="estadoExp" hidden>
+          <p class="etiqueta">Estado del expediente</p>
+          <dl id="estadoExpLista"></dl>
+        </div>
       </div>
     </section>
 
@@ -350,47 +402,29 @@
 
   <!-- ============ ÁREA DE TRABAJO ============ -->
   <main class="taller">
+    <div class="taller-cabecera">
+      <h1 class="taller-titulo" id="tituloTablero">Tablero en blanco</h1>
+      <button class="chip-estado" id="chipEstado" type="button"></button>
+    </div>
+
     <div class="taller-barra">
-      <div class="taller-info">
-        <strong id="infoPaginas">0 páginas</strong>
-        <span id="infoSeleccion">nada seleccionado</span>
+      <div class="seg" id="segVista" role="group" aria-label="Cómo ver el expediente">
+        <button type="button" data-vista="hojas" title="Todas las hojas, una por una"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hojas"/></svg> Hojas</button>
+        <button type="button" data-vista="paquetes" title="Una tarjeta por cada documento que entró"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paquete"/></svg> Paquetes</button>
+        <button type="button" id="btnLector" title="Ver las hojas en grande (V)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> En grande</button>
       </div>
+      <button class="buscar-barra" id="btnBuscarBarra" type="button" title="Buscar una palabra en todas las hojas (Ctrl+F)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> <span>Buscar en el expediente…</span><kbd>Ctrl F</kbd></button>
       <button class="chip-busqueda" id="chipBusqueda" type="button" hidden title="Quitar la búsqueda (Esc en el buscador)">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg>
         <span id="chipBusquedaTexto"></span>
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg>
       </button>
       <div class="taller-herramientas">
-        <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paquete"/></svg> Ver por paquetes</button>
+        <button class="btn btn-mini" id="btnVista" hidden title="Cambiar entre ver paquetes o todas las hojas"></button>
         <button class="btn btn-mini" id="btnVolverPaquetes" hidden title="Volver a la vista de paquetes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-volver"/></svg> Paquetes</button>
-        <span class="separador-vertical"></span>
-        <button class="btn btn-mini" id="btnSelTodo">Seleccionar todo</button>
+        <button class="btn btn-secundario btn-chico" id="btnSelTodo" title="Marcar todas las hojas (Ctrl+A)">Seleccionar todo</button>
         <button class="btn btn-mini" id="btnSelNada">Ninguna</button>
         <button class="btn btn-mini" id="btnSelInvertir">Invertir</button>
-        <button class="btn btn-mini" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Bajar selección</button>
-        <button class="btn btn-mini" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-comparar"/></svg> Comparar marcadas</button>
-        <span class="enviar-caja">
-          <button class="btn btn-mini" id="btnEnviar" type="button" hidden title="Copia o mueve las hojas marcadas a otro tablero"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-fin"/></svg> Enviar a… <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
-          <div class="menu-enviar" id="menuEnviar" hidden></div>
-        </span>
-        <span class="separador-vertical"></span>
-        <button class="btn btn-mini" id="btnLector" title="Ver las hojas en grande (V)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Ver en grande</button>
-        <span class="separador-vertical"></span>
-        <button class="btn btn-mini" id="btnGirarIzq" title="Girar 90° izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
-        <button class="btn btn-mini" id="btnGirarDer" title="Girar 90° derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
-        <button class="btn btn-mini" id="btnDuplicar" title="Duplicar (Ctrl+D)" aria-label="Duplicar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-duplicar"/></svg></button>
-        <button class="btn btn-mini" id="btnMoverInicio" title="Mover al inicio" aria-label="Mover al inicio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inicio"/></svg></button>
-        <button class="btn btn-mini" id="btnMoverFin" title="Mover al final" aria-label="Mover al final"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-fin"/></svg></button>
-        <label class="salto-pos" title="Mueve la selección a esa posición (o Alt+↑ / Alt+↓ de a una)">
-          Ir a
-          <input type="number" id="saltoPos" min="1" placeholder="Nº">
-        </label>
-        <button class="btn btn-mini" id="btnSaltoPos">Mover</button>
-        <button class="btn btn-mini btn-peligro-suave" id="btnEliminar" title="Eliminar (Supr)" aria-label="Eliminar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
-        <span class="separador-vertical"></span>
-        <label class="zoom">Zoom
-          <input type="range" id="zoom" min="110" max="2400" value="180" title="Amplía las hojas hasta poder leerlas">
-        </label>
       </div>
     </div>
 
@@ -453,8 +487,47 @@
       </header>
       <div class="lector-hojas" id="lectorHojas"></div>
     </div>
+
+    <!-- Lo que se hace con las hojas marcadas. Si no hay ninguna marcada, estas
+         acciones van a TODAS (se dice con la etiqueta de la izquierda). -->
+    <div class="barra-seleccion" id="barraSeleccion" hidden role="toolbar" aria-label="Acciones sobre las hojas">
+      <span class="bs-cuenta" id="bsCuenta" title=""><b id="bsNumero">0</b><span id="bsTexto">hojas</span></span>
+      <button class="bs-btn" id="btnGirarIzq" title="Girar 90° izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
+      <button class="bs-btn" id="btnGirarDer" title="Girar 90° derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
+      <span class="bs-sep"></span>
+      <button class="bs-btn" id="bsFirmar" title="Abre Firmas y sellos para colocar una firma en estas hojas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg> Firmar</button>
+      <button class="bs-btn" id="btnDuplicar" title="Duplicar (Ctrl+D)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-duplicar"/></svg> Duplicar</button>
+      <button class="bs-btn" id="btnMoverInicio" title="Mover al inicio" aria-label="Mover al inicio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inicio"/></svg></button>
+      <button class="bs-btn" id="btnMoverFin" title="Mover al final" aria-label="Mover al final"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-fin"/></svg></button>
+      <label class="salto-pos" title="Mueve la selección a esa posición (o Alt+↑ / Alt+↓ de a una)">
+        Ir a
+        <input type="number" id="saltoPos" min="1" placeholder="Nº">
+      </label>
+      <button class="bs-btn" id="btnSaltoPos">Mover</button>
+      <span class="bs-sep"></span>
+      <button class="bs-btn" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Extraer</button>
+      <button class="bs-btn" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-comparar"/></svg> Comparar</button>
+      <span class="enviar-caja">
+        <button class="bs-btn bs-destacado" id="btnEnviar" type="button" hidden title="Copia o mueve las hojas marcadas a otro tablero">Enviar a… <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+        <div class="menu-enviar" id="menuEnviar" hidden></div>
+      </span>
+      <span class="bs-sep"></span>
+      <button class="bs-btn bs-peligro" id="btnEliminar" title="Eliminar (Supr)" aria-label="Eliminar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
+    </div>
   </main>
 </div>
+
+<footer class="barra-estado" id="barraEstado">
+  <span class="estado-guardado" id="estadoGuardado"></span>
+  <span class="estado-sync" id="estadoSync" title="La lista de guardados, las firmas y los avisos se comparten entre todos los tableros y las ventanas abiertas de Pdflash."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recoger"/></svg> <span id="estadoSyncTexto">Sincronizado</span></span>
+  <span class="estado-espacio"></span>
+  <strong id="infoPaginas">0 páginas</strong>
+  <span id="infoSeleccion">nada seleccionado</span>
+  <span id="infoTamano" title="Tamaño de las hojas"></span>
+  <label class="zoom">Zoom
+    <input type="range" id="zoom" min="110" max="2400" value="180" title="Amplía las hojas hasta poder leerlas">
+  </label>
+</footer>
 
 <div class="restaurar" id="restaurar" hidden>
   <span id="restaurarTexto">Quedó un trabajo sin terminar.</span>
@@ -652,13 +725,16 @@
         <li><strong>Revisa</strong>: en «Hojas en blanco y de lado», Pdflash encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
-        <li><strong>Guarda</strong> el PDF final, o divídelo si necesitas archivos separados.</li>
-        <li>Para armar otro expediente, <strong>Nuevo</strong> vacía el taller. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
+        <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
+        <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
+        <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 3) y avanzas con los tres en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero.</li>
       </ol>
       <h4>Atajos</h4>
       <table class="tabla-atajos">
         <tr><td>Ctrl+O</td><td>Abrir archivos</td></tr>
-        <tr><td>Ctrl+S</td><td>Guardar PDF</td></tr>
+        <tr><td>Ctrl+S</td><td>Exportar PDF</td></tr>
+        <tr><td>Ctrl+Mayús+S</td><td>Guardar el expediente (para retomarlo después)</td></tr>
+        <tr><td>Alt+1, 2 o 3</td><td>Cambiar de tablero</td></tr>
         <tr><td>Ctrl+F</td><td>Buscar una palabra en todas las hojas · Enter pasa a la siguiente</td></tr>
         <tr><td>Ctrl+Z / Ctrl+Y</td><td>Deshacer / Rehacer</td></tr>
         <tr><td>Ctrl+A</td><td>Seleccionar todas las páginas</td></tr>
@@ -684,12 +760,12 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20260930c"></script>
-<script src="assets/buscar.js?v=20260930c"></script>
-<script src="assets/revisar.js?v=20260930c"></script>
-<script src="assets/office.js?v=20260930c"></script>
-<script src="assets/expedientes.js?v=20260930c"></script>
-<script src="assets/firmas.js?v=20260930c"></script>
-<script src="assets/app.js?v=20260930c"></script>
+<script src="assets/core.js?v=20261005a"></script>
+<script src="assets/buscar.js?v=20261005a"></script>
+<script src="assets/revisar.js?v=20261005a"></script>
+<script src="assets/office.js?v=20261005a"></script>
+<script src="assets/expedientes.js?v=20261005a"></script>
+<script src="assets/firmas.js?v=20261005a"></script>
+<script src="assets/app.js?v=20261005a"></script>
 </body>
 </html>

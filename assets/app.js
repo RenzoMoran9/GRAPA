@@ -423,7 +423,7 @@
     const btnVolver = $('#btnVolverPaquetes');
     if (!btnVista || !btnVolver) return;
     const hay = E.paginas.length > 0;
-    btnVista.hidden = !hay || !!paqueteAbierto;
+    btnVista.hidden = true;     // el selector de vista de arriba ocupa su lugar
     btnVista.innerHTML = vista === 'paquetes'
       ? icono('hojas') + ' Ver todas las hojas'
       : icono('paquete') + ' Ver por paquetes';
@@ -621,17 +621,21 @@
     const avisoRevision = nodoRevision(pagina);
     if (avisoRevision) marco.appendChild(avisoRevision);
 
-    const num = document.createElement('span');
-    num.className = 'pag-num';
-    num.textContent = indice + 1;
-    marco.appendChild(num);
-
-    if (fuente) {
-      const org = document.createElement('span');
-      org.className = 'pag-origen';
-      org.textContent = fuente.nombre;
-      org.title = fuente.nombreCompleto + ' · página original ' + (pagina.indice + 1);
-      marco.appendChild(org);
+    // Marcas de lo que la hoja ya lleva: firmada, y con qué folio
+    if (pagina.sellos.some((x) => x.rol === 'firma')) {
+      const f = document.createElement('span');
+      f.className = 'pag-marca-firma';
+      f.title = 'Lleva firma o sello';
+      f.innerHTML = icono('firma');
+      marco.appendChild(f);
+    }
+    const folioDe = folios.get(pagina.uid);
+    if (folioDe != null) {
+      const f = document.createElement('span');
+      f.className = 'pag-folio';
+      f.textContent = 'F. ' + folioDe;
+      f.title = 'Folio ' + folioDe;
+      marco.appendChild(f);
     }
 
     const acciones = document.createElement('div');
@@ -662,9 +666,19 @@
 
     el.appendChild(marco);
 
+    // El pie: su sitio en el expediente y a qué paquete pertenece. El tamaño y
+    // el archivo de origen quedan en el texto que sale al apuntarlo.
     const etiqueta = document.createElement('div');
     etiqueta.className = 'pag-etiqueta';
-    etiqueta.textContent = `${Math.round(vis.w * 0.3528)}×${Math.round(vis.h * 0.3528)} mm`;
+    const numero = document.createElement('b');
+    numero.textContent = indice + 1;
+    const paq = E.paquetes.get(pagina.paqueteId);
+    const quien = document.createElement('span');
+    quien.textContent = fuente ? fuente.nombre : '';
+    etiqueta.append(numero, quien);
+    etiqueta.title = (paq ? 'Paquete «' + paq.nombre + '» · ' : '')
+      + (fuente ? fuente.nombreCompleto + ' · página original ' + (pagina.indice + 1) + ' · ' : '')
+      + `${Math.round(vis.w * 0.3528)}×${Math.round(vis.h * 0.3528)} mm`;
     el.appendChild(etiqueta);
 
     // tijera de corte (no aparece en la última página)
@@ -720,6 +734,21 @@
     const a = textoAlcance(enPaquetes);
     el.textContent = a.txt;
     el.classList.toggle('alcance-todo', a.alerta);
+    pintarBarraSeleccion(enPaquetes);
+  }
+
+  /** La barra flotante: cuántas hojas marcadas, o «Todas» si no hay ninguna. */
+  function pintarBarraSeleccion(enPaquetes) {
+    const barra = $('#barraSeleccion');
+    if (!barra) return;
+    barra.hidden = !E.paginas.length || !!enPaquetes;
+    const n = E.seleccion.size;
+    $('#bsNumero').textContent = n ? n : 'Todas';
+    $('#bsTexto').textContent = n ? (n === 1 ? 'hoja' : 'hojas') : '';
+    $('#bsCuenta').classList.toggle('todas', !n);
+    $('#bsCuenta').title = n
+      ? (n === 1 ? '1 hoja marcada' : n + ' hojas marcadas')
+      : `Sin marcar: las acciones van a las ${hojasVisibles().length} hojas`;
   }
 
   function refrescarSeleccion() {
@@ -758,8 +787,12 @@
     // En la vista de paquetes no se enseñan herramientas de hoja suelta:
     // actuarían sobre una selección que no se está viendo.
     $('.taller-herramientas').classList.toggle('solo-paquetes', enPaquetes);
+    $('.taller-herramientas').classList.toggle('sin-hojas', !E.paginas.length);
+    pintarTamano();
+    pintarSegVista();
 
     pintarDocs();
+    pintarEstadoExpediente();
     pintarFirmas();
     actualizarBotonesHistorial();
     // Taller vacío es empezar de nuevo, se haya llegado ahí por el botón
@@ -781,6 +814,125 @@
     seguirLectorTrasPintar();
   }
   G.pintar = pintar;
+
+  /** «A4» si todas las hojas son A4; si no, el tamaño o «Tamaños mixtos». */
+  function pintarTamano() {
+    const el = $('#infoTamano');
+    if (!el) return;
+    if (!E.paginas.length) { el.textContent = ''; return; }
+    const medidas = new Set(E.paginas.map((p) => {
+      const v = visDe(p);
+      const a = Math.round(v.w * 0.3528), b = Math.round(v.h * 0.3528);
+      return a + '×' + b;
+    }));
+    if (medidas.size > 1) { el.textContent = 'Tamaños mixtos'; return; }
+    const [m] = medidas;
+    el.textContent = (m === '210×297' || m === '297×210') ? 'A4' : m + ' mm';
+  }
+
+  /** Hojas · Paquetes · En grande: la vista que está encendida. */
+  function irAVista(v) {
+    if (!E.paginas.length) return;
+    if (paqueteAbierto) { if (v === 'paquetes') cerrarPaquete(); return; }
+    if (vista === v) return;
+    vista = v;
+    E.seleccion.clear();
+    pintar();
+  }
+  function pintarSegVista() {
+    const seg = $('#segVista');
+    if (!seg) return;
+    const hay = E.paginas.length > 0;
+    const enPaquetes = vista === 'paquetes' && !paqueteAbierto;
+    $$('[data-vista]', seg).forEach((b) => {
+      const on = !lector.abierto && (b.dataset.vista === 'paquetes' ? enPaquetes : !enPaquetes);
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.disabled = !hay;
+    });
+    $('#btnLector').classList.toggle('on', !!lector.abierto);
+    $('#btnLector').disabled = !hay;
+  }
+
+  /** Lo que de un vistazo falta o sobra en el expediente que se ve. */
+  function pintarEstadoExpediente() {
+    const caja = $('#estadoExp');
+    if (!caja) return;
+    caja.hidden = !E.paginas.length;
+    if (caja.hidden) return;
+    const filas = [];
+    filas.push(['Foliación', totalFolios
+      ? { ok: true, t: totalFolios === 1 ? '1 folio' : totalFolios + ' folios' }
+      : { t: 'Sin foliar' }]);
+    const sellos = E.paginas.reduce((n, p) => n + p.sellos.filter((x) => x.rol !== 'folio').length, 0);
+    filas.push(['Firmas y sellos', sellos ? { t: sellos === 1 ? '1 colocado' : sellos + ' colocados' } : { t: 'Ninguno' }]);
+    const { blancas, giradas } = avisosRevision();
+    const sinRevisar = E.paginas.filter((p) => !revision.hechas.has(p.uid)).length;
+    const porMirar = blancas.length + giradas.length;
+    filas.push(['Blancas o torcidas', sinRevisar === E.paginas.length
+      ? { t: 'Sin revisar' }
+      : porMirar ? { aviso: true, t: porMirar === 1 ? '1 por revisar' : porMirar + ' por revisar' }
+        : { ok: true, t: sinRevisar ? 'Ninguna (faltan ' + sinRevisar + ')' : 'Ninguna' }]);
+    const bytes = fuentesUsadas().reduce((n, f) => n + (f.bytes ? f.bytes.length : 0), 0);
+    filas.push(['Peso de los originales', { t: enMb(bytes) }]);
+
+    const dl = $('#estadoExpLista');
+    dl.innerHTML = '';
+    filas.forEach(([nombre, v]) => {
+      const fila = document.createElement('div');
+      const dt = document.createElement('dt');
+      dt.textContent = nombre;
+      const dd = document.createElement('dd');
+      if (v.ok) { dd.className = 'ok'; dd.innerHTML = icono('check'); }
+      if (v.aviso) dd.className = 'aviso';
+      dd.append(v.t);
+      fila.append(dt, dd);
+      dl.appendChild(fila);
+    });
+  }
+
+  /** Los menús de arriba: cada opción acciona el botón de siempre. */
+  function conectarMenus() {
+    const menus = $$('#menus .menu');
+    const cerrar = () => menus.forEach((m) => {
+      m.classList.remove('abierto');
+      m.querySelector('.menu-lista').hidden = true;
+      m.querySelector('.menu-boton').setAttribute('aria-expanded', 'false');
+    });
+    const abrir = (m) => {
+      cerrar();
+      // lo que no se puede hacer ahora se ve apagado, como el botón que lo acciona
+      $$('.menu-item[data-clic]', m).forEach((it) => {
+        const d = $(it.dataset.clic);
+        it.disabled = !!(d && d.disabled);
+      });
+      $$('.menu-item[data-vista]', m).forEach((it) => { it.disabled = !E.paginas.length; });
+      m.classList.add('abierto');
+      m.querySelector('.menu-lista').hidden = false;
+      m.querySelector('.menu-boton').setAttribute('aria-expanded', 'true');
+    };
+    menus.forEach((m) => {
+      const boton = m.querySelector('.menu-boton');
+      boton.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (m.classList.contains('abierto')) cerrar(); else abrir(m);
+      });
+      // con uno abierto, pasar el puntero a otro lo abre, como en cualquier programa
+      boton.addEventListener('mouseenter', () => {
+        if (menus.some((x) => x.classList.contains('abierto')) && !m.classList.contains('abierto')) abrir(m);
+      });
+      m.querySelector('.menu-lista').addEventListener('click', (ev) => {
+        const it = ev.target.closest('.menu-item');
+        if (!it || it.disabled) return;
+        cerrar();
+        if (it.dataset.clic) { const d = $(it.dataset.clic); if (d) d.click(); }
+        else if (it.dataset.vista) irAVista(it.dataset.vista);
+      });
+    });
+    document.addEventListener('click', (ev) => { if (!ev.target.closest('#menus')) cerrar(); });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrar(); }, true);
+    window.addEventListener('blur', cerrar);
+  }
 
   function pintarDocs() {
     const lista = $('#listaDocs');
@@ -2232,6 +2384,7 @@
     });
     t.paginas = copias.concat(t.paginas);     // encima, como al grapar sobre un expediente
     t.seleccion = new Set(copias.map((c) => c.uid));
+    t.paqueteAbierto = null;                  // si estaba dentro de un paquete, no vería lo que llega
     t.firmaActual = firmaTrabajo(t.paginas, t.paquetes);
     autoguardarTablero(t);
 
@@ -2322,7 +2475,8 @@
       const d = datosDe(t);
       const estado = estadoDe(t);
       const el = document.createElement('div');
-      el.className = 'tablero ' + estado + (t === tableroActivo ? ' activo' : '');
+      // «est-»: «vacio» ya es la clase de la pantalla «Aún no hay páginas»
+      el.className = 'tablero est-' + estado + (t === tableroActivo ? ' activo' : '');
       el.dataset.id = t.id;
       el.setAttribute('role', 'tab');
       el.setAttribute('aria-selected', t === tableroActivo ? 'true' : 'false');
@@ -2368,6 +2522,47 @@
     $('#tablerosCupo').classList.toggle('lleno', lleno);
     actualizarBotonNuevo();
     pintarEnviar();
+    pintarCabeceraYEstado();
+  }
+
+  /** «hace un momento», «hace 5 min»… para lo último que se guardó. */
+  function haceCuanto(ms) {
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    if (s < 45) return 'hace un momento';
+    if (s < 3600) return 'hace ' + Math.max(1, Math.round(s / 60)) + ' min';
+    if (s < 86400) return 'hace ' + Math.round(s / 3600) + ' h';
+    return fechaCorta(ms);
+  }
+
+  /** El título del tablero, su chip de estado y la barra de abajo. */
+  function pintarCabeceraYEstado() {
+    const t = tableroActivo;
+    if (!t || !$('#tituloTablero')) return;
+    const estado = estadoDe(t);
+    const nombre = nombreTablero(t);
+    $('#tituloTablero').textContent = nombre;
+    $('#tituloTablero').title = nombre;
+    document.title = estado === 'vacio' ? 'Pdflash · Taller de PDF' : nombre + ' · Pdflash';
+
+    const chip = $('#chipEstado');
+    chip.hidden = estado === 'vacio';
+    chip.className = 'chip-estado est-' + estado;
+    chip.innerHTML = estado === 'guardado'
+      ? icono('check') + ' Guardado'
+      : '<i class="punto-sucio"></i> Sin guardar';
+    chip.title = estado === 'guardado'
+      ? 'Todo lo que ves está guardado'
+      : 'Hay cambios sin guardar. Clic para guardar (Ctrl+Mayús+S).';
+    chip.disabled = estado === 'guardado';
+
+    const g = $('#estadoGuardado');
+    g.className = 'estado-guardado est-' + estado;
+    g.innerHTML = estado === 'vacio' ? 'Tablero en blanco'
+      : estado === 'guardado'
+        ? icono('check') + ' Guardado ' + haceCuanto(t.guardadoEn || Date.now())
+        : '<i class="punto-sucio"></i> Sin guardar';
+    const n = tableros.length;
+    $('#estadoSyncTexto').textContent = n === 1 ? 'Sincronizado' : `Sincronizado en ${n} tableros`;
   }
 
   function actualizarBotonNuevo() {
@@ -2377,7 +2572,7 @@
     b.title = lleno
       ? `Están los ${MAX_TABLEROS} tableros en uso: vacía este para armar otro expediente.`
       : 'Abre otro tablero en blanco para armar otro expediente a la vez. No toca lo que ya tienes.';
-    b.textContent = lleno ? 'Vaciar tablero' : 'Nuevo tablero';
+    $('#txtNuevo').textContent = lleno ? 'Vaciar este tablero' : 'Nuevo tablero';
   }
 
   /** «Enviar a»: solo aparece si hay otros tableros y hojas marcadas. */
@@ -3760,6 +3955,7 @@
     $('#lector').hidden = false;
     construirLector();
     irAHoja(indice, true);
+    pintarSegVista();
   }
 
   function cerrarLector() {
@@ -3773,6 +3969,7 @@
     if (lector.obs) lector.obs.disconnect();
     $('#lectorHojas').innerHTML = '';
     pintarLectorBusqueda();
+    pintarSegVista();
   }
 
   function refrescarLector(indice) {
@@ -4965,6 +5162,13 @@
     // empezar otro expediente
     $('#btnNuevo').addEventListener('click', nuevoTablero);
     conectarTableros();
+    conectarMenus();
+    $$('#segVista [data-vista]').forEach((b) => b.addEventListener('click', () => irAVista(b.dataset.vista)));
+    $('#btnBuscarBarra').addEventListener('click', abrirBuscador);
+    $('#btnGuardarExp').addEventListener('click', guardarExpedienteActual);
+    $('#chipEstado').addEventListener('click', guardarExpedienteActual);
+    $('#bsFirmar').addEventListener('click', () => irASeccion('firmas'));
+    setInterval(pintarCabeceraYEstado, 30000);
 
     // nombre del archivo de salida
     $('#nombreSalida').addEventListener('input', () => {

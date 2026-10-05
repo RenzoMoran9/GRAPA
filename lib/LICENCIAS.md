@@ -10,3 +10,4 @@ Grapa funciona sin conexión porque trae sus dependencias dentro de `lib/`.
 | `docx-preview.min.js` | [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) | 0.4.0 | Apache-2.0 |
 | `xlsx.core.min.js` | [SheetJS](https://github.com/SheetJS/sheetjs) | 0.18.5 | Apache-2.0 |
 | `html2canvas.min.js` | [html2canvas](https://github.com/niklasvh/html2canvas) | 1.4.1 | MIT |
+| `../assets/inter-latin.woff2` (tipografía) | [Inter](https://rsms.me/inter/) (Rasmus Andersson) | 4.0 | SIL Open Font License 1.1 |

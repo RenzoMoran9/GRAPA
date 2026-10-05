@@ -49,6 +49,38 @@ Funciona en Chrome, Edge y Firefox actuales.
 - Gira, duplica, elimina, manda al inicio o al final.
 - Selección múltiple con `Ctrl` y `Shift`, y **deshacer / rehacer**.
 
+### Varios expedientes a la vez: tableros
+Pdflash abre **hasta tres expedientes a la vez**, cada uno en su pestaña, para
+avanzar con todos en paralelo.
+
+- **Nuevo tablero** (el **＋** de las pestañas o *Archivo ▸ Nuevo tablero*) abre
+  otro en blanco. **Alt+1, Alt+2 y Alt+3** cambian de uno a otro.
+- **Cada tablero tiene lo suyo:** sus hojas, paquetes, selección, deshacer y
+  rehacer, el expediente que se está editando, el nombre del archivo de salida
+  y su propio autoguardado. Lo que haces en uno no toca a los otros.
+- **Se comparte lo común:** la lista de expedientes guardados, las firmas y los
+  sellos, la carpeta de salida y las preferencias.
+- **Un expediente guardado solo puede estar abierto en un tablero.** Si lo
+  abres otra vez, te lleva al tablero que ya lo tiene. Al abrir uno se usa
+  primero un tablero en blanco; si los tres están en uso, pregunta antes de
+  reemplazar el actual.
+- **La pestaña dice cómo está:** un punto significa *sin guardar*; sin punto, ya
+  está guardado. El título, la barra de abajo y la lista de guardados lo
+  muestran igual y en qué tablero está abierto cada expediente.
+- **Guardar o actualizar en uno se ve en todos:** la lista de guardados se
+  actualiza al instante, también en otras ventanas de Pdflash abiertas a la
+  vez. Si otra ventana guardó el mismo expediente que tienes abierto, Pdflash
+  avisa y pide confirmar antes de pisarlo.
+- **Enviar hojas a otro tablero:** con hojas marcadas, **Enviar a…** las
+  *copia* o las *mueve*. Llegan encima, en un paquete aparte, con sus firmas y
+  sellos; los folios no viajan, porque se numeraban en el expediente de origen.
+  Allí Ctrl+Z las quita.
+- **Cerrar un tablero** (la **×**, o clic con el botón central) pregunta si
+  tiene cambios sin guardar. Con tres tableros en uso, *Nuevo* pasa a
+  *Vaciar este tablero*.
+- Lo que corrige el **editor de texto** vuelve al tablero que mandó las hojas,
+  aunque mientras tanto hayas cambiado de tablero.
+
 ### Firmar y sellar
 1. Escanea tu firma y sello sobre una hoja y abre ese PDF en Pdflash.
 2. **Firmas y sellos → Desde escaneo**: encierra la firma en un recuadro y
@@ -211,13 +243,16 @@ va a pesar. Te dice cuál cabe y el botón **Usar** lo deja elegido.
 - El MB es el de Windows (1 MB = 1024 × 1024 bytes). El máximo se recuerda.
 - Calcular arma el PDF hasta cuatro veces: en un expediente escaneado largo
   tarda lo mismo que guardarlo esas veces.
-- Por ahora vale para **Guardar PDF**. Al **dividir**, cada parte no se
+- Por ahora vale para **Exportar PDF**. Al **dividir**, cada parte no se
   compara con el máximo.
 
 ### Guardar el trabajo a medio hacer
-Pdflash **autoguarda** lo que estás armando: si cierras el navegador por error, al
-volver te ofrece continuar. Y puedes guardar expedientes con nombre para
-retomarlos otro día. Todo se queda en tu equipo.
+Pdflash **autoguarda** lo que estás armando, **un autoguardado por tablero**: si
+cierras el navegador por error, al volver te ofrece continuar con **todos** los
+tableros que tenías. Y puedes guardar expedientes con nombre para retomarlos
+otro día con **Guardar** (o **Ctrl+Mayús+S**): la primera vez pide un nombre y
+después actualiza el mismo guardado. **Exportar PDF** (**Ctrl+S**) arma el PDF
+terminado. Todo se queda en tu equipo.
 
 ### Carpeta de destino
 Si eliges una carpeta, el PDF terminado se escribe ahí directamente, sin pasar
@@ -336,7 +371,9 @@ salga tal como se ve.
 |---|---|
 | `P` | Plegar o desplegar el panel lateral |
 | `Ctrl+O` | Abrir archivos |
-| `Ctrl+S` | Guardar PDF |
+| `Ctrl+S` | Exportar PDF |
+| `Ctrl+Mayús+S` | Guardar el expediente (para retomarlo otro día) |
+| `Alt+1`, `Alt+2`, `Alt+3` | Cambiar de tablero |
 | `Ctrl+F` | Buscar una palabra en todas las hojas · `Enter` pasa a la siguiente |
 | `Ctrl+Z` / `Ctrl+Y` | Deshacer / Rehacer |
 | `Ctrl+A` | Seleccionar todas las páginas |

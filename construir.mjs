@@ -23,6 +23,7 @@ const CREDITOS = `<!--
     · docx-preview 0.4.0 — Apache-2.0 — https://github.com/VolodymyrBaydalka/docxjs
     · SheetJS 0.18.5 — Apache-2.0 — https://github.com/SheetJS/sheetjs
     · html2canvas 1.4.1 — MIT — https://github.com/niklasvh/html2canvas
+    · Inter 4 — SIL OFL 1.1 — https://github.com/rsms/inter
 -->
 `;
 
@@ -39,7 +40,10 @@ const cuerpo = html
   .replace(/\n\s*<script src="[^"]+"><\/script>/g, '')
   .trim();
 
-const css = leer('assets/styles.css') +
+// Inter va dentro del archivo, como las demás librerías: así Grapa.html se ve igual sin internet
+const interBase64 = readFileSync(RAIZ + 'assets/inter-latin.woff2').toString('base64');
+const css = leer('assets/styles.css')
+    .replace('url("inter-latin.woff2")', `url("data:font/woff2;base64,${interBase64}")`) +
   '\n/* la envoltura del visor limita las imágenes; los sellos se miden solos */\n' +
   '.sello-mini{max-width:none}\n';
 
