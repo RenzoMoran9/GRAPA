@@ -184,6 +184,15 @@
       if (lec.fallo) p.extra.push(`La hoja ${m.numero} no se pudo leer (${lec.error || 'error desconocido'}). Pulsa «Copiar diagnóstico» y mándaselo a quien te ayuda.`);
       else if (!lec.lineas.length) p.extra.push(`De la hoja ${m.numero} no salió ningún texto: puede estar en blanco, muy borrosa o con letra muy chica.`);
     });
+    // postores que se llaman igual (vienen del mismo archivo): se distinguen por su hoja
+    const repetidos = {};
+    sesion.postores.forEach((p) => { repetidos[p.nombreGrupo] = (repetidos[p.nombreGrupo] || 0) + 1; });
+    sesion.postores.forEach((p) => {
+      if (p.nombreGrupo && repetidos[p.nombreGrupo] > 1) {
+        const m = sesion.hojas.find((x) => x.id === p.hojas[0]);
+        p.nombreGrupo += ` · hoja ${m ? m.numero : '?'}`;
+      }
+    });
     sesion.postores.forEach((p) => O().recalcular(p));
     sesion.sel = sesion.postores.length ? sesion.postores[0].id : null;
     sesion.hojaVista = sesion.postores.length ? sesion.postores[0].hojas[0] : null;

@@ -44,7 +44,8 @@
   /** «1,250.00», «1.250,00», «S/ 980.50», «1250»… → número. null si no es un monto. */
   function leerMonto(token) {
     let t = String(token || '').trim()
-      .replace(/^(?:US\$|S\/\.?|\$|USD|PEN)\s*/i, '')
+      // «S/.» también se lee como «8/.», «5/.» o «$/.» en un escaneo
+      .replace(/^(?:US\$|[S58$]\/\.?(?=\d|\s|$)|\$|USD|PEN)\s*/i, '')
       .replace(/[()*]/g, '')
       .replace(/[.,;:]+$/, '');
     if (!t) return null;
@@ -53,6 +54,9 @@
     let n = null;
     if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(t)) n = parseFloat(t.replace(/,/g, ''));
     else if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(t)) n = parseFloat(t.replace(/\./g, '').replace(',', '.'));
+    // un escaneo lee el punto de los decimales como coma: «7,350,00» es 7,350.00
+    else if (/^\d{1,3}(,\d{3})+,\d{2}$/.test(t)) n = parseFloat(t.replace(/,(\d{2})$/, '.$1').replace(/,/g, ''));
+    else if (/^\d{1,3}(\.\d{3})+\.\d{2}$/.test(t)) n = parseFloat(t.replace(/\.(\d{2})$/, ',$1').replace(/\./g, '').replace(',', '.'));
     else if (/^\d+\.\d{1,2}$/.test(t)) n = parseFloat(t);
     else if (/^\d+,\d{1,2}$/.test(t)) n = parseFloat(t.replace(',', '.'));
     else if (/^\d+$/.test(t)) n = parseFloat(t);
@@ -62,9 +66,23 @@
   const redondear = (n) => Math.round(n * 100) / 100;
   const casi = (a, b, tol) => Math.abs(a - b) <= (tol == null ? Math.max(0.05, Math.abs(b) * 0.002) : tol);
 
-  /** Los montos de un renglón, con el lugar que ocupan. */
-  function montosDe(texto) {
-    const toks = texto.split(/\s+/).filter(Boolean);
+  /**
+   * Los montos de un renglón, con el lugar que ocupan. Con `juntarMiles`, «6 000.00» es un
+   * solo monto (hay quien escribe así los miles); sin él, son un «6» y un «000.00», porque en
+   * una fila «10 250.00» también puede ser una cantidad y un precio.
+   */
+  function montosDe(texto, juntarMiles) {
+    let toks = texto.split(/\s+/).filter(Boolean);
+    if (juntarMiles) {
+      const unidos = [];
+      for (let i = 0; i < toks.length; i++) {
+        if (/^\d{1,3}$/.test(toks[i]) && i + 1 < toks.length && /^\d{3}(?:[.,]\d{1,2})?$/.test(toks[i + 1])) {
+          unidos.push(toks[i] + toks[i + 1]);
+          i++;
+        } else unidos.push(toks[i]);
+      }
+      toks = unidos;
+    }
     const res = [];
     toks.forEach((tk, i) => {
       const v = leerMonto(tk);
@@ -109,7 +127,7 @@
     const l = lineas[i];
     const m = rx.exec(plano(l.texto));
     if (!m) return null;
-    let v = l.texto.slice(m.index + m[0].length).replace(/^[\s:.\-–—_]+/, '');
+    let v = l.texto.slice(m.index + m[0].length).replace(/^[\s:.\-–—_;,]+/, '');
     v = v.split(TERMINA_VALOR)[0];
     v = limpiar(v);
     if (v) return v;
@@ -127,9 +145,10 @@
   }
 
   const RX = {
-    razon: /(?:RAZON\s+SOCIAL|DENOMINACION|NOMBRE\s+DEL\s+POSTOR|NOMBRE\s+DEL\s+PROVEEDOR|EMPRESA)(?:\s+DEL\s+(?:POSTOR|PROVEEDOR))?(?:\s+O\s+RAZON\s+SOCIAL)?/,
+    // «empresa» a secas no vale (sale en «representante de la empresa»): solo con dos puntos
+    razon: /(?:RAZON\s+SOCIAL|DENOMINACION|NOMBRE\s+DEL\s+POSTOR|NOMBRE\s+DEL\s+PROVEEDOR|EMPRESA(?=\s*:))(?:\s+DEL\s+(?:POSTOR|PROVEEDOR))?(?:\s+O\s+RAZON\s+SOCIAL)?/,
     domicilio: /(?:DOMICILIO(?:\s+(?:LEGAL|FISCAL))?|DIRECCION(?:\s+(?:LEGAL|FISCAL))?)/,
-    telefono: /(?:TELEFONO|TELEF\.?|TELF?\.?|CELULAR|\bCEL\b)(?:\s*\/\s*(?:CELULAR|FAX))?/,
+    telefono: /(?:\bTEL[EÉ]?FONOS?\b|\bTELEF\.?|\bTELF?\.|\bCELULAR\b|\bCEL\b)(?:\s*\/\s*(?:CELULAR|FAX))?/,
     representante: /(?:REPRESENTANTE\s+LEGAL|APODERADO|NOMBRE\s+DEL\s+REPRESENTANTE)/,
     plazo: [etiqueta('plazo de entrega'), etiqueta('plazo de ejecucion'), etiqueta('plazo de prestacion'),
       etiqueta('plazo de atencion'), etiqueta('tiempo de entrega')],
@@ -148,7 +167,7 @@
   }
 
   function diasDe(txt) {
-    const m = /(\d+)\s*(?:\(\s*\d+\s*\)\s*)?(D[IÍ]AS?|SEMANAS?|MESES|MES|A[NÑ]OS?)/i.exec(plano(txt || ''));
+    const m = /(\d+)\s*\)?\s*(?:\(\s*\d+\s*\)\s*)?(D[IÍ]AS?|SEMANAS?|MESES|MES|A[NÑ]OS?)/i.exec(plano(txt || ''));
     if (!m) { const solo = /^\s*(\d{1,3})\s*$/.exec(txt || ''); return solo ? Number(solo[1]) : null; }
     const n = Number(m[1]);
     const u = m[2];
@@ -236,7 +255,18 @@
 
   /** ¿Esta fila es un ítem? Busca cantidad × unitario = total entre sus números. */
   function filaDeItem(texto, sinParcial) {
-    const { toks, montos } = montosDe(texto);
+    const a = filaDeItemCon(texto, sinParcial, false);
+    if (a && !a.parcial) return a;
+    // «6 000.00» con el espacio de los miles: se prueba juntándolo
+    if (/\d{1,3}\s\d{3}(?:[.,]\d{1,2})?(?:\s|$)/.test(texto)) {
+      const b = filaDeItemCon(texto, sinParcial, true);
+      if (b && (!b.parcial || !a)) return b;
+    }
+    return a;
+  }
+
+  function filaDeItemCon(texto, sinParcial, juntarMiles) {
+    const { toks, montos } = montosDe(texto, juntarMiles);
     if (montos.length < 2) return sinParcial ? null : filaParcial(toks, montos);
     // cantidad × unitario = total, el trío más a la derecha
     for (let k = montos.length - 1; k >= 2; k--) {
@@ -255,7 +285,8 @@
     if (a.decimales && b.decimales && b.v >= a.v && a.v > 0) {
       const c = b.v / a.v;
       if (casi(c, Math.round(c), 0.001) && Math.round(c) >= 1 && Math.round(c) <= 99999) {
-        return construir(toks, montos, -1, n - 2, n - 1, true, Math.round(c));
+        // precio igual al total = una sola unidad (un servicio): no hay nada que dudar
+        return construir(toks, montos, -1, n - 2, n - 1, Math.round(c) !== 1, Math.round(c));
       }
     }
     return sinParcial ? null : filaParcial(toks, montos);
@@ -305,7 +336,7 @@
     if (hasta - 1 >= desde && UNIDADES.test(toks[hasta - 1])) { unidad = toks[hasta - 1].replace(/\.$/, ''); hasta -= 1; }
     return {
       n,
-      desc: limpiar(toks.slice(desde, hasta).join(' ')),
+      desc: limpiar(toks.slice(desde, hasta).join(' ').replace(/(?:\s+(?:[S58$]\/?\.?|[0-9]))+$/, '')),
       unidad,
       cant: i >= 0 ? montos[i].v : cantInferida,
       pu: montos[j].v,
@@ -324,7 +355,7 @@
       const esIgv = /^\W*(?:I\.?G\.?V\.?)(?!\s*\))/.test(p) && !PALABRAS_TOTAL.test(p);
       const esTotal = PALABRAS_TOTAL.test(p) && !esSub && !ES_CABECERA.test(p);
       if (!esSub && !esIgv && !esTotal) continue;
-      let { montos } = montosDe(lineas[i].texto);
+      let { montos } = montosDe(lineas[i].texto, true);
       // el 18 % de «IGV 18 %» no es el monto
       montos = montos.filter((m) => !(esIgv && m.v === 18 && !m.decimales));
       if (!montos.length && esTotal) {
@@ -455,6 +486,10 @@
       let nuevo = !actual || h.grupo !== ultimoGrupo;
       if (!nuevo && ruc && actual.ruc && ruc !== actual.ruc) nuevo = true;
       if (!nuevo && lec.formato === 1 && actual.formatos.includes(1) && !(ruc && ruc === actual.ruc)) nuevo = true;
+      // un postor presenta un solo Formato 5: otro «Formato N° 5» con precios es de otro postor
+      // (pasa cuando varios vienen juntos en un mismo archivo y no se lee el RUC)
+      if (!nuevo && lec.formato === 5 && lec.tienePrecios && actual.formatos.includes(5)
+          && (actual.items.length || actual.totalDeclarado != null) && !(ruc && ruc === actual.ruc)) nuevo = true;
       if (nuevo) {
         actual = {
           id: 'p' + (postores.length + 1), hojas: [], formatos: [], razon: '', ruc: '',
