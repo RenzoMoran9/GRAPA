@@ -1115,7 +1115,20 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .estado-guardado.est-guardado{color:var(--verde)}
 .estado-espacio{flex:1}
 .barra-estado strong{font-weight:500;color:var(--texto)}
-.barra-estado .zoom{font-size:12px;font-weight:500}
+.barra-estado .zoom{font-size:12px;font-weight:500;flex:none}
+/* El zoom nunca se esconde: lo que sobra se recorta o se oculta por el otro lado. */
+.barra-estado>*{flex:none}
+.barra-estado>#infoSeleccion{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.barra-estado>.estado-espacio{flex:1 1 0;min-width:0}
+@media (max-width:1100px){
+  .barra-estado{gap:12px}
+  #infoTamano{display:none}
+  #estadoSyncTexto{display:none}
+}
+@media (max-width:800px){
+  #estadoGuardado{display:none}
+  .barra-estado .zoom input{width:72px}
+}
 .barra-estado #infoSeleccion.alcance-todo{padding:0 8px}
 
 .taller-herramientas.sin-hojas #btnSelTodo,
