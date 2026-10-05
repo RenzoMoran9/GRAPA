@@ -595,7 +595,7 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 /* ---------- lector: las hojas en grande ---------- */
 /* Ocupa solo el sitio de las hojas. Antes tapaba la pantalla entera y parecía
    otro programa: para firmar, foliar o buscar había que cerrarlo primero. */
-.lector{position:absolute;inset:0;z-index:6;background:var(--fondo);display:flex;flex-direction:column}
+.lector{position:absolute;inset:var(--tableros-alto) 0 0 0;z-index:6;background:var(--fondo);display:flex;flex-direction:column}
 .lector-barra{
   display:flex;align-items:center;gap:14px;padding:9px 16px;background:var(--fondo-2);
   border-bottom:1px solid var(--borde);flex-wrap:wrap;flex:none;
@@ -908,8 +908,8 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 
 /* ---------- tableros: hasta tres expedientes a la vez ---------- */
 .tableros{
-  height:var(--tableros-alto);box-sizing:border-box;display:flex;align-items:flex-end;gap:6px;
-  padding:0 12px;background:var(--fondo-3);border-bottom:1px solid var(--borde);
+  height:var(--tableros-alto);box-sizing:border-box;display:flex;align-items:flex-end;gap:6px;flex:none;
+  padding:0 22px;background:var(--fondo-3);border-bottom:1px solid var(--borde);
   position:relative;z-index:20;
 }
 .tableros-lista{display:flex;align-items:flex-end;gap:2px;min-width:0;flex:0 1 auto}
@@ -924,7 +924,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .tablero:hover{background:color-mix(in srgb,var(--fondo-2) 55%,transparent);color:var(--texto)}
 .tablero:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
 .tablero.activo{
-  background:var(--fondo-2);color:var(--texto);border-color:var(--borde);
+  background:var(--fondo);color:var(--texto);border-color:var(--borde);
   height:35px;margin-bottom:-1px;
 }
 .tablero.activo::before{

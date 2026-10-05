@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261005a">
+<link rel="stylesheet" href="assets/styles.css?v=20261005b">
 </head>
 <body>
 
@@ -132,15 +132,6 @@
     <button class="btn btn-primario" id="btnGuardar" title="Arma el PDF terminado y lo baja (Ctrl+S)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF</button>
   </div>
 </header>
-
-<!-- ============ TABLEROS ============
-     Hasta tres expedientes abiertos a la vez, cada uno en su pestaña. Las
-     pestañas las dibuja app.js; todo lo guardado se comparte entre ellas. -->
-<div class="tableros" id="tableros">
-  <div class="tableros-lista" id="tablerosLista" role="tablist" aria-label="Tableros abiertos"></div>
-  <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 3 a la vez. Alt+1, Alt+2 y Alt+3 cambian de tablero."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> Nuevo tablero</button>
-  <span class="tableros-cupo" id="tablerosCupo"></span>
-</div>
 
 <div class="cuerpo">
 
@@ -402,6 +393,14 @@
 
   <!-- ============ ÁREA DE TRABAJO ============ -->
   <main class="taller">
+    <!-- Pestañas de los tableros: empiezan donde empieza el área de trabajo, a
+         la altura del título, y no encima del panel de herramientas. -->
+    <div class="tableros" id="tableros">
+      <div class="tableros-lista" id="tablerosLista" role="tablist" aria-label="Tableros abiertos"></div>
+      <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 3 a la vez. Alt+1, Alt+2 y Alt+3 cambian de tablero."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> Nuevo tablero</button>
+      <span class="tableros-cupo" id="tablerosCupo"></span>
+    </div>
+
     <div class="taller-cabecera">
       <h1 class="taller-titulo" id="tituloTablero">Tablero en blanco</h1>
       <button class="chip-estado" id="chipEstado" type="button"></button>
@@ -760,12 +759,12 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20261005a"></script>
-<script src="assets/buscar.js?v=20261005a"></script>
-<script src="assets/revisar.js?v=20261005a"></script>
-<script src="assets/office.js?v=20261005a"></script>
-<script src="assets/expedientes.js?v=20261005a"></script>
-<script src="assets/firmas.js?v=20261005a"></script>
-<script src="assets/app.js?v=20261005a"></script>
+<script src="assets/core.js?v=20261005b"></script>
+<script src="assets/buscar.js?v=20261005b"></script>
+<script src="assets/revisar.js?v=20261005b"></script>
+<script src="assets/office.js?v=20261005b"></script>
+<script src="assets/expedientes.js?v=20261005b"></script>
+<script src="assets/firmas.js?v=20261005b"></script>
+<script src="assets/app.js?v=20261005b"></script>
 </body>
 </html>
