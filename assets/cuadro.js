@@ -121,7 +121,7 @@
         } catch (e) {
           console.error(e);
           if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); cerrar(); return; }
-          lec = { lineas: [], origen: 'texto', fallo: true };
+          lec = { lineas: [], origen: 'texto', fallo: true, error: e && e.message ? e.message : String(e) };
         }
         lec = await segundaPasada(m, lec, sesion, i, n);
         if (sesion.cancelado || modal.hidden) { sesion.cancelado = true; return; }
@@ -137,22 +137,28 @@
   }
 
   /**
-   * Un escaneo con la letra chica a veces sale con una cifra mal leída. Si la hoja es de
-   * precios y la lectura no quedó limpia (sin ítems, o con filas que no cuadran), se vuelve
-   * a leer con más detalle y se queda la que mejor salió.
+   * Si la lectura no quedó limpia se prueba la otra forma de leer la hoja y se queda la que
+   * mejor salió: un escaneo de letra chica se vuelve a leer con más detalle, y una hoja con
+   * texto de verdad de la que no sale nada se lee como imagen (hay PDF con un texto oculto
+   * mal armado, de cuando se escaneó).
    */
   async function segundaPasada(m, lec, sesion, i, n) {
-    if (lec.origen !== 'ocr' || lec.fallo) return lec;
+    if (lec.fallo) return lec;
     const a = O().leerHoja(lec.lineas);
     const hablaDePrecios = a.formato === 5 || /PRECIO|OFERTA|COTIZ|TOTAL/.test(O().plano(lec.lineas.map((l) => l.texto).join(' ')));
     const sucia = !a.tienePrecios || a.precios.items.some((it) => it.parcial || it.inferida);
-    if (!hablaDePrecios || !sucia) return lec;
-    pintarProgreso(i, n, 'Volviendo a leer con más detalle…');
+    const sinNada = !a.tienePrecios && !a.ident.ruc && !a.ident.razon;
+    if (!((hablaDePrecios && sucia) || sinNada)) return lec;
+    const opciones = lec.origen === 'texto' ? { forzarOcr: true } : { alta: true };
+    pintarProgreso(i, n, 'Volviendo a leer con más cuidado…');
     try {
-      const alta = await G.leerLineas(m.pagina, { alta: true, alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Volviendo a leer con más detalle…', f); } });
+      const alt = await G.leerLineas(m.pagina, Object.assign({
+        alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Volviendo a leer con más cuidado…', f); },
+      }, opciones));
       const puntaje = (r) => r.precios.items.filter((it) => !it.parcial && !it.inferida).length * 3
-        + (r.precios.totales.length ? 1 : 0) - r.precios.items.filter((it) => it.parcial).length;
-      return puntaje(O().leerHoja(alta.lineas)) > puntaje(a) ? alta : lec;
+        + (r.precios.totales.length ? 1 : 0) - r.precios.items.filter((it) => it.parcial).length
+        + (r.ident.ruc ? 2 : 0) + (r.ident.razon ? 2 : 0);
+      return puntaje(O().leerHoja(alt.lineas)) > puntaje(a) ? alt : lec;
     } catch (e) {
       console.error(e);
       return lec;
@@ -171,6 +177,14 @@
       const unSoloArchivo = suyas.length && suyas.every((m) => m.nombreArchivo === suyas[0].nombreArchivo);
       p.nombreGrupo = primera ? (primera.variosArchivos && unSoloArchivo ? primera.nombreArchivo : primera.nombreGrupo) : '';
     });
+    sesion.hojas.forEach((m) => {
+      const lec = sesion.lecturas.get(m.id);
+      const p = sesion.postores.find((x) => x.hojas.includes(m.id));
+      if (!p || !lec) return;
+      if (lec.fallo) p.extra.push(`La hoja ${m.numero} no se pudo leer (${lec.error || 'error desconocido'}). Pulsa «Copiar diagnóstico» y mándaselo a quien te ayuda.`);
+      else if (!lec.lineas.length) p.extra.push(`De la hoja ${m.numero} no salió ningún texto: puede estar en blanco, muy borrosa o con letra muy chica.`);
+    });
+    sesion.postores.forEach((p) => O().recalcular(p));
     sesion.sel = sesion.postores.length ? sesion.postores[0].id : null;
     sesion.hojaVista = sesion.postores.length ? sesion.postores[0].hojas[0] : null;
     sesion.res = O().evaluar(sesion.postores);
@@ -209,6 +223,7 @@
     $('#ofPie').replaceChildren(
       h('span', { class: 'of-pie-nota' }, 'Gana el menor precio entre los que cumplen. Corrige lo que haga falta: se recalcula solo.'),
       h('span', { class: 'espacio' }),
+      h('button', { class: 'btn btn-fantasma', title: 'Copia lo que se leyó de cada hoja y cómo se interpretó: sirve para pedir ayuda si algo no sale', onclick: copiarDiagnostico }, 'Copiar diagnóstico'),
       h('button', { class: 'btn btn-suave', title: 'Copia el cuadro para pegarlo en Excel u otro programa', onclick: copiarCuadro }, 'Copiar cuadro'),
       h('button', { class: 'btn btn-suave', onclick: bajarExcel }, 'Excel'),
       h('button', { class: 'btn btn-secundario', title: 'Agrega al expediente una hoja con este cuadro, como sustento', onclick: agregarHoja }, 'Agregar hoja resumen'),
@@ -555,6 +570,22 @@
     } catch (e) {
       G.aviso('El navegador no dejó copiar. Selecciona el dato y usa Ctrl+C.', 'error');
     }
+  }
+
+  /** Todo lo que se leyó y cómo se entendió, en texto: para pegarlo en un mensaje si algo falla. */
+  function copiarDiagnostico() {
+    const v = (document.querySelector('script[src*="app.js"]') || {}).src || '';
+    const partes = [`DIAGNÓSTICO DE LECTURA · Pdflash ${(/v=([0-9a-z]+)/.exec(v) || [])[1] || 'archivo único'}`,
+      `${ev.postores.length} postores · ${ev.hojas.length} hojas`];
+    ev.hojas.forEach((m) => {
+      const lec = ev.lecturas.get(m.id) || { lineas: [] };
+      const lec1 = O().leerHoja(lec.lineas);
+      const p = ev.postores.find((x) => x.hojas.includes(m.id));
+      partes.push('', `=== Hoja ${m.numero} · paquete «${m.nombreGrupo}» · archivo «${m.nombreArchivo}» · Formato ${lec1.formato || '?'} · ${lec.origen === 'ocr' ? 'escaneo leído' : 'texto del documento'}${lec.fallo ? ' · FALLÓ: ' + lec.error : ''} · ${lec.lineas.length} líneas`);
+      partes.push(G.unirLineas(lec.lineas, false).split('\n').slice(0, 90).join('\n'));
+      partes.push(`-- Interpretación: razón=${lec1.ident.razon || '—'} · RUC=${lec1.ident.ruc || '—'} · ítems=${JSON.stringify(lec1.precios.items.map((i) => [i.cant, i.pu, i.total]))} · totales=${JSON.stringify(lec1.precios.totales.map((t) => t.v))}${p ? ' · postor ' + p.id : ''}`);
+    });
+    copiar(partes.join('\n'));
   }
 
   function copiarFila(p) {

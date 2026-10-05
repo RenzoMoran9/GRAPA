@@ -81,6 +81,13 @@
     return motor;
   }
 
+  /** Si el motor se descompone (memoria, un error raro), se tira y se arma de nuevo en la siguiente hoja. */
+  async function reiniciarMotor() {
+    const anterior = motor;
+    motor = null;
+    try { const m = await anterior; if (m && m.cliente) await m.cliente.destroy(); } catch (e) { /* ya estaba caído */ }
+  }
+
   // el motor lee de a una imagen: las demás esperan su turno
   let cola = Promise.resolve();
   function enCola(fn) {
@@ -91,9 +98,25 @@
 
   /* ---------- de palabras sueltas a renglones ---------- */
 
-  /** Junta palabras (ya ordenadas) en un renglón; los huecos grandes llevan dos espacios. */
-  function renglon(palabras) {
+  /**
+   * Junta palabras (ya ordenadas) en un renglón; los huecos grandes llevan dos espacios.
+   * Con `pegadas` (texto de un PDF) los trozos que casi se tocan son una sola palabra: un
+   * PDF parte «48,000.00» en «48», «,», «0», «00.00» sin que haya espacio de por medio.
+   */
+  function renglon(palabras, pegadas) {
     const alto = Math.max(...palabras.map((p) => p.y1 - p.y0), 1e-6);
+    if (pegadas) {
+      const unidas = [];
+      palabras.forEach((p) => {
+        const ant = unidas[unidas.length - 1];
+        if (ant && p.x0 - ant.x1 <= alto * 0.14 && p.x0 - ant.x1 >= -alto * 0.3) {
+          ant.t += p.t;
+          ant.x1 = Math.max(ant.x1, p.x1);
+          ant.y0 = Math.min(ant.y0, p.y0); ant.y1 = Math.max(ant.y1, p.y1);
+        } else unidas.push(Object.assign({}, p));
+      });
+      palabras = unidas;
+    }
     let texto = '';
     palabras.forEach((p, i) => {
       if (i) {
@@ -111,7 +134,7 @@
   }
 
   /** Agrupa palabras por su altura: sirve cuando no se sabe qué renglón es cada una. */
-  function agruparPorAltura(palabras) {
+  function agruparPorAltura(palabras, pegadas) {
     const orden = palabras.slice().sort((a, b) => (a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2);
     const filas = [];
     orden.forEach((p) => {
@@ -125,7 +148,7 @@
     });
     return filas
       .sort((a, b) => a.cy - b.cy)
-      .map((f) => renglon(f.ps.sort((a, b) => a.x0 - b.x0)));
+      .map((f) => renglon(f.ps.sort((a, b) => a.x0 - b.x0), pegadas));
   }
 
   /* ---------- preparar el escaneo ----------
@@ -303,6 +326,10 @@
             c: c.confidence,
           }));
         return { lineas: agruparPorAltura(palabras), origen: 'ocr' };
+      } catch (e) {
+        console.error('Fallo el lector de texto; se reinicia', e);
+        reiniciarMotor();
+        throw e;
       } finally {
         try { await cliente.clearImage(); } catch (e) { /* ya se soltó */ }
         if (imagen.close) imagen.close();
@@ -510,7 +537,7 @@
         c: 1,
       });
     });
-    return { lineas: agruparPorAltura(palabras), origen: 'texto' };
+    return { lineas: agruparPorAltura(palabras, true), origen: 'texto' };
   }
 
   /**
@@ -519,12 +546,21 @@
    */
   G.leerLineas = async function (pagina, opciones) {
     const alta = !!(opciones && opciones.alta);
-    const k = clave(pagina) + (alta ? ':alta' : '');
+    const soloOcr = !!(opciones && opciones.forzarOcr);
+    const k = clave(pagina) + (alta ? ':alta' : '') + (soloOcr ? ':ocr' : '');
     if (cache.has(k)) return cache.get(k);
     const alProgreso = opciones && opciones.alProgreso;
+    const ocr = async () => {
+      try {
+        return await leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
+      } catch (e) {
+        // un fallo del motor se reintenta una vez, con el motor nuevo
+        return leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
+      }
+    };
     const p = (async () => {
-      if (await G.tieneTexto(pagina)) return leerNativa(pagina);
-      return leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
+      if (!soloOcr && await G.tieneTexto(pagina)) return leerNativa(pagina);
+      return ocr();
     })();
     cache.set(k, p);
     try {

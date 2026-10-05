@@ -4385,6 +4385,13 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     return motor;
   }
 
+  /** Si el motor se descompone (memoria, un error raro), se tira y se arma de nuevo en la siguiente hoja. */
+  async function reiniciarMotor() {
+    const anterior = motor;
+    motor = null;
+    try { const m = await anterior; if (m && m.cliente) await m.cliente.destroy(); } catch (e) { /* ya estaba caído */ }
+  }
+
   // el motor lee de a una imagen: las demás esperan su turno
   let cola = Promise.resolve();
   function enCola(fn) {
@@ -4395,9 +4402,25 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   /* ---------- de palabras sueltas a renglones ---------- */
 
-  /** Junta palabras (ya ordenadas) en un renglón; los huecos grandes llevan dos espacios. */
-  function renglon(palabras) {
+  /**
+   * Junta palabras (ya ordenadas) en un renglón; los huecos grandes llevan dos espacios.
+   * Con `pegadas` (texto de un PDF) los trozos que casi se tocan son una sola palabra: un
+   * PDF parte «48,000.00» en «48», «,», «0», «00.00» sin que haya espacio de por medio.
+   */
+  function renglon(palabras, pegadas) {
     const alto = Math.max(...palabras.map((p) => p.y1 - p.y0), 1e-6);
+    if (pegadas) {
+      const unidas = [];
+      palabras.forEach((p) => {
+        const ant = unidas[unidas.length - 1];
+        if (ant && p.x0 - ant.x1 <= alto * 0.14 && p.x0 - ant.x1 >= -alto * 0.3) {
+          ant.t += p.t;
+          ant.x1 = Math.max(ant.x1, p.x1);
+          ant.y0 = Math.min(ant.y0, p.y0); ant.y1 = Math.max(ant.y1, p.y1);
+        } else unidas.push(Object.assign({}, p));
+      });
+      palabras = unidas;
+    }
     let texto = '';
     palabras.forEach((p, i) => {
       if (i) {
@@ -4415,7 +4438,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   /** Agrupa palabras por su altura: sirve cuando no se sabe qué renglón es cada una. */
-  function agruparPorAltura(palabras) {
+  function agruparPorAltura(palabras, pegadas) {
     const orden = palabras.slice().sort((a, b) => (a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2);
     const filas = [];
     orden.forEach((p) => {
@@ -4429,7 +4452,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     });
     return filas
       .sort((a, b) => a.cy - b.cy)
-      .map((f) => renglon(f.ps.sort((a, b) => a.x0 - b.x0)));
+      .map((f) => renglon(f.ps.sort((a, b) => a.x0 - b.x0), pegadas));
   }
 
   /* ---------- preparar el escaneo ----------
@@ -4607,6 +4630,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
             c: c.confidence,
           }));
         return { lineas: agruparPorAltura(palabras), origen: 'ocr' };
+      } catch (e) {
+        console.error('Fallo el lector de texto; se reinicia', e);
+        reiniciarMotor();
+        throw e;
       } finally {
         try { await cliente.clearImage(); } catch (e) { /* ya se soltó */ }
         if (imagen.close) imagen.close();
@@ -4814,7 +4841,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         c: 1,
       });
     });
-    return { lineas: agruparPorAltura(palabras), origen: 'texto' };
+    return { lineas: agruparPorAltura(palabras, true), origen: 'texto' };
   }
 
   /**
@@ -4823,12 +4850,21 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    */
   G.leerLineas = async function (pagina, opciones) {
     const alta = !!(opciones && opciones.alta);
-    const k = clave(pagina) + (alta ? ':alta' : '');
+    const soloOcr = !!(opciones && opciones.forzarOcr);
+    const k = clave(pagina) + (alta ? ':alta' : '') + (soloOcr ? ':ocr' : '');
     if (cache.has(k)) return cache.get(k);
     const alProgreso = opciones && opciones.alProgreso;
+    const ocr = async () => {
+      try {
+        return await leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
+      } catch (e) {
+        // un fallo del motor se reintenta una vez, con el motor nuevo
+        return leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
+      }
+    };
     const p = (async () => {
-      if (await G.tieneTexto(pagina)) return leerNativa(pagina);
-      return leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
+      if (!soloOcr && await G.tieneTexto(pagina)) return leerNativa(pagina);
+      return ocr();
     })();
     cache.set(k, p);
     try {
@@ -5099,6 +5135,16 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const t = buscarValor(lineas, RX.telefono);
     if (t) { const tel = t.v.replace(/[^\d\s()+\-/]/g, '').replace(/\s{2,}/g, ' ').trim(); if (/\d{5}/.test(tel.replace(/\D/g, ''))) id.telefono = tel; }
     const rl = buscarValor(lineas, RX.representante); if (rl) id.representante = rl.v;
+    // «Nombre: … / Cargo: Representante legal» al pie de una carta, sin la etiqueta «representante legal»
+    if (!id.representante) {
+      for (let i = 0; i < lineas.length - 1; i++) {
+        const m = /^\W*NOMBRES?(?:\s+Y\s+APELLIDOS)?\W*:\s*(.+)/.exec(plano(lineas[i].texto));
+        if (m && /CARGO|REPRESENTANTE|GERENTE|APODERADO/.test(plano(lineas[i + 1].texto))) {
+          id.representante = limpiar(lineas[i].texto.slice(lineas[i].texto.indexOf(':') + 1));
+          break;
+        }
+      }
+    }
     for (const l of lineas) {
       const m = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/.exec(l.texto);
       if (m) { id.correo = m[0]; break; }
@@ -5351,7 +5397,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
           direccion: '', telefono: '', correo: '', correoDudoso: false, representante: '', dni: '',
           items: [], total: null, totalDeclarado: null, subtotal: null, igv: null, moneda: '', igvIncluido: '',
           plazo: '', plazoDias: null, validez: '', validezDias: null, garantia: '', pago: '', lugar: '',
-          cumple: true, avisos: [], dudosas: [], origen: new Set(), donde: {},
+          cumple: true, avisos: [], extra: [], dudosas: [], origen: new Set(), donde: {},
         };
         postores.push(actual);
       }
@@ -5436,7 +5482,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     if (p.ruc && !rucValido(p.ruc)) av.push(`El RUC ${p.ruc} no pasa la verificación; puede estar mal leído.`);
     if (!p.ruc) av.push('No se encontró el RUC (¿falta el Formato 1?).');
     if (!p.razon) av.push('No se encontró la razón social (¿falta el Formato 1?).');
-    p.avisos = av.concat(p.dudosas.length ? ['Hay líneas con precios que no se entendieron: ' + p.dudosas.slice(0, 3).join(' | ')] : []);
+    p.avisos = (p.extra || []).concat(av).concat(p.dudosas.length ? ['Hay líneas con precios que no se entendieron: ' + p.dudosas.slice(0, 3).join(' | ')] : []);
   }
 
   /* ---------- quién gana ---------- */
@@ -5680,7 +5726,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         } catch (e) {
           console.error(e);
           if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); cerrar(); return; }
-          lec = { lineas: [], origen: 'texto', fallo: true };
+          lec = { lineas: [], origen: 'texto', fallo: true, error: e && e.message ? e.message : String(e) };
         }
         lec = await segundaPasada(m, lec, sesion, i, n);
         if (sesion.cancelado || modal.hidden) { sesion.cancelado = true; return; }
@@ -5696,22 +5742,28 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   /**
-   * Un escaneo con la letra chica a veces sale con una cifra mal leída. Si la hoja es de
-   * precios y la lectura no quedó limpia (sin ítems, o con filas que no cuadran), se vuelve
-   * a leer con más detalle y se queda la que mejor salió.
+   * Si la lectura no quedó limpia se prueba la otra forma de leer la hoja y se queda la que
+   * mejor salió: un escaneo de letra chica se vuelve a leer con más detalle, y una hoja con
+   * texto de verdad de la que no sale nada se lee como imagen (hay PDF con un texto oculto
+   * mal armado, de cuando se escaneó).
    */
   async function segundaPasada(m, lec, sesion, i, n) {
-    if (lec.origen !== 'ocr' || lec.fallo) return lec;
+    if (lec.fallo) return lec;
     const a = O().leerHoja(lec.lineas);
     const hablaDePrecios = a.formato === 5 || /PRECIO|OFERTA|COTIZ|TOTAL/.test(O().plano(lec.lineas.map((l) => l.texto).join(' ')));
     const sucia = !a.tienePrecios || a.precios.items.some((it) => it.parcial || it.inferida);
-    if (!hablaDePrecios || !sucia) return lec;
-    pintarProgreso(i, n, 'Volviendo a leer con más detalle…');
+    const sinNada = !a.tienePrecios && !a.ident.ruc && !a.ident.razon;
+    if (!((hablaDePrecios && sucia) || sinNada)) return lec;
+    const opciones = lec.origen === 'texto' ? { forzarOcr: true } : { alta: true };
+    pintarProgreso(i, n, 'Volviendo a leer con más cuidado…');
     try {
-      const alta = await G.leerLineas(m.pagina, { alta: true, alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Volviendo a leer con más detalle…', f); } });
+      const alt = await G.leerLineas(m.pagina, Object.assign({
+        alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Volviendo a leer con más cuidado…', f); },
+      }, opciones));
       const puntaje = (r) => r.precios.items.filter((it) => !it.parcial && !it.inferida).length * 3
-        + (r.precios.totales.length ? 1 : 0) - r.precios.items.filter((it) => it.parcial).length;
-      return puntaje(O().leerHoja(alta.lineas)) > puntaje(a) ? alta : lec;
+        + (r.precios.totales.length ? 1 : 0) - r.precios.items.filter((it) => it.parcial).length
+        + (r.ident.ruc ? 2 : 0) + (r.ident.razon ? 2 : 0);
+      return puntaje(O().leerHoja(alt.lineas)) > puntaje(a) ? alt : lec;
     } catch (e) {
       console.error(e);
       return lec;
@@ -5730,6 +5782,14 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       const unSoloArchivo = suyas.length && suyas.every((m) => m.nombreArchivo === suyas[0].nombreArchivo);
       p.nombreGrupo = primera ? (primera.variosArchivos && unSoloArchivo ? primera.nombreArchivo : primera.nombreGrupo) : '';
     });
+    sesion.hojas.forEach((m) => {
+      const lec = sesion.lecturas.get(m.id);
+      const p = sesion.postores.find((x) => x.hojas.includes(m.id));
+      if (!p || !lec) return;
+      if (lec.fallo) p.extra.push(`La hoja ${m.numero} no se pudo leer (${lec.error || 'error desconocido'}). Pulsa «Copiar diagnóstico» y mándaselo a quien te ayuda.`);
+      else if (!lec.lineas.length) p.extra.push(`De la hoja ${m.numero} no salió ningún texto: puede estar en blanco, muy borrosa o con letra muy chica.`);
+    });
+    sesion.postores.forEach((p) => O().recalcular(p));
     sesion.sel = sesion.postores.length ? sesion.postores[0].id : null;
     sesion.hojaVista = sesion.postores.length ? sesion.postores[0].hojas[0] : null;
     sesion.res = O().evaluar(sesion.postores);
@@ -5768,6 +5828,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     $('#ofPie').replaceChildren(
       h('span', { class: 'of-pie-nota' }, 'Gana el menor precio entre los que cumplen. Corrige lo que haga falta: se recalcula solo.'),
       h('span', { class: 'espacio' }),
+      h('button', { class: 'btn btn-fantasma', title: 'Copia lo que se leyó de cada hoja y cómo se interpretó: sirve para pedir ayuda si algo no sale', onclick: copiarDiagnostico }, 'Copiar diagnóstico'),
       h('button', { class: 'btn btn-suave', title: 'Copia el cuadro para pegarlo en Excel u otro programa', onclick: copiarCuadro }, 'Copiar cuadro'),
       h('button', { class: 'btn btn-suave', onclick: bajarExcel }, 'Excel'),
       h('button', { class: 'btn btn-secundario', title: 'Agrega al expediente una hoja con este cuadro, como sustento', onclick: agregarHoja }, 'Agregar hoja resumen'),
@@ -6114,6 +6175,22 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     } catch (e) {
       G.aviso('El navegador no dejó copiar. Selecciona el dato y usa Ctrl+C.', 'error');
     }
+  }
+
+  /** Todo lo que se leyó y cómo se entendió, en texto: para pegarlo en un mensaje si algo falla. */
+  function copiarDiagnostico() {
+    const v = (document.querySelector('script[src*="app.js"]') || {}).src || '';
+    const partes = [`DIAGNÓSTICO DE LECTURA · Pdflash ${(/v=([0-9a-z]+)/.exec(v) || [])[1] || 'archivo único'}`,
+      `${ev.postores.length} postores · ${ev.hojas.length} hojas`];
+    ev.hojas.forEach((m) => {
+      const lec = ev.lecturas.get(m.id) || { lineas: [] };
+      const lec1 = O().leerHoja(lec.lineas);
+      const p = ev.postores.find((x) => x.hojas.includes(m.id));
+      partes.push('', `=== Hoja ${m.numero} · paquete «${m.nombreGrupo}» · archivo «${m.nombreArchivo}» · Formato ${lec1.formato || '?'} · ${lec.origen === 'ocr' ? 'escaneo leído' : 'texto del documento'}${lec.fallo ? ' · FALLÓ: ' + lec.error : ''} · ${lec.lineas.length} líneas`);
+      partes.push(G.unirLineas(lec.lineas, false).split('\n').slice(0, 90).join('\n'));
+      partes.push(`-- Interpretación: razón=${lec1.ident.razon || '—'} · RUC=${lec1.ident.ruc || '—'} · ítems=${JSON.stringify(lec1.precios.items.map((i) => [i.cant, i.pu, i.total]))} · totales=${JSON.stringify(lec1.precios.totales.map((t) => t.v))}${p ? ' · postor ' + p.id : ''}`);
+    });
+    copiar(partes.join('\n'));
   }
 
   function copiarFila(p) {

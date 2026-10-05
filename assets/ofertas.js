@@ -199,6 +199,16 @@
     const t = buscarValor(lineas, RX.telefono);
     if (t) { const tel = t.v.replace(/[^\d\s()+\-/]/g, '').replace(/\s{2,}/g, ' ').trim(); if (/\d{5}/.test(tel.replace(/\D/g, ''))) id.telefono = tel; }
     const rl = buscarValor(lineas, RX.representante); if (rl) id.representante = rl.v;
+    // «Nombre: … / Cargo: Representante legal» al pie de una carta, sin la etiqueta «representante legal»
+    if (!id.representante) {
+      for (let i = 0; i < lineas.length - 1; i++) {
+        const m = /^\W*NOMBRES?(?:\s+Y\s+APELLIDOS)?\W*:\s*(.+)/.exec(plano(lineas[i].texto));
+        if (m && /CARGO|REPRESENTANTE|GERENTE|APODERADO/.test(plano(lineas[i + 1].texto))) {
+          id.representante = limpiar(lineas[i].texto.slice(lineas[i].texto.indexOf(':') + 1));
+          break;
+        }
+      }
+    }
     for (const l of lineas) {
       const m = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/.exec(l.texto);
       if (m) { id.correo = m[0]; break; }
@@ -451,7 +461,7 @@
           direccion: '', telefono: '', correo: '', correoDudoso: false, representante: '', dni: '',
           items: [], total: null, totalDeclarado: null, subtotal: null, igv: null, moneda: '', igvIncluido: '',
           plazo: '', plazoDias: null, validez: '', validezDias: null, garantia: '', pago: '', lugar: '',
-          cumple: true, avisos: [], dudosas: [], origen: new Set(), donde: {},
+          cumple: true, avisos: [], extra: [], dudosas: [], origen: new Set(), donde: {},
         };
         postores.push(actual);
       }
@@ -536,7 +546,7 @@
     if (p.ruc && !rucValido(p.ruc)) av.push(`El RUC ${p.ruc} no pasa la verificación; puede estar mal leído.`);
     if (!p.ruc) av.push('No se encontró el RUC (¿falta el Formato 1?).');
     if (!p.razon) av.push('No se encontró la razón social (¿falta el Formato 1?).');
-    p.avisos = av.concat(p.dudosas.length ? ['Hay líneas con precios que no se entendieron: ' + p.dudosas.slice(0, 3).join(' | ')] : []);
+    p.avisos = (p.extra || []).concat(av).concat(p.dudosas.length ? ['Hay líneas con precios que no se entendieron: ' + p.dudosas.slice(0, 3).join(' | ')] : []);
   }
 
   /* ---------- quién gana ---------- */
