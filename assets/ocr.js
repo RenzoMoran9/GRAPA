@@ -25,6 +25,7 @@
   };
   const ANCHO_HOJA = 2200;      // píxeles de ancho al leer una hoja entera (~265 ppp)
   const ANCHO_ZONA = 2600;      // y al leer solo un trozo, que merece más detalle
+  const ANCHO_ALTA = 3400;      // la segunda pasada, para la letra chica que salió mal (tope de renderGrande: 3500)
 
   /* ---------- cargar el motor la primera vez ---------- */
 
@@ -335,27 +336,149 @@
   }
 
   /** La hoja de la página, con un giro de más: se vuelve a dibujar, para no perder detalle. */
-  async function lienzoGirado(pagina, extra) {
+  async function lienzoGirado(pagina, extra, ancho) {
     const copia = Object.assign({}, pagina, { giro: G.norm((pagina.giro || 0) + extra) });
-    return prepararEscaneo(await G.renderGrande(copia, ANCHO_HOJA));
+    return prepararEscaneo(await G.renderGrande(copia, ancho || ANCHO_HOJA));
   }
 
-  async function leerBienOrientada(pagina, alProgreso) {
-    let mejor = await G.ocrLienzo(prepararEscaneo(await G.renderGrande(pagina, ANCHO_HOJA)), alProgreso);
+  /* ---------- lo que Tesseract se deja sin leer ----------
+     Tesseract decide qué partes de la hoja son texto, y suele saltarse la
+     letra chica de una tabla con rayas o de un bloque de firma. Se buscan
+     las franjas con tinta donde no se leyó ni una palabra, y cada una se
+     lee por separado, agrandada: así la letra chica sí se lee.           */
+
+  async function rellenarHuecos(lienzo, lec, alProgreso) {
+    const W = lienzo.width, H = lienzo.height;
+    const g = grises(lienzo);
+    const umbral = umbralOtsu(g);
+    const BIN = Math.max(8, Math.round(H / 200));
+    const nb = Math.ceil(H / BIN);
+    const tinta = new Float32Array(nb);
+    for (let y = 0; y < H; y++) {
+      let n = 0;
+      for (let x = 0; x < W; x += 2) if (g[y * W + x] < 200) n++;
+      tinta[Math.floor(y / BIN)] += n / (W / 2) / BIN;
+    }
+    const cubierto = new Uint8Array(nb);
+    lec.lineas.forEach((l) => l.palabras.forEach((w) => {
+      const b0 = Math.max(0, Math.floor((w.y0 * H) / BIN)), b1 = Math.min(nb - 1, Math.floor((w.y1 * H) / BIN));
+      for (let b = b0; b <= b1; b++) cubierto[b] = 1;
+    }));
+    // franjas con tinta y sin palabras; un solo corte de un renglón no las separa
+    const huecos = [];
+    let ini = -1, ultima = -1;
+    for (let b = 0; b <= nb; b++) {
+      const hay = b < nb && tinta[b] > 0.0012 && !cubierto[b];
+      if (hay) { if (ini < 0) ini = b; ultima = b; }
+      else if (ini >= 0 && (b >= nb || b - ultima > 1)) { huecos.push([ini, ultima]); ini = -1; }
+    }
+    // si hay muchas, las de más tinta: las motas sueltas del escáner pesan poco
+    const peso = ([b0, b1]) => { let t = 0; for (let b = b0; b <= b1; b++) t += tinta[b]; return t; };
+    huecos.sort((x, y) => peso(y) - peso(x));
+    huecos.length = Math.min(huecos.length, 10);
+    huecos.sort((x, y) => x[0] - y[0]);
+    const trozos = [];
+    huecos.forEach(([b0, b1]) => {
+      let ya = Math.max(0, b0 * BIN - BIN);
+      const yb = Math.min(H, (b1 + 1) * BIN + BIN);
+      const tope = Math.round(H * 0.16);
+      while (ya < yb) {
+        const fin = Math.min(yb, ya + tope);
+        trozos.push([ya, fin]);
+        if (fin >= yb) break;
+        ya = fin - BIN;   // un poco de solape, para no partir un renglón
+      }
+    });
+    if (G.depurarOcr) console.info('huecos', JSON.stringify(trozos), 'bin', BIN);
+    if (!trozos.length) return lec;
+    const nuevas = [];
+    let llamadas = 0;
+    // Cada renglón de cada franja, y dentro de él cada celda o frase, se lee por separado
+    // y bien agrandado: así la letra chica llega a un tamaño que Tesseract sí lee.
+    const hayTinta = (x, y) => g[y * W + x] < 200;
+    for (const [ya, yb] of trozos) {
+      // renglones: filas seguidas con tinta
+      const renglones = [];
+      let r0 = -1, vacias = 0;
+      for (let y = ya; y <= yb; y++) {
+        let n = 0;
+        for (let x = 0; x < W; x += 2) if (hayTinta(x, y)) n++;
+        const con = n >= 2;
+        if (con) { if (r0 < 0) r0 = y; vacias = 0; }
+        else if (r0 >= 0 && ++vacias > 2) { renglones.push([r0, y - vacias]); r0 = -1; vacias = 0; }
+      }
+      if (r0 >= 0) renglones.push([r0, yb]);
+      for (const [y0, y1] of renglones) {
+        const alto = y1 - y0 + 1;
+        if (alto < 5 || alto > H * 0.1) continue;
+        // celdas o frases: columnas con tinta, separadas por huecos anchos
+        const separacion = Math.max(24, Math.round(alto * 2.2));
+        const segmentos = [];
+        let s0 = -1, ult = -1;
+        for (let x = 0; x <= W; x++) {
+          let con = false;
+          if (x < W) for (let y = y0; y <= y1; y += 1) if (hayTinta(x, y)) { con = true; break; }
+          if (con) { if (s0 < 0) s0 = x; ult = x; }
+          else if (s0 >= 0 && (x === W || x - ult > separacion)) { segmentos.push([s0, ult]); s0 = -1; }
+        }
+        for (const [x0, x1] of segmentos) {
+          if (x1 - x0 < 4 || llamadas >= 60) continue;
+          const pr = G.ocrParam || {};
+          const f = pr.f || Math.min(6, Math.max(2, Math.round(60 / alto)));
+          const margen = 24;
+          const an = x1 - x0 + 1;
+          const c = document.createElement('canvas');
+          c.width = an * f + margen * 2;
+          c.height = alto * f + margen * 2;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.imageSmoothingQuality = 'high';
+          ctx.filter = `contrast(${pr.contraste || 1.6})`;
+          ctx.drawImage(lienzo, x0, y0, an, alto, margen, margen, an * f, alto * f);
+          ctx.filter = 'none';
+          llamadas++;
+          const r = await G.ocrLienzo(c, alProgreso);
+          if (G.depurarOcr) console.info('trozo', x0, y0, an, alto, 'f=' + f, JSON.stringify(r.lineas.map((l) => l.texto)));
+          r.lineas.forEach((l) => l.palabras.forEach((w) => {
+            // lo recuperado se exige más: las firmas, los sellos y los logos también tienen tinta
+            if (w.c < 0.6 || !/[A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]{2}/.test(w.t)) return;
+            nuevas.push({
+              t: w.t, c: w.c,
+              x0: (x0 + (w.x0 * c.width - margen) / f) / W, x1: (x0 + (w.x1 * c.width - margen) / f) / W,
+              y0: (y0 + (w.y0 * c.height - margen) / f) / H, y1: (y0 + (w.y1 * c.height - margen) / f) / H,
+            });
+          }));
+        }
+      }
+    }
+    if (!nuevas.length) return lec;
+    const todas = [];
+    lec.lineas.forEach((l) => l.palabras.forEach((w) => todas.push(w)));
+    const res = { lineas: agruparPorAltura(todas.concat(nuevas)), origen: 'ocr', rellenada: nuevas.length };
+    if (lec.girada) res.girada = lec.girada;
+    return res;
+  }
+
+  async function leerBienOrientada(pagina, alProgreso, ancho) {
+    const ancha = ancho || ANCHO_HOJA;
+    let lienzo = await lienzoGirado(pagina, 0, ancha);
+    let mejor = await G.ocrLienzo(lienzo, alProgreso);
     let q = calidad(mejor);
-    if (q >= 10) return mejor;
-    // pobre: se prueba al revés y de lado, y gana la que más palabras reconocibles tenga
-    const inicial = q;
-    for (const grados of [180, 90, 270]) {
-      const alt = await G.ocrLienzo(await lienzoGirado(pagina, grados), alProgreso);
-      const qa = calidad(alt);
-      if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; }
-    }
-    if (q < 8 || q < inicial * 2) {
+    if (q < 10) {
+      // pobre: se prueba al revés y de lado, y gana la que más palabras reconocibles tenga
+      const inicial = q;
+      const original = { lec: mejor, lienzo };
+      for (const grados of [180, 90, 270]) {
+        const lz = await lienzoGirado(pagina, grados, ancha);
+        const alt = await G.ocrLienzo(lz, alProgreso);
+        const qa = calidad(alt);
+        if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; lienzo = lz; }
+      }
       // ninguna sale claramente mejor: se deja la lectura sin girar
-      mejor = await G.ocrLienzo(prepararEscaneo(await G.renderGrande(pagina, ANCHO_HOJA)), alProgreso);
+      if (q < 8 || q < inicial * 2) { mejor = original.lec; lienzo = original.lienzo; }
     }
-    return mejor;
+    return rellenarHuecos(lienzo, mejor, alProgreso);
   }
 
   /* ---------- leer una hoja ---------- */
@@ -395,12 +518,13 @@
    * `opciones.alProgreso(0..1)` informa de un escaneo, que es lo lento.
    */
   G.leerLineas = async function (pagina, opciones) {
-    const k = clave(pagina);
+    const alta = !!(opciones && opciones.alta);
+    const k = clave(pagina) + (alta ? ':alta' : '');
     if (cache.has(k)) return cache.get(k);
     const alProgreso = opciones && opciones.alProgreso;
     const p = (async () => {
       if (await G.tieneTexto(pagina)) return leerNativa(pagina);
-      return leerBienOrientada(pagina, alProgreso);
+      return leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
     })();
     cache.set(k, p);
     try {

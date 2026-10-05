@@ -225,9 +225,9 @@
   const ES_CABECERA = /UNITARIO|P\.?\s?UNIT|CANT|DESCRIPCI|UNIDAD\b|IMPORTE\b.*\bUND\b|ITEM|ÍTEM/;
 
   /** ¿Esta fila es un ítem? Busca cantidad × unitario = total entre sus números. */
-  function filaDeItem(texto) {
+  function filaDeItem(texto, sinParcial) {
     const { toks, montos } = montosDe(texto);
-    if (montos.length < 2) return null;
+    if (montos.length < 2) return sinParcial ? null : filaParcial(toks, montos);
     // cantidad × unitario = total, el trío más a la derecha
     for (let k = montos.length - 1; k >= 2; k--) {
       for (let j = k - 1; j >= 1; j--) {
@@ -248,7 +248,40 @@
         return construir(toks, montos, -1, n - 2, n - 1, true, Math.round(c));
       }
     }
-    return null;
+    return sinParcial ? null : filaParcial(toks, montos);
+  }
+
+  /**
+   * Una fila cuyas cifras no cuadran (casi siempre una cifra mal leída del escaneo).
+   * No se descarta: si termina en un monto con decimales y tiene una descripción, se
+   * conserva ese total, y se avisa de que cantidad × unitario no lo confirma.
+   */
+  function filaParcial(toks, montos) {
+    const n = montos.length;
+    if (!n) return null;
+    const ult = montos[n - 1];
+    if (ult.i !== toks.length - 1 || !ult.decimales || ult.v < 10) return null;
+    const antes = toks.slice(0, ult.i);
+    if (/^[xX×]$/.test(antes[antes.length - 1] || '')) return null;      // «… X 50» es una medida
+    if (antes.join('').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, '').length < 8) return null;
+    // cantidad y unitario: los dos números pegados antes del total (con un «S/» a lo sumo entre medias)
+    const j = n >= 2 && montos[n - 2].i >= ult.i - 2 ? n - 2 : -1;
+    const i = j >= 1 && montos[j - 1].i === montos[j].i - 1 ? j - 1 : -1;
+    const primero = i >= 0 ? montos[i].i : j >= 0 ? montos[j].i : ult.i;
+    let desde = 0, num = null;
+    if (/^\d{1,3}[.)]?$/.test(toks[0] || '') && primero > 1) { num = parseInt(toks[0], 10); desde = 1; }
+    let hasta = primero;
+    let unidad = '';
+    if (hasta - 1 >= desde && UNIDADES.test(toks[hasta - 1])) { unidad = toks[hasta - 1].replace(/\.$/, ''); hasta -= 1; }
+    // sin dos cifras pegadas ni número de ítem al principio, un monto suelto es de un párrafo, no de una tabla
+    if (!(i >= 0 && j >= 0) && num == null) return null;
+    const cant = i >= 0 ? montos[i].v : null, pu = j >= 0 ? montos[j].v : null;
+    const calc = cant != null && pu != null ? redondear(cant * pu) : null;
+    return {
+      n: num, desc: limpiar(toks.slice(desde, hasta).join(' ')), unidad, cant, pu, total: ult.v,
+      inferida: false, parcial: true,
+      noCuadra: calc != null && !casi(calc, ult.v) ? { calc, dice: ult.v } : null,
+    };
   }
 
   function construir(toks, montos, i, j, k, inferida, cantInferida) {
@@ -326,7 +359,7 @@
     lineas.forEach((l, i) => {
       const p = plano(l.texto);
       if (ES_CABECERA.test(p) && !/\d[.,]\d{2}/.test(l.texto)) return;
-      if (/SUB\s*-?\s*TOTAL|\bTOTAL\b|\bIGV\b/.test(p) && !filaDeItem(l.texto)) return;
+      if (/SUB\s*-?\s*TOTAL|\bTOTAL\b|\bIGV\b/.test(p) && !filaDeItem(l.texto, true)) return;
       const f = filaDeItem(l.texto);
       if (f) {
         // descripción que sigue en el renglón de abajo (la celda se partió en dos)
@@ -352,6 +385,23 @@
       }
       if (!/\d\s*[xX×]\s*\d/.test(l.texto) && montosDe(l.texto).montos.filter((m) => m.decimales).length >= 2) dudosas.push(limpiar(l.texto));
     });
+    // si no salió ningún ítem, la tabla puede haberse leído rota (cada celda en su renglón): se
+    // prueba con todo el bloque de después del encabezado, como si fuera un solo renglón
+    if (!items.length) {
+      const ini = lineas.findIndex((l) => /(CANTIDAD|CANT\.?)\b.*(PRECIO|UNIT|TOTAL)|PRECIO\s+UNITARIO|OFERTA\s+ES\s+LA\s+SIGUIENTE|COTIZAMOS\s+LO\s+SIGUIENTE|DESCRIPCI.N\b.*\bTOTAL/.test(plano(l.texto)));
+      if (ini >= 0) {
+        let fin = ini + 1;
+        while (fin < lineas.length && fin <= ini + 8 && lineas[fin].texto.length < 90 && !/^\W*(PLAZO|VALIDEZ|GARANT|FORMA\s+DE\s+PAGO|LIMA\b)/.test(plano(lineas[fin].texto))) fin++;
+        const bloque = lineas.slice(ini + 1, fin);
+        const f = bloque.length > 1 ? filaDeItem(bloque.map((l) => l.texto).join(' ')) : null;
+        if (f && !f.parcial) {
+          const donde = ini + 1 + bloque.findIndex((l) => l.texto.includes(String(f.total).split('.')[0]) || /\d/.test(l.texto));
+          f.linea = Math.max(ini + 1, donde);
+          f.desdeBloque = true;
+          items.push(f);
+        }
+      }
+    }
     // los ítems siguen el orden de la tabla: si no traen número se les da
     items.forEach((it, k) => { if (it.n == null) it.n = k + 1; });
 
@@ -479,6 +529,10 @@
       if (p.formatos.includes(5) || p.hojas.length) av.push('No se pudo leer ningún precio. Escríbelo en el cuadro o mira la hoja.');
     }
     if (p.items.some((it) => it.inferida)) av.push('A algún ítem se le perdió la cantidad al leer; se dedujo del precio. Verifícalo.');
+    p.items.forEach((it) => {
+      if (it.noCuadra) av.push(`Ítem ${it.n}: cantidad × precio unitario (${fmt(it.cant)} × ${fmt(it.pu)} = ${fmt(it.noCuadra.calc)}) no da el total que dice (${fmt(it.noCuadra.dice)}). Una de las cifras se leyó mal: mira la hoja.`);
+      else if (it.parcial && (it.cant == null || it.pu == null)) av.push(`Ítem ${it.n}: solo se pudo leer el total (${fmt(it.total)}); la cantidad y el precio unitario no. Mira la hoja.`);
+    });
     if (p.ruc && !rucValido(p.ruc)) av.push(`El RUC ${p.ruc} no pasa la verificación; puede estar mal leído.`);
     if (!p.ruc) av.push('No se encontró el RUC (¿falta el Formato 1?).');
     if (!p.razon) av.push('No se encontró la razón social (¿falta el Formato 1?).');

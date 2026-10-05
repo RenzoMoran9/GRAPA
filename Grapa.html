@@ -1193,6 +1193,10 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .of-hoja-caja{position:relative;background:#fff;box-shadow:var(--sombra)}
 .of-lienzo{width:100%;height:auto;display:block;background:#fff}
 .of-marca{position:absolute;border:2px solid var(--acento);background:rgba(224,83,47,.18);border-radius:3px;box-shadow:0 0 0 3px rgba(224,83,47,.25);pointer-events:none}
+.of-der-texto{flex:none;max-height:34%;overflow:auto;background:var(--fondo-2);border-top:1px solid var(--borde-suave);padding:4px 12px}
+.of-der-texto:empty{display:none}
+.of-texto{margin:6px 0 8px;white-space:pre-wrap;word-break:break-word;font:11.5px/1.45 ui-monospace,Consolas,monospace;color:var(--texto-2);user-select:text}
+.of-texto-pie{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .of-cargando{color:var(--texto-3);font-size:13px;padding:30px;text-align:center}
 .of-chip{border:1px solid var(--borde);background:var(--fondo);color:var(--texto-2);border-radius:999px;padding:3px 11px;font-size:12px;cursor:pointer}
 .of-chip:hover{border-color:var(--texto-3)}
@@ -4325,6 +4329,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   };
   const ANCHO_HOJA = 2200;      // píxeles de ancho al leer una hoja entera (~265 ppp)
   const ANCHO_ZONA = 2600;      // y al leer solo un trozo, que merece más detalle
+  const ANCHO_ALTA = 3400;      // la segunda pasada, para la letra chica que salió mal (tope de renderGrande: 3500)
 
   /* ---------- cargar el motor la primera vez ---------- */
 
@@ -4635,27 +4640,149 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   }
 
   /** La hoja de la página, con un giro de más: se vuelve a dibujar, para no perder detalle. */
-  async function lienzoGirado(pagina, extra) {
+  async function lienzoGirado(pagina, extra, ancho) {
     const copia = Object.assign({}, pagina, { giro: G.norm((pagina.giro || 0) + extra) });
-    return prepararEscaneo(await G.renderGrande(copia, ANCHO_HOJA));
+    return prepararEscaneo(await G.renderGrande(copia, ancho || ANCHO_HOJA));
   }
 
-  async function leerBienOrientada(pagina, alProgreso) {
-    let mejor = await G.ocrLienzo(prepararEscaneo(await G.renderGrande(pagina, ANCHO_HOJA)), alProgreso);
+  /* ---------- lo que Tesseract se deja sin leer ----------
+     Tesseract decide qué partes de la hoja son texto, y suele saltarse la
+     letra chica de una tabla con rayas o de un bloque de firma. Se buscan
+     las franjas con tinta donde no se leyó ni una palabra, y cada una se
+     lee por separado, agrandada: así la letra chica sí se lee.           */
+
+  async function rellenarHuecos(lienzo, lec, alProgreso) {
+    const W = lienzo.width, H = lienzo.height;
+    const g = grises(lienzo);
+    const umbral = umbralOtsu(g);
+    const BIN = Math.max(8, Math.round(H / 200));
+    const nb = Math.ceil(H / BIN);
+    const tinta = new Float32Array(nb);
+    for (let y = 0; y < H; y++) {
+      let n = 0;
+      for (let x = 0; x < W; x += 2) if (g[y * W + x] < 200) n++;
+      tinta[Math.floor(y / BIN)] += n / (W / 2) / BIN;
+    }
+    const cubierto = new Uint8Array(nb);
+    lec.lineas.forEach((l) => l.palabras.forEach((w) => {
+      const b0 = Math.max(0, Math.floor((w.y0 * H) / BIN)), b1 = Math.min(nb - 1, Math.floor((w.y1 * H) / BIN));
+      for (let b = b0; b <= b1; b++) cubierto[b] = 1;
+    }));
+    // franjas con tinta y sin palabras; un solo corte de un renglón no las separa
+    const huecos = [];
+    let ini = -1, ultima = -1;
+    for (let b = 0; b <= nb; b++) {
+      const hay = b < nb && tinta[b] > 0.0012 && !cubierto[b];
+      if (hay) { if (ini < 0) ini = b; ultima = b; }
+      else if (ini >= 0 && (b >= nb || b - ultima > 1)) { huecos.push([ini, ultima]); ini = -1; }
+    }
+    // si hay muchas, las de más tinta: las motas sueltas del escáner pesan poco
+    const peso = ([b0, b1]) => { let t = 0; for (let b = b0; b <= b1; b++) t += tinta[b]; return t; };
+    huecos.sort((x, y) => peso(y) - peso(x));
+    huecos.length = Math.min(huecos.length, 10);
+    huecos.sort((x, y) => x[0] - y[0]);
+    const trozos = [];
+    huecos.forEach(([b0, b1]) => {
+      let ya = Math.max(0, b0 * BIN - BIN);
+      const yb = Math.min(H, (b1 + 1) * BIN + BIN);
+      const tope = Math.round(H * 0.16);
+      while (ya < yb) {
+        const fin = Math.min(yb, ya + tope);
+        trozos.push([ya, fin]);
+        if (fin >= yb) break;
+        ya = fin - BIN;   // un poco de solape, para no partir un renglón
+      }
+    });
+    if (G.depurarOcr) console.info('huecos', JSON.stringify(trozos), 'bin', BIN);
+    if (!trozos.length) return lec;
+    const nuevas = [];
+    let llamadas = 0;
+    // Cada renglón de cada franja, y dentro de él cada celda o frase, se lee por separado
+    // y bien agrandado: así la letra chica llega a un tamaño que Tesseract sí lee.
+    const hayTinta = (x, y) => g[y * W + x] < 200;
+    for (const [ya, yb] of trozos) {
+      // renglones: filas seguidas con tinta
+      const renglones = [];
+      let r0 = -1, vacias = 0;
+      for (let y = ya; y <= yb; y++) {
+        let n = 0;
+        for (let x = 0; x < W; x += 2) if (hayTinta(x, y)) n++;
+        const con = n >= 2;
+        if (con) { if (r0 < 0) r0 = y; vacias = 0; }
+        else if (r0 >= 0 && ++vacias > 2) { renglones.push([r0, y - vacias]); r0 = -1; vacias = 0; }
+      }
+      if (r0 >= 0) renglones.push([r0, yb]);
+      for (const [y0, y1] of renglones) {
+        const alto = y1 - y0 + 1;
+        if (alto < 5 || alto > H * 0.1) continue;
+        // celdas o frases: columnas con tinta, separadas por huecos anchos
+        const separacion = Math.max(24, Math.round(alto * 2.2));
+        const segmentos = [];
+        let s0 = -1, ult = -1;
+        for (let x = 0; x <= W; x++) {
+          let con = false;
+          if (x < W) for (let y = y0; y <= y1; y += 1) if (hayTinta(x, y)) { con = true; break; }
+          if (con) { if (s0 < 0) s0 = x; ult = x; }
+          else if (s0 >= 0 && (x === W || x - ult > separacion)) { segmentos.push([s0, ult]); s0 = -1; }
+        }
+        for (const [x0, x1] of segmentos) {
+          if (x1 - x0 < 4 || llamadas >= 60) continue;
+          const pr = G.ocrParam || {};
+          const f = pr.f || Math.min(6, Math.max(2, Math.round(60 / alto)));
+          const margen = 24;
+          const an = x1 - x0 + 1;
+          const c = document.createElement('canvas');
+          c.width = an * f + margen * 2;
+          c.height = alto * f + margen * 2;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.imageSmoothingQuality = 'high';
+          ctx.filter = `contrast(${pr.contraste || 1.6})`;
+          ctx.drawImage(lienzo, x0, y0, an, alto, margen, margen, an * f, alto * f);
+          ctx.filter = 'none';
+          llamadas++;
+          const r = await G.ocrLienzo(c, alProgreso);
+          if (G.depurarOcr) console.info('trozo', x0, y0, an, alto, 'f=' + f, JSON.stringify(r.lineas.map((l) => l.texto)));
+          r.lineas.forEach((l) => l.palabras.forEach((w) => {
+            // lo recuperado se exige más: las firmas, los sellos y los logos también tienen tinta
+            if (w.c < 0.6 || !/[A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]{2}/.test(w.t)) return;
+            nuevas.push({
+              t: w.t, c: w.c,
+              x0: (x0 + (w.x0 * c.width - margen) / f) / W, x1: (x0 + (w.x1 * c.width - margen) / f) / W,
+              y0: (y0 + (w.y0 * c.height - margen) / f) / H, y1: (y0 + (w.y1 * c.height - margen) / f) / H,
+            });
+          }));
+        }
+      }
+    }
+    if (!nuevas.length) return lec;
+    const todas = [];
+    lec.lineas.forEach((l) => l.palabras.forEach((w) => todas.push(w)));
+    const res = { lineas: agruparPorAltura(todas.concat(nuevas)), origen: 'ocr', rellenada: nuevas.length };
+    if (lec.girada) res.girada = lec.girada;
+    return res;
+  }
+
+  async function leerBienOrientada(pagina, alProgreso, ancho) {
+    const ancha = ancho || ANCHO_HOJA;
+    let lienzo = await lienzoGirado(pagina, 0, ancha);
+    let mejor = await G.ocrLienzo(lienzo, alProgreso);
     let q = calidad(mejor);
-    if (q >= 10) return mejor;
-    // pobre: se prueba al revés y de lado, y gana la que más palabras reconocibles tenga
-    const inicial = q;
-    for (const grados of [180, 90, 270]) {
-      const alt = await G.ocrLienzo(await lienzoGirado(pagina, grados), alProgreso);
-      const qa = calidad(alt);
-      if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; }
-    }
-    if (q < 8 || q < inicial * 2) {
+    if (q < 10) {
+      // pobre: se prueba al revés y de lado, y gana la que más palabras reconocibles tenga
+      const inicial = q;
+      const original = { lec: mejor, lienzo };
+      for (const grados of [180, 90, 270]) {
+        const lz = await lienzoGirado(pagina, grados, ancha);
+        const alt = await G.ocrLienzo(lz, alProgreso);
+        const qa = calidad(alt);
+        if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; lienzo = lz; }
+      }
       // ninguna sale claramente mejor: se deja la lectura sin girar
-      mejor = await G.ocrLienzo(prepararEscaneo(await G.renderGrande(pagina, ANCHO_HOJA)), alProgreso);
+      if (q < 8 || q < inicial * 2) { mejor = original.lec; lienzo = original.lienzo; }
     }
-    return mejor;
+    return rellenarHuecos(lienzo, mejor, alProgreso);
   }
 
   /* ---------- leer una hoja ---------- */
@@ -4695,12 +4822,13 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
    * `opciones.alProgreso(0..1)` informa de un escaneo, que es lo lento.
    */
   G.leerLineas = async function (pagina, opciones) {
-    const k = clave(pagina);
+    const alta = !!(opciones && opciones.alta);
+    const k = clave(pagina) + (alta ? ':alta' : '');
     if (cache.has(k)) return cache.get(k);
     const alProgreso = opciones && opciones.alProgreso;
     const p = (async () => {
       if (await G.tieneTexto(pagina)) return leerNativa(pagina);
-      return leerBienOrientada(pagina, alProgreso);
+      return leerBienOrientada(pagina, alProgreso, alta ? ANCHO_ALTA : ANCHO_HOJA);
     })();
     cache.set(k, p);
     try {
@@ -4997,9 +5125,9 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   const ES_CABECERA = /UNITARIO|P\.?\s?UNIT|CANT|DESCRIPCI|UNIDAD\b|IMPORTE\b.*\bUND\b|ITEM|ÍTEM/;
 
   /** ¿Esta fila es un ítem? Busca cantidad × unitario = total entre sus números. */
-  function filaDeItem(texto) {
+  function filaDeItem(texto, sinParcial) {
     const { toks, montos } = montosDe(texto);
-    if (montos.length < 2) return null;
+    if (montos.length < 2) return sinParcial ? null : filaParcial(toks, montos);
     // cantidad × unitario = total, el trío más a la derecha
     for (let k = montos.length - 1; k >= 2; k--) {
       for (let j = k - 1; j >= 1; j--) {
@@ -5020,7 +5148,40 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
         return construir(toks, montos, -1, n - 2, n - 1, true, Math.round(c));
       }
     }
-    return null;
+    return sinParcial ? null : filaParcial(toks, montos);
+  }
+
+  /**
+   * Una fila cuyas cifras no cuadran (casi siempre una cifra mal leída del escaneo).
+   * No se descarta: si termina en un monto con decimales y tiene una descripción, se
+   * conserva ese total, y se avisa de que cantidad × unitario no lo confirma.
+   */
+  function filaParcial(toks, montos) {
+    const n = montos.length;
+    if (!n) return null;
+    const ult = montos[n - 1];
+    if (ult.i !== toks.length - 1 || !ult.decimales || ult.v < 10) return null;
+    const antes = toks.slice(0, ult.i);
+    if (/^[xX×]$/.test(antes[antes.length - 1] || '')) return null;      // «… X 50» es una medida
+    if (antes.join('').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, '').length < 8) return null;
+    // cantidad y unitario: los dos números pegados antes del total (con un «S/» a lo sumo entre medias)
+    const j = n >= 2 && montos[n - 2].i >= ult.i - 2 ? n - 2 : -1;
+    const i = j >= 1 && montos[j - 1].i === montos[j].i - 1 ? j - 1 : -1;
+    const primero = i >= 0 ? montos[i].i : j >= 0 ? montos[j].i : ult.i;
+    let desde = 0, num = null;
+    if (/^\d{1,3}[.)]?$/.test(toks[0] || '') && primero > 1) { num = parseInt(toks[0], 10); desde = 1; }
+    let hasta = primero;
+    let unidad = '';
+    if (hasta - 1 >= desde && UNIDADES.test(toks[hasta - 1])) { unidad = toks[hasta - 1].replace(/\.$/, ''); hasta -= 1; }
+    // sin dos cifras pegadas ni número de ítem al principio, un monto suelto es de un párrafo, no de una tabla
+    if (!(i >= 0 && j >= 0) && num == null) return null;
+    const cant = i >= 0 ? montos[i].v : null, pu = j >= 0 ? montos[j].v : null;
+    const calc = cant != null && pu != null ? redondear(cant * pu) : null;
+    return {
+      n: num, desc: limpiar(toks.slice(desde, hasta).join(' ')), unidad, cant, pu, total: ult.v,
+      inferida: false, parcial: true,
+      noCuadra: calc != null && !casi(calc, ult.v) ? { calc, dice: ult.v } : null,
+    };
   }
 
   function construir(toks, montos, i, j, k, inferida, cantInferida) {
@@ -5098,7 +5259,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     lineas.forEach((l, i) => {
       const p = plano(l.texto);
       if (ES_CABECERA.test(p) && !/\d[.,]\d{2}/.test(l.texto)) return;
-      if (/SUB\s*-?\s*TOTAL|\bTOTAL\b|\bIGV\b/.test(p) && !filaDeItem(l.texto)) return;
+      if (/SUB\s*-?\s*TOTAL|\bTOTAL\b|\bIGV\b/.test(p) && !filaDeItem(l.texto, true)) return;
       const f = filaDeItem(l.texto);
       if (f) {
         // descripción que sigue en el renglón de abajo (la celda se partió en dos)
@@ -5124,6 +5285,23 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       }
       if (!/\d\s*[xX×]\s*\d/.test(l.texto) && montosDe(l.texto).montos.filter((m) => m.decimales).length >= 2) dudosas.push(limpiar(l.texto));
     });
+    // si no salió ningún ítem, la tabla puede haberse leído rota (cada celda en su renglón): se
+    // prueba con todo el bloque de después del encabezado, como si fuera un solo renglón
+    if (!items.length) {
+      const ini = lineas.findIndex((l) => /(CANTIDAD|CANT\.?)\b.*(PRECIO|UNIT|TOTAL)|PRECIO\s+UNITARIO|OFERTA\s+ES\s+LA\s+SIGUIENTE|COTIZAMOS\s+LO\s+SIGUIENTE|DESCRIPCI.N\b.*\bTOTAL/.test(plano(l.texto)));
+      if (ini >= 0) {
+        let fin = ini + 1;
+        while (fin < lineas.length && fin <= ini + 8 && lineas[fin].texto.length < 90 && !/^\W*(PLAZO|VALIDEZ|GARANT|FORMA\s+DE\s+PAGO|LIMA\b)/.test(plano(lineas[fin].texto))) fin++;
+        const bloque = lineas.slice(ini + 1, fin);
+        const f = bloque.length > 1 ? filaDeItem(bloque.map((l) => l.texto).join(' ')) : null;
+        if (f && !f.parcial) {
+          const donde = ini + 1 + bloque.findIndex((l) => l.texto.includes(String(f.total).split('.')[0]) || /\d/.test(l.texto));
+          f.linea = Math.max(ini + 1, donde);
+          f.desdeBloque = true;
+          items.push(f);
+        }
+      }
+    }
     // los ítems siguen el orden de la tabla: si no traen número se les da
     items.forEach((it, k) => { if (it.n == null) it.n = k + 1; });
 
@@ -5251,6 +5429,10 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       if (p.formatos.includes(5) || p.hojas.length) av.push('No se pudo leer ningún precio. Escríbelo en el cuadro o mira la hoja.');
     }
     if (p.items.some((it) => it.inferida)) av.push('A algún ítem se le perdió la cantidad al leer; se dedujo del precio. Verifícalo.');
+    p.items.forEach((it) => {
+      if (it.noCuadra) av.push(`Ítem ${it.n}: cantidad × precio unitario (${fmt(it.cant)} × ${fmt(it.pu)} = ${fmt(it.noCuadra.calc)}) no da el total que dice (${fmt(it.noCuadra.dice)}). Una de las cifras se leyó mal: mira la hoja.`);
+      else if (it.parcial && (it.cant == null || it.pu == null)) av.push(`Ítem ${it.n}: solo se pudo leer el total (${fmt(it.total)}); la cantidad y el precio unitario no. Mira la hoja.`);
+    });
     if (p.ruc && !rucValido(p.ruc)) av.push(`El RUC ${p.ruc} no pasa la verificación; puede estar mal leído.`);
     if (!p.ruc) av.push('No se encontró el RUC (¿falta el Formato 1?).');
     if (!p.razon) av.push('No se encontró la razón social (¿falta el Formato 1?).');
@@ -5500,6 +5682,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
           if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); cerrar(); return; }
           lec = { lineas: [], origen: 'texto', fallo: true };
         }
+        lec = await segundaPasada(m, lec, sesion, i, n);
+        if (sesion.cancelado || modal.hidden) { sesion.cancelado = true; return; }
         sesion.lecturas.set(m.id, lec);
         sesion.formatos.set(m.id, O().formatoDe(lec.lineas));
       }
@@ -5511,14 +5695,40 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     render();
   }
 
+  /**
+   * Un escaneo con la letra chica a veces sale con una cifra mal leída. Si la hoja es de
+   * precios y la lectura no quedó limpia (sin ítems, o con filas que no cuadran), se vuelve
+   * a leer con más detalle y se queda la que mejor salió.
+   */
+  async function segundaPasada(m, lec, sesion, i, n) {
+    if (lec.origen !== 'ocr' || lec.fallo) return lec;
+    const a = O().leerHoja(lec.lineas);
+    const hablaDePrecios = a.formato === 5 || /PRECIO|OFERTA|COTIZ|TOTAL/.test(O().plano(lec.lineas.map((l) => l.texto).join(' ')));
+    const sucia = !a.tienePrecios || a.precios.items.some((it) => it.parcial || it.inferida);
+    if (!hablaDePrecios || !sucia) return lec;
+    pintarProgreso(i, n, 'Volviendo a leer con más detalle…');
+    try {
+      const alta = await G.leerLineas(m.pagina, { alta: true, alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Volviendo a leer con más detalle…', f); } });
+      const puntaje = (r) => r.precios.items.filter((it) => !it.parcial && !it.inferida).length * 3
+        + (r.precios.totales.length ? 1 : 0) - r.precios.items.filter((it) => it.parcial).length;
+      return puntaje(O().leerHoja(alta.lineas)) > puntaje(a) ? alta : lec;
+    } catch (e) {
+      console.error(e);
+      return lec;
+    }
+  }
+
   /** Con lo leído, arma los postores y decide. */
   function armar(sesion) {
     sesion.postores = O().armarPostores(sesion.hojas.map((m) => ({
       id: m.id, grupo: m.grupo, lineas: sesion.lecturas.get(m.id).lineas, origen: sesion.lecturas.get(m.id).origen,
     })));
     sesion.postores.forEach((p) => {
-      const primera = sesion.hojas.find((m) => m.id === p.hojas[0]);
-      p.nombreGrupo = (primera && primera.nombreGrupo) || '';
+      const suyas = sesion.hojas.filter((m) => p.hojas.includes(m.id));
+      const primera = suyas[0];
+      // si el paquete junta varios archivos y este postor es de uno solo, se le nombra con el archivo
+      const unSoloArchivo = suyas.length && suyas.every((m) => m.nombreArchivo === suyas[0].nombreArchivo);
+      p.nombreGrupo = primera ? (primera.variosArchivos && unSoloArchivo ? primera.nombreArchivo : primera.nombreGrupo) : '';
     });
     sesion.sel = sesion.postores.length ? sesion.postores[0].id : null;
     sesion.hojaVista = sesion.postores.length ? sesion.postores[0].hojas[0] : null;
@@ -5542,7 +5752,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       h('div', { id: 'ofPorItem' }));
     const der = h('aside', { class: 'of-der' },
       h('div', { class: 'of-der-cab', id: 'ofHojas' }),
-      h('div', { class: 'of-der-hoja', id: 'ofVista' }));
+      h('div', { class: 'of-der-hoja', id: 'ofVista' }),
+      h('div', { class: 'of-der-texto', id: 'ofTexto' }));
     $('#ofCuerpo').replaceChildren(izq, der);
     pie();
     pintarResultado();
@@ -5718,24 +5929,27 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       return;
     }
     const filas = p.items.map((it) => {
-      const cant = h('input', { type: 'text', class: 'of-in der', value: String(it.cant), inputmode: 'decimal' });
-      const pu = h('input', { type: 'text', class: 'of-in der', value: O().fmt(it.pu), inputmode: 'decimal' });
+      const cant = h('input', { type: 'text', class: 'of-in der', value: it.cant == null ? '' : String(it.cant), placeholder: '?', inputmode: 'decimal' });
+      const pu = h('input', { type: 'text', class: 'of-in der', value: it.pu == null ? '' : O().fmt(it.pu), placeholder: '?', inputmode: 'decimal' });
       const tot = h('input', { type: 'text', class: 'of-in der', value: O().fmt(it.total), inputmode: 'decimal' });
       const desc = campo(it.desc, '', '', 'Descripción', (v) => { it.desc = v; reevaluar(); });
       const cambia = (campo) => () => {
-        if (campo === 'cant') it.cant = O().leerMonto(cant.value) || 0;
-        if (campo === 'pu') it.pu = O().leerMonto(pu.value) || 0;
+        if (campo === 'cant') it.cant = cant.value.trim() ? O().leerMonto(cant.value) : null;
+        if (campo === 'pu') it.pu = pu.value.trim() ? O().leerMonto(pu.value) : null;
         if (campo === 'tot') it.total = O().leerMonto(tot.value) || 0;
-        // cantidad o unitario cambian el total de la fila; si se cambia el total se respeta
-        if (campo !== 'tot') { it.total = Math.round(it.cant * it.pu * 100) / 100; tot.value = O().fmt(it.total); }
+        // cantidad o unitario cambian el total de la fila (si hay los dos); si se cambia el total se respeta
+        if (campo !== 'tot' && it.cant != null && it.pu != null) { it.total = Math.round(it.cant * it.pu * 100) / 100; tot.value = O().fmt(it.total); }
         it.inferida = false;
-        cant.value = String(it.cant); pu.value = O().fmt(it.pu);
+        it.noCuadra = it.cant != null && it.pu != null && Math.abs(Math.round(it.cant * it.pu * 100) / 100 - it.total) > 0.05
+          ? { calc: Math.round(it.cant * it.pu * 100) / 100, dice: it.total } : null;
+        it.parcial = it.cant == null || it.pu == null ? it.parcial : false;
+        cant.value = it.cant == null ? '' : String(it.cant); pu.value = it.pu == null ? '' : O().fmt(it.pu);
         reevaluar();
         sincronizarTotal(p);
       };
       cant.addEventListener('change', cambia('cant')); pu.addEventListener('change', cambia('pu')); tot.addEventListener('change', cambia('tot'));
       [cant, pu, tot, desc].forEach((e) => e.addEventListener('focus', () => señalar(p, 'item', it)));
-      return h('tr', { class: it.inferida ? 'of-dudosa' : '' },
+      return h('tr', { class: it.inferida || it.parcial || it.noCuadra ? 'of-dudosa' : '' },
         h('td', { class: 'n' }, it.n), h('td', { class: 'desc' }, desc), h('td', {}, it.unidad || ''),
         h('td', {}, cant), h('td', {}, pu), h('td', {}, tot));
     });
@@ -5837,6 +6051,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
           title: 'Hoja ' + (m ? m.numero : ''),
         }, (ETQ_FORMATO[f] || 'Hoja') + ' · p. ' + (m ? m.numero : '?'));
       }));
+    pintarTexto();
     const uid = ev.hojaVista;
     const m = ev.hojas.find((x) => x.id === uid);
     if (!m) { cont.replaceChildren(); return; }
@@ -5859,6 +6074,23 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       vistas.set(uid, lienzo);
       if (ev && ev.hojaVista === uid) poner(lienzo);
     }).catch(() => { if (ev && ev.hojaVista === uid) $('#ofVista').replaceChildren(h('div', { class: 'of-cargando' }, 'No se pudo dibujar la hoja.')); });
+  }
+
+  /** El texto tal como se leyó de la hoja que se está viendo: sirve para entender por qué falló algo. */
+  function pintarTexto() {
+    const cont = $('#ofTexto');
+    if (!cont) return;
+    const lec = ev.hojaVista && ev.lecturas.get(ev.hojaVista);
+    if (!lec) { cont.replaceChildren(); return; }
+    const texto = G.unirLineas(lec.lineas, false);
+    const p = ev.sel && postorDe(ev.sel);
+    const sinPrecio = !!p && p.avisos.some((a) => /ningún precio/.test(a));
+    cont.replaceChildren(h('details', { class: 'of-det', open: sinPrecio },
+      h('summary', {}, `Texto leído de esta hoja (${lec.lineas.length} líneas${lec.origen === 'ocr' ? ', de un escaneo' : ''})`),
+      h('div', { class: 'of-texto-pie' },
+        h('button', { class: 'btn btn-mini', onclick: () => copiar(texto) }, 'Copiar todo el texto'),
+        h('span', { class: 'nota' }, 'Es lo que Pdflash entendió. Si falta algo aquí, falta también en el cuadro.')),
+      h('pre', { class: 'of-texto' }, texto)));
   }
 
   /** Enseña en la hoja de verdad de dónde salió un dato (al entrar en su casilla). */
@@ -10270,9 +10502,12 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       return E.paginas.filter((p) => E.seleccion.has(p.uid)).map((p) => {
         const paq = p.paqueteId && E.paquetes.get(p.paqueteId);
         const fuente = E.fuentes.get(p.fuenteId);
+        // un paquete puede juntar varios archivos: entonces el archivo dice más que el paquete
+        const variosArchivos = !!paq && new Set(E.paginas.filter((q) => q.paqueteId === p.paqueteId).map((q) => q.fuenteId)).size > 1;
         return {
           id: p.uid, pagina: p, grupo: p.paqueteId || p.fuenteId,
           nombreGrupo: (paq && paq.nombre) || (fuente && fuente.nombre) || '',
+          nombreArchivo: (fuente && fuente.nombre) || '', variosArchivos,
           numero: E.paginas.indexOf(p) + 1,
         };
       });

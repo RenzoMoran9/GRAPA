@@ -377,8 +377,12 @@ Para no creerse un número mal leído:
 - cada ítem tiene que cuadrar (cantidad × precio unitario = total);
 - el total que escribió el postor se contrasta con la suma de sus ítems;
 - el RUC se comprueba con su dígito de control (no se «corrige» solo: se avisa);
+- una fila cuyas cifras no cuadran no se tira: se conserva su total y se avisa
+  de cuál no cuadra; si el escaneo es de letra chica, se vuelve a leer con más
+  detalle antes de rendirse;
 - lo dudoso sale en **Revisa antes de decidir**, y al lado se ve la hoja de
-  verdad para cotejar.
+  verdad para cotejar, con el **texto leído** debajo (para entender por qué
+  algo no salió).
 
 El cuadro es **editable**: corrige una cifra o desmarca *Cumple* y el ganador se
 recalcula al instante. Cada dato se copia con su botón, y puedes llevarte el

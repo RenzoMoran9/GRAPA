@@ -3161,9 +3161,12 @@
       return E.paginas.filter((p) => E.seleccion.has(p.uid)).map((p) => {
         const paq = p.paqueteId && E.paquetes.get(p.paqueteId);
         const fuente = E.fuentes.get(p.fuenteId);
+        // un paquete puede juntar varios archivos: entonces el archivo dice más que el paquete
+        const variosArchivos = !!paq && new Set(E.paginas.filter((q) => q.paqueteId === p.paqueteId).map((q) => q.fuenteId)).size > 1;
         return {
           id: p.uid, pagina: p, grupo: p.paqueteId || p.fuenteId,
           nombreGrupo: (paq && paq.nombre) || (fuente && fuente.nombre) || '',
+          nombreArchivo: (fuente && fuente.nombre) || '', variosArchivos,
           numero: E.paginas.indexOf(p) + 1,
         };
       });

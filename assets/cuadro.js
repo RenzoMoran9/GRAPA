@@ -123,6 +123,8 @@
           if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); cerrar(); return; }
           lec = { lineas: [], origen: 'texto', fallo: true };
         }
+        lec = await segundaPasada(m, lec, sesion, i, n);
+        if (sesion.cancelado || modal.hidden) { sesion.cancelado = true; return; }
         sesion.lecturas.set(m.id, lec);
         sesion.formatos.set(m.id, O().formatoDe(lec.lineas));
       }
@@ -134,14 +136,40 @@
     render();
   }
 
+  /**
+   * Un escaneo con la letra chica a veces sale con una cifra mal leída. Si la hoja es de
+   * precios y la lectura no quedó limpia (sin ítems, o con filas que no cuadran), se vuelve
+   * a leer con más detalle y se queda la que mejor salió.
+   */
+  async function segundaPasada(m, lec, sesion, i, n) {
+    if (lec.origen !== 'ocr' || lec.fallo) return lec;
+    const a = O().leerHoja(lec.lineas);
+    const hablaDePrecios = a.formato === 5 || /PRECIO|OFERTA|COTIZ|TOTAL/.test(O().plano(lec.lineas.map((l) => l.texto).join(' ')));
+    const sucia = !a.tienePrecios || a.precios.items.some((it) => it.parcial || it.inferida);
+    if (!hablaDePrecios || !sucia) return lec;
+    pintarProgreso(i, n, 'Volviendo a leer con más detalle…');
+    try {
+      const alta = await G.leerLineas(m.pagina, { alta: true, alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Volviendo a leer con más detalle…', f); } });
+      const puntaje = (r) => r.precios.items.filter((it) => !it.parcial && !it.inferida).length * 3
+        + (r.precios.totales.length ? 1 : 0) - r.precios.items.filter((it) => it.parcial).length;
+      return puntaje(O().leerHoja(alta.lineas)) > puntaje(a) ? alta : lec;
+    } catch (e) {
+      console.error(e);
+      return lec;
+    }
+  }
+
   /** Con lo leído, arma los postores y decide. */
   function armar(sesion) {
     sesion.postores = O().armarPostores(sesion.hojas.map((m) => ({
       id: m.id, grupo: m.grupo, lineas: sesion.lecturas.get(m.id).lineas, origen: sesion.lecturas.get(m.id).origen,
     })));
     sesion.postores.forEach((p) => {
-      const primera = sesion.hojas.find((m) => m.id === p.hojas[0]);
-      p.nombreGrupo = (primera && primera.nombreGrupo) || '';
+      const suyas = sesion.hojas.filter((m) => p.hojas.includes(m.id));
+      const primera = suyas[0];
+      // si el paquete junta varios archivos y este postor es de uno solo, se le nombra con el archivo
+      const unSoloArchivo = suyas.length && suyas.every((m) => m.nombreArchivo === suyas[0].nombreArchivo);
+      p.nombreGrupo = primera ? (primera.variosArchivos && unSoloArchivo ? primera.nombreArchivo : primera.nombreGrupo) : '';
     });
     sesion.sel = sesion.postores.length ? sesion.postores[0].id : null;
     sesion.hojaVista = sesion.postores.length ? sesion.postores[0].hojas[0] : null;
@@ -165,7 +193,8 @@
       h('div', { id: 'ofPorItem' }));
     const der = h('aside', { class: 'of-der' },
       h('div', { class: 'of-der-cab', id: 'ofHojas' }),
-      h('div', { class: 'of-der-hoja', id: 'ofVista' }));
+      h('div', { class: 'of-der-hoja', id: 'ofVista' }),
+      h('div', { class: 'of-der-texto', id: 'ofTexto' }));
     $('#ofCuerpo').replaceChildren(izq, der);
     pie();
     pintarResultado();
@@ -341,24 +370,27 @@
       return;
     }
     const filas = p.items.map((it) => {
-      const cant = h('input', { type: 'text', class: 'of-in der', value: String(it.cant), inputmode: 'decimal' });
-      const pu = h('input', { type: 'text', class: 'of-in der', value: O().fmt(it.pu), inputmode: 'decimal' });
+      const cant = h('input', { type: 'text', class: 'of-in der', value: it.cant == null ? '' : String(it.cant), placeholder: '?', inputmode: 'decimal' });
+      const pu = h('input', { type: 'text', class: 'of-in der', value: it.pu == null ? '' : O().fmt(it.pu), placeholder: '?', inputmode: 'decimal' });
       const tot = h('input', { type: 'text', class: 'of-in der', value: O().fmt(it.total), inputmode: 'decimal' });
       const desc = campo(it.desc, '', '', 'Descripción', (v) => { it.desc = v; reevaluar(); });
       const cambia = (campo) => () => {
-        if (campo === 'cant') it.cant = O().leerMonto(cant.value) || 0;
-        if (campo === 'pu') it.pu = O().leerMonto(pu.value) || 0;
+        if (campo === 'cant') it.cant = cant.value.trim() ? O().leerMonto(cant.value) : null;
+        if (campo === 'pu') it.pu = pu.value.trim() ? O().leerMonto(pu.value) : null;
         if (campo === 'tot') it.total = O().leerMonto(tot.value) || 0;
-        // cantidad o unitario cambian el total de la fila; si se cambia el total se respeta
-        if (campo !== 'tot') { it.total = Math.round(it.cant * it.pu * 100) / 100; tot.value = O().fmt(it.total); }
+        // cantidad o unitario cambian el total de la fila (si hay los dos); si se cambia el total se respeta
+        if (campo !== 'tot' && it.cant != null && it.pu != null) { it.total = Math.round(it.cant * it.pu * 100) / 100; tot.value = O().fmt(it.total); }
         it.inferida = false;
-        cant.value = String(it.cant); pu.value = O().fmt(it.pu);
+        it.noCuadra = it.cant != null && it.pu != null && Math.abs(Math.round(it.cant * it.pu * 100) / 100 - it.total) > 0.05
+          ? { calc: Math.round(it.cant * it.pu * 100) / 100, dice: it.total } : null;
+        it.parcial = it.cant == null || it.pu == null ? it.parcial : false;
+        cant.value = it.cant == null ? '' : String(it.cant); pu.value = it.pu == null ? '' : O().fmt(it.pu);
         reevaluar();
         sincronizarTotal(p);
       };
       cant.addEventListener('change', cambia('cant')); pu.addEventListener('change', cambia('pu')); tot.addEventListener('change', cambia('tot'));
       [cant, pu, tot, desc].forEach((e) => e.addEventListener('focus', () => señalar(p, 'item', it)));
-      return h('tr', { class: it.inferida ? 'of-dudosa' : '' },
+      return h('tr', { class: it.inferida || it.parcial || it.noCuadra ? 'of-dudosa' : '' },
         h('td', { class: 'n' }, it.n), h('td', { class: 'desc' }, desc), h('td', {}, it.unidad || ''),
         h('td', {}, cant), h('td', {}, pu), h('td', {}, tot));
     });
@@ -460,6 +492,7 @@
           title: 'Hoja ' + (m ? m.numero : ''),
         }, (ETQ_FORMATO[f] || 'Hoja') + ' · p. ' + (m ? m.numero : '?'));
       }));
+    pintarTexto();
     const uid = ev.hojaVista;
     const m = ev.hojas.find((x) => x.id === uid);
     if (!m) { cont.replaceChildren(); return; }
@@ -482,6 +515,23 @@
       vistas.set(uid, lienzo);
       if (ev && ev.hojaVista === uid) poner(lienzo);
     }).catch(() => { if (ev && ev.hojaVista === uid) $('#ofVista').replaceChildren(h('div', { class: 'of-cargando' }, 'No se pudo dibujar la hoja.')); });
+  }
+
+  /** El texto tal como se leyó de la hoja que se está viendo: sirve para entender por qué falló algo. */
+  function pintarTexto() {
+    const cont = $('#ofTexto');
+    if (!cont) return;
+    const lec = ev.hojaVista && ev.lecturas.get(ev.hojaVista);
+    if (!lec) { cont.replaceChildren(); return; }
+    const texto = G.unirLineas(lec.lineas, false);
+    const p = ev.sel && postorDe(ev.sel);
+    const sinPrecio = !!p && p.avisos.some((a) => /ningún precio/.test(a));
+    cont.replaceChildren(h('details', { class: 'of-det', open: sinPrecio },
+      h('summary', {}, `Texto leído de esta hoja (${lec.lineas.length} líneas${lec.origen === 'ocr' ? ', de un escaneo' : ''})`),
+      h('div', { class: 'of-texto-pie' },
+        h('button', { class: 'btn btn-mini', onclick: () => copiar(texto) }, 'Copiar todo el texto'),
+        h('span', { class: 'nota' }, 'Es lo que Pdflash entendió. Si falta algo aquí, falta también en el cuadro.')),
+      h('pre', { class: 'of-texto' }, texto)));
   }
 
   /** Enseña en la hoja de verdad de dónde salió un dato (al entrar en su casilla). */
