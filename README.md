@@ -382,7 +382,19 @@ donde PaddleOCR no arranca, lee con Tesseract, el lector de antes.
    postor por columna, y los ítems del postor elegido, para corregirlos.
 
 Si la tabla de precios del Formato 5 sigue en la hoja de al lado, **Ubicar** la
-marca también («Formato 5 (sigue)»). La descripción, la unidad, la marca y la
+marca también («Formato 5 (sigue)»), pero sus filas solo se suman si con ellas el
+total del Formato 5 cuadra; si no, se dejan fuera y se avisa. Los correos impresos
+(Gmail, Outlook) nunca se toman por hojas de precios, aunque nombren el ítem.
+
+**Ubicar** marca también la **hoja de cotización** del propio postor (su carta, su
+proforma, su «oferta económica»): suele traer lo que el Formato 5 calla. El Formato 1
+y el 5 mandan; la cotización completa lo que les falte (marca, modelo, procedencia,
+validez, forma de pago) y, si el postor no trajo Formato 5, sus precios son la oferta.
+
+**Llevar a HNAL** descarga un *trabajo* para la app HNAL: en *Trabajos → Importar
+trabajo (.json)* quedan llenos el Cuadro de Validación (postores y marcas) y el
+Cuadro Comparativo (RUC, contacto, teléfono, correo, garantía, plazo, precio y marca
+de cada ítem, y el ganador). Las fechas de solicitud y de recepción se ponen allí. La descripción, la unidad, la marca y la
 procedencia de cada ítem salen cada una en su sitio, por la columna de la tabla
 en que están.
 
