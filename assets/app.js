@@ -3810,6 +3810,9 @@
           if (donde >= 0) E.paginas[donde] = nueva;
         });
         E.seleccion = new Set(r.paginas.map((x) => x.uid));
+        // la pestaña del editor sigue abierta con estas hojas: si se corrige algo más
+        // y se vuelve a devolver, tiene que reemplazar ESTAS, no entrar como documento nuevo
+        puente.enviadas = r.paginas.map((x) => x.uid);
         pintar();
         if (buscable) { avisarBuscables(buscable); return; }
         G.aviso(cuantos
