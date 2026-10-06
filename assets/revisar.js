@@ -329,7 +329,9 @@
     const k = claveDe(pagina);
     if (cache.has(k)) return cache.get(k);
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
-    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    // se dibuja en una copia del PDF con su propio hilo: así varias hojas se miran a la vez
+    const doc = (G.copiaParaLeer && await G.copiaParaLeer(pagina.fuenteId)) || fuente.doc;
+    const pag = await doc.getPage(pagina.indice + 1);
     let r;
     const t = await mirarTexto(pag, G.norm(pagina.giro) + 0).catch(() => ({ letras: 0 }));
     if (t.letras >= 20) {

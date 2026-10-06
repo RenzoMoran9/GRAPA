@@ -4344,7 +4344,9 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     const k = claveDe(pagina);
     if (cache.has(k)) return cache.get(k);
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
-    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    // se dibuja en una copia del PDF con su propio hilo: así varias hojas se miran a la vez
+    const doc = (G.copiaParaLeer && await G.copiaParaLeer(pagina.fuenteId)) || fuente.doc;
+    const pag = await doc.getPage(pagina.indice + 1);
     let r;
     const t = await mirarTexto(pag, G.norm(pagina.giro) + 0).catch(() => ({ letras: 0 }));
     if (t.letras >= 20) {
@@ -4582,7 +4584,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
      siempre.                                                                    */
 
   const copias = new Map();     // fuenteId → Promise<[PDFDocumentProxy]>
-  const COPIAS = (navigator.hardwareConcurrency || 2) >= 6 ? 2 : 1;
+  const COPIAS = Math.max(1, Math.min(3, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
   let urlHiloPdf = null;
   let turnoCopia = 0;
 
@@ -4621,6 +4623,20 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       p.then((docs) => docs.forEach((d) => { const w = d.loadingTask && d.loadingTask._worker; d.destroy(); if (w) w.destroy(); }), () => {});
     });
   }
+
+  /** Una de las copias del PDF de la hoja, por turno (o el PDF de siempre, si no se pudo abrir). */
+  G.copiaParaLeer = async function (fuenteId) {
+    const fuente = G.estado.fuentes.get(fuenteId);
+    if (!fuente || !fuente.bytes) return fuente && fuente.doc;
+    try {
+      const docs = await copiasDe(fuenteId);
+      return docs[turnoCopia++ % docs.length];
+    } catch (e) {
+      return fuente.doc;
+    }
+  };
+  /** Cuántas hojas conviene dibujar a la vez. */
+  G.copiasParaLeer = () => COPIAS;
 
   /** La hoja dibujada para leerla (con su giro y su enderezado), en uno de los hilos aparte. */
   async function dibujarParaLeer(pagina, ancho) {
@@ -13006,9 +13022,9 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     pintarRevision();
     const lista = E.paginas.slice();
     const t0 = performance.now();
-    // De a dos: mientras se hacen las cuentas de una hoja, la siguiente se
-    // va leyendo del archivo (eso lo hace pdf.js aparte). El resultado de
-    // cada hoja es el mismo; solo se espera menos.
+    // Varias a la vez: mientras se hacen las cuentas de una hoja, las siguientes
+    // se van dibujando en los hilos aparte del lector (una copia del PDF cada uno).
+    // El resultado de cada hoja es el mismo; solo se espera menos.
     const enCurso = new Map();
     const lanzar = (j) => {
       if (j >= lista.length || enCurso.has(j) || !E.paginas.includes(lista[j])) return;
@@ -13019,7 +13035,8 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     try {
       for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
         const p = lista[i];
-        lanzar(i); lanzar(i + 1);
+        const adelante = (G.copiasParaLeer ? G.copiasParaLeer() : 1) + 1;
+        for (let j = i; j <= i + adelante; j++) lanzar(j);
         if (!enCurso.has(i)) continue;
         estado.textContent = `Revisando hoja ${i + 1} de ${lista.length}…`;
         const hecho = await enCurso.get(i);

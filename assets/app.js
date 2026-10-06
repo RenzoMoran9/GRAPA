@@ -4845,9 +4845,9 @@
     pintarRevision();
     const lista = E.paginas.slice();
     const t0 = performance.now();
-    // De a dos: mientras se hacen las cuentas de una hoja, la siguiente se
-    // va leyendo del archivo (eso lo hace pdf.js aparte). El resultado de
-    // cada hoja es el mismo; solo se espera menos.
+    // Varias a la vez: mientras se hacen las cuentas de una hoja, las siguientes
+    // se van dibujando en los hilos aparte del lector (una copia del PDF cada uno).
+    // El resultado de cada hoja es el mismo; solo se espera menos.
     const enCurso = new Map();
     const lanzar = (j) => {
       if (j >= lista.length || enCurso.has(j) || !E.paginas.includes(lista[j])) return;
@@ -4858,7 +4858,8 @@
     try {
       for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
         const p = lista[i];
-        lanzar(i); lanzar(i + 1);
+        const adelante = (G.copiasParaLeer ? G.copiasParaLeer() : 1) + 1;
+        for (let j = i; j <= i + adelante; j++) lanzar(j);
         if (!enCurso.has(i)) continue;
         estado.textContent = `Revisando hoja ${i + 1} de ${lista.length}…`;
         const hecho = await enCurso.get(i);

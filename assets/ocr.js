@@ -214,7 +214,7 @@
      siempre.                                                                    */
 
   const copias = new Map();     // fuenteId → Promise<[PDFDocumentProxy]>
-  const COPIAS = (navigator.hardwareConcurrency || 2) >= 6 ? 2 : 1;
+  const COPIAS = Math.max(1, Math.min(3, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
   let urlHiloPdf = null;
   let turnoCopia = 0;
 
@@ -253,6 +253,20 @@
       p.then((docs) => docs.forEach((d) => { const w = d.loadingTask && d.loadingTask._worker; d.destroy(); if (w) w.destroy(); }), () => {});
     });
   }
+
+  /** Una de las copias del PDF de la hoja, por turno (o el PDF de siempre, si no se pudo abrir). */
+  G.copiaParaLeer = async function (fuenteId) {
+    const fuente = G.estado.fuentes.get(fuenteId);
+    if (!fuente || !fuente.bytes) return fuente && fuente.doc;
+    try {
+      const docs = await copiasDe(fuenteId);
+      return docs[turnoCopia++ % docs.length];
+    } catch (e) {
+      return fuente.doc;
+    }
+  };
+  /** Cuántas hojas conviene dibujar a la vez. */
+  G.copiasParaLeer = () => COPIAS;
 
   /** La hoja dibujada para leerla (con su giro y su enderezado), en uno de los hilos aparte. */
   async function dibujarParaLeer(pagina, ancho) {
