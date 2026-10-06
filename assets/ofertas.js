@@ -125,16 +125,44 @@
     const todo = cortos.join(' ');
     if (/DECLARACION\s+JURADA\s+DE\s+DATOS\s+DEL\s+POSTOR|^DATOS\s+DEL\s+POSTOR/.test(todo)) return 1;
     if (cortos.some((l) => /^\W*PRECIO\s+DE\s+LA\s+OFERTA\W*$/.test(l))) return 5;
-    if (/(OFERTA|PROPUESTA)\s+ECONOMICA|CARTA\s+DE\s+(COTIZACION|OFERTA)/.test(todo)) return 5;
+    if (esCotizacion(cab)) return 'cot';
     return null;
+  }
+
+  /**
+   * ¿Es la hoja de cotización del propio postor (su carta, su proforma, su «oferta
+   * económica»)? No es un formato de las bases, pero suele traer lo que el Formato 5 calla:
+   * la marca, el modelo, la procedencia, la garantía. Las hojas de la propia entidad que
+   * PIDEN la cotización («solicitud de cotización») no cuentan.
+   */
+  function esCotizacion(cab) {
+    if (esCorreo(cab.map((texto) => ({ texto })))) return false;
+    return cab.some((l) => {
+      if (/SOLICITUD\s+DE\s+COTIZACION|SOLICITAR\s+COTIZACION|GMAIL|REQUERIMIENTO\s+DE/.test(l)) return false;
+      if (l.length <= 60 && /(OFERTA|PROPUESTA)\s+ECONOMICA|CARTA\s+DE\s+(COTIZACION|OFERTA|PRESENTACION)|^\W*COTIZACION\b|\bPROFORMA\b|COTIZACION\s+N\W/.test(l)) return true;
+      return l.length <= 110 && /^\W*(ASUNTO|REFERENCIA|REF)\W+.{0,40}\bCOTIZACION/.test(l);
+    });
   }
 
   /**
    * ¿Es esta hoja la continuación de una tabla de precios? (la que sigue a un Formato 5 cuando
    * los ítems no caben en una hoja). Arriba trae filas de ítems o el total, y no un título propio.
    */
+  /**
+   * ¿Es un correo impreso (Gmail, Outlook)? Un correo puede nombrar el ítem, la cantidad y
+   * hasta un precio, y no por eso es una hoja de precios del postor.
+   */
+  function esCorreo(lineas) {
+    const t = plano(lineas.slice(0, 30).map((l) => l.texto).join(' \n '));
+    // «Gmail - EXP. 10488…» del encabezado impreso; no la dirección «…@gmail.com» de nadie
+    if (/(?:^|[\s|])(?:GMAIL|OUTLOOK)(?![.\w@])|MENSAJE\s+ORIGINAL|\bREENVIADO\b|FORWARDED\s+MESSAGE/.test(t)) return true;
+    const senales = [/(^|\n)\W*DE\s*:/, /(^|\n)\W*PARA\s*:/, /(^|\n)\W*(ASUNTO|SUBJECT)\s*:/, /\bENVIADO\b|\bSENT\b/, /(^|\n)\W*CC\s*:/,
+      /\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}/, /<[^>@\s]+@[^>\s]+>/];
+    return senales.filter((r) => r.test(t)).length >= 2;
+  }
+
   function pareceContinuacion(lineas) {
-    if (!lineas.length || formatoDe(lineas)) return false;
+    if (!lineas.length || formatoDe(lineas) || esCorreo(lineas)) return false;
     const cab = lineas.slice(0, 12);
     const t = plano(cab.map((l) => l.texto).join(' '));
     if (/DECLARACION\s+JURADA|CARTA\s|SENORES|SEÑORES|CONSTANCIA|FICHA\s+RUC|REGISTRO\s+NACIONAL|MEMORANDO|RESOLUCION|ANEXO/.test(t)) return false;
@@ -175,11 +203,14 @@
     telefono: /(?:\bTEL[EÉ]?FONOS?\b|\bTELEF\.?|\bTELF?\.|\bCELULAR\b|\bCEL\b)(?:\s*\/\s*(?:CELULAR|FAX))?/,
     // con dos puntos: «representante legal de la empresa …» en una frase no es la etiqueta
     representante: /(?:REPRESENTANTE\s+LEGAL|APODERADO|NOMBRE\s+DEL\s+REPRESENTANTE(?:\s+LEGAL)?)(?=\s*:)/,
+    contacto: /(?:PERSONA\s+DE\s+CONTACTO|NOMBRE\s+DE(?:L)?\s+CONTACTO|CONTACTO(?=\s*:))/,
+    modelo: /(?:^|[^A-Z])MODELO(?=\s*:)/,
+    procedencia: /(?:^|[^A-Z])(?:PROCEDENCIA|PAIS\s+DE\s+ORIGEN|ORIGEN)(?=\s*:)/,
     marca: /(?:^|[^A-Z])MARCA(?=\s*:)/,
     plazo: [etiqueta('plazo de entrega'), etiqueta('plazo de ejecucion'), etiqueta('plazo de prestacion'),
       etiqueta('plazo de atencion'), etiqueta('tiempo de entrega')],
     validez: [/(?:VALIDEZ|VIGENCIA)\s+DE\s+(?:LA\s+)?(?:OFERTA|COTIZACION|PROPUESTA)/, /(?:^|[^A-Z])\w?ALIDEZ\s+DE(?:\s+LA)?(?:\s+(?:OFERTA|COTIZACION|PROPUESTA))?/],
-    garantia: etiqueta('garantia'),
+    garantia: /(?:^|[^A-Z])\w?ARANTIA(?:\s+(?:COMERCIAL|DEL\s+(?:PRODUCTO|BIEN|FABRICANTE)|DE\s+FABRICA))?/,
     pago: [etiqueta('forma de pago'), etiqueta('condiciones de pago'), etiqueta('condicion de pago')],
     lugar: etiqueta('lugar de entrega'),
   };
@@ -274,6 +305,8 @@
     }
     const rl = !id.representante && buscarValor(lineas, RX.representante);
     if (rl) { id.representante = rl.v; donde.representante = rl.i; }
+    const co = buscarValor(lineas, RX.contacto);
+    if (co && /[A-Za-zÁÉÍÓÚÑáéíóúñ]{3}/.test(co.v) && !/@/.test(co.v)) { id.contacto = co.v.replace(/\s+(?:TEL[EÉ]F\w*|CEL\w*|CORREO)\b.*$/i, ''); donde.contacto = co.i; }
     // «Nombre: … / Cargo: Representante legal» al pie de una carta, sin la etiqueta «representante legal»
     if (!id.representante) {
       for (let i = 0; i < lineas.length - 1; i++) {
@@ -465,10 +498,18 @@
     ['total', /^(?:TOTAL|IMPORTE|SUBTOTAL|P\.?\s?TOTAL)$/],
   ];
 
+  /** El tipo de columna de una palabra de la cabecera; en un PDF con texto llega la frase entera
+   *  («DESCRIPCIÓN DEL BIEN / SERVICIO», «P. UNITARIO»): manda la primera palabra que diga algo. */
   function tipoDeColumna(palabra) {
-    const t = plano(palabra).replace(/[():;,]+$/g, '').replace(/^[(]+/, '');
-    const c = COLUMNAS.find(([, rx]) => rx.test(t));
-    return c ? c[0] : null;
+    const una = (w) => {
+      const t = plano(w).replace(/[():;,]+$/g, '').replace(/^[(]+/, '');
+      const c = COLUMNAS.find(([, rx]) => rx.test(t));
+      return c ? c[0] : null;
+    };
+    const entera = una(palabra);
+    if (entera) return entera;
+    for (const w of String(palabra).split(/[\s/]+/)) { const t = una(w); if (t) return t; }
+    return null;
   }
 
   /** La cabecera de la tabla: { linea, hasta, cols: [{ tipo, x }] } ordenadas de izquierda a derecha, o null. */
@@ -606,7 +647,15 @@
     const ga = buscarValor(lineas, RX.garantia); if (ga) cond.garantia = ga.v;
     const pa = primero(lineas, RX.pago); if (pa) cond.pago = pa.v;
     const lu = buscarValor(lineas, RX.lugar); if (lu) cond.lugar = lu.v;
-    const ma = buscarValor(lineas, RX.marca); if (ma && !/^[(*_.\-]|COLOCAR/i.test(ma.v)) cond.marca = ma.v;
+    // la marca suelta del postor («Marca: NACIONAL»), no la de una fila de la tabla
+    const fuera = lineas.map((l, i) => (esFila.has(i) ? { texto: '' } : l));
+    const ma = buscarValor(fuera, RX.marca); if (ma && !/^[(*_.\-]|COLOCAR/i.test(ma.v)) cond.marca = soloSuValor(ma.v);
+    const mo = buscarValor(fuera, RX.modelo); if (mo && !/^[(*_.\-]|COLOCAR/i.test(mo.v)) cond.modelo = soloSuValor(mo.v);
+    const pc = buscarValor(fuera, RX.procedencia); if (pc && !/^[(*_.\-]|COLOCAR/i.test(pc.v)) cond.procedencia = soloSuValor(pc.v);
+    // «25 días calendarios.» → sin el punto final
+    ['plazo', 'validez', 'garantia', 'pago'].forEach((k) => { if (cond[k]) cond[k] = cond[k].replace(/\.$/, ''); });
+    // en la celda de la tabla: «MODELO: S88113 MARCA: SELLSTROM PROCEDENCIA: USA»
+    items.forEach(separarEtiquetas);
     return {
       items, subtotal: tot.subtotal, igv: tot.igv, totales: tot.totales, cond,
       moneda: leerMoneda(lineas), igvIncluido: leerIgv(lineas), dudosas,
@@ -629,7 +678,10 @@
       if (filas.some((it) => it.linea === i)) continue;
       const l = lineas[i];
       const p = plano(l.texto);
-      if (/\bTOTAL\b|\bIGV\b|:/.test(p) || montosDe(l.texto).montos.some((m) => m.decimales)) { if (i > ultima) break; continue; }
+      // los dos puntos de «MODELO: S88113» son de la celda; los de «Plazo de entrega:», no
+      const etiquetaDeCelda = /^\W*(?:MARCA|MODELO|PROCEDENCIA|ORIGEN|PAIS)\b/.test(p);
+      if (/\bTOTAL\b|\bIGV\b/.test(p) || (/:/.test(p) && !etiquetaDeCelda && !/\b(?:MARCA|MODELO|PROCEDENCIA)\s*:/.test(p))
+          || montosDe(l.texto).montos.some((m) => m.decimales)) { if (i > ultima) break; continue; }
       const cols = textoPorColumna(cab, l);
       if (!Object.keys(cols).length || l.texto.length > 90) continue;
       // al ítem cuya fila de cifras está más cerca, y no muy lejos
@@ -657,13 +709,36 @@
     });
   }
 
+  const ETIQUETAS_ITEM = { marca: 'MARCA', modelo: 'MODELO', procedencia: 'PROCEDENCIA|ORIGEN|PAIS' };
+  /** «SELLSTROM PROCEDENCIA: USA» → «SELLSTROM»: lo que sigue a otra etiqueta no es de esta. */
+  function soloSuValor(v) {
+    return limpiar(String(v).split(/\s+(?:MARCA|MODELO|PROCEDENCIA|ORIGEN|PA[IÍ]S|GARANT[IÍ]A|PLAZO)\s*:/i)[0]).replace(/[,;.]+$/, '');
+  }
+
+  /**
+   * Una celda «MARCA / MODELO» trae varias cosas con su etiqueta, a veces repartidas entre
+   * columnas vecinas y a veces metidas en la descripción. Se juntan y se separa cada una.
+   */
+  function separarEtiquetas(it) {
+    // la descripción va primero: así lo que cierra el texto es la última etiqueta y su valor
+    const todo = [it.desc, it.marca, it.modelo, it.procedencia].filter(Boolean).join(' ');
+    if (!/\b(?:MARCA|MODELO|PROCEDENCIA|ORIGEN)\s*:/i.test(todo)) return;
+    Object.entries(ETIQUETAS_ITEM).forEach(([k, rx]) => {
+      const m = new RegExp('\\b(?:' + rx + ')\\s*:\\s*(.+?)(?=\\s+(?:MARCA|MODELO|PROCEDENCIA|ORIGEN|PA[IÍ]S)\\s*:|$)', 'i').exec(todo);
+      if (m && limpiar(m[1])) it[k] = limpiar(m[1]).replace(/[,;.]+$/, '');
+    });
+    // la descripción se queda sin lo que era de las otras columnas
+    if (it.desc) it.desc = limpiar(it.desc.replace(/\b(?:MARCA|MODELO|PROCEDENCIA|ORIGEN|PA[IÍ]S)\s*:.*$/i, ''));
+  }
+
   /** Todo lo que se puede sacar de una hoja. */
   function leerHoja(lineas) {
-    const formato = formatoDe(lineas);
+    const correo = esCorreo(lineas);
+    const formato = correo ? null : formatoDe(lineas);
     const ident = leerIdentidad(lineas);
     const precios = leerPrecios(lineas);
     const tienePrecios = precios.items.length > 0 || precios.totales.length > 0;
-    return { formato, ident, precios, tienePrecios };
+    return { formato, ident, precios, tienePrecios: tienePrecios && !correo, correo };
   }
 
   /* ---------- postores ---------- */
@@ -697,6 +772,7 @@
           direccion: '', telefono: '', correo: '', correoDudoso: false, representante: '', dni: '',
           items: [], total: null, totalDeclarado: null, subtotal: null, igv: null, moneda: '', igvIncluido: '',
           plazo: '', plazoDias: null, validez: '', validezDias: null, garantia: '', pago: '', lugar: '', marca: '',
+          modelo: '', procedencia: '', contacto: '', itemsCot: [], totalCot: null,
           cumple: true, avisos: [], extra: [], dudosas: [], origen: new Set(), donde: {},
         };
         postores.push(actual);
@@ -709,6 +785,14 @@
   }
 
   function absorber(p, h, lec) {
+    // lo de la hoja de cotización va aparte: el Formato 1 y el 5 mandan, y ella completa
+    if (lec.formato === 'cot' && !p.esCot) {
+      p.deCot = p.deCot || { esCot: true, hojas: [], formatos: [], origen: new Set(), donde: {}, items: [], avisos: [], dudosas: [] };
+      p.hojas.push(h.id);
+      if (!p.formatos.includes('cot')) p.formatos.push('cot');
+      absorber(p.deCot, h, lec);
+      return;
+    }
     p.hojas.push(h.id);
     if (lec.formato && !p.formatos.includes(lec.formato)) p.formatos.push(lec.formato);
     if (h.origen) p.origen.add(h.origen);
@@ -717,7 +801,7 @@
       const l = i != null && h.lineas[i];
       return l ? { hoja: h.id, x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 } : null;
     };
-    ['razon', 'ruc', 'direccion', 'telefono', 'correo', 'representante', 'dni'].forEach((c) => {
+    ['razon', 'ruc', 'direccion', 'telefono', 'correo', 'representante', 'dni', 'contacto'].forEach((c) => {
       if (id[c] && !p[c]) {
         p[c] = id[c];
         if (id.donde && id.donde[c] != null) p.donde[c] = caja(id.donde[c]);
@@ -725,6 +809,19 @@
     });
     if (id.correoDudoso && p.correo === id.correo) p.correoDudoso = true;
     const pr = lec.precios;
+    // Una hoja sin título que trae precios, en un postor que ya tiene su Formato 5: es la
+    // tabla que sigue en otra hoja SOLO si las cifras lo confirman. Si el Formato 5 ya
+    // cuadraba con su total, o sumar esta hoja no lo hace cuadrar, no es suya: se deja fuera
+    // y se dice por qué.
+    if (lec.tienePrecios && !lec.formato && p.formatos.includes(5) && p.items.length && p.totalDeclarado != null && pr.items.length) {
+      const suma = redondear(p.items.reduce((a, it) => a + (Number(it.total) || 0), 0));
+      const nueva = redondear(pr.items.reduce((a, it) => a + (Number(it.total) || 0), 0));
+      const cuadra = (x) => casi(x, p.totalDeclarado, 0.05) || casi(redondear(x * 1.18), p.totalDeclarado, 0.1);
+      if (cuadra(suma) || !cuadra(redondear(suma + nueva))) {
+        p.extra.push(`Una hoja con precios (${pr.items.length} fila${pr.items.length === 1 ? '' : 's'}, ${fmt(nueva)}) no se sumó: no es la continuación de su Formato 5, porque con ella el total no cuadra. Mírala si crees que sí.`);
+        return;
+      }
+    }
     if (lec.tienePrecios) {
       // los ítems y los totales son de la hoja de precios; si hay dos, se suman los ítems
       pr.items.forEach((it) => p.items.push(Object.assign({ hoja: h.id, caja: caja(it.linea) }, it)));
@@ -739,16 +836,59 @@
       p.dudosas.push(...pr.dudosas);
     }
     const c = pr.cond;
-    ['plazo', 'validez', 'garantia', 'pago', 'lugar', 'marca'].forEach((k) => { if (c[k] && !p[k]) p[k] = c[k]; });
+    ['plazo', 'validez', 'garantia', 'pago', 'lugar', 'marca', 'modelo', 'procedencia'].forEach((k) => { if (c[k] && !p[k]) p[k] = c[k]; });
     if (c.plazoDias != null && p.plazoDias == null) p.plazoDias = c.plazoDias;
     if (c.validezDias != null && p.validezDias == null) p.validezDias = c.validezDias;
   }
 
   function cerrarPostor(p) {
+    if (p.deCot) {
+      p.itemsCot = p.deCot.items;
+      p.totalCot = p.deCot.totalDeclarado != null ? { v: p.deCot.totalDeclarado, caja: p.deCot.donde.total } : null;
+      usarCotizacion(p);
+    }
     p.items.forEach((it, k) => { it.n = k + 1; });
     // la marca del postor: la que dice su hoja o, si no, la de sus ítems
-    if (!p.marca) p.marca = [...new Set(p.items.map((it) => it.marca).filter(Boolean))].join(' / ');
+    ['marca', 'modelo', 'procedencia'].forEach((k) => {
+      if (!p[k]) p[k] = [...new Set(p.items.map((it) => it[k]).filter(Boolean))].join(' / ');
+    });
     recalcular(p);
+  }
+
+  /**
+   * Lo que trae la hoja de cotización. Sin Formato 5 con precios, sus ítems y su total son
+   * la oferta. Con Formato 5, solo completa a cada ítem lo que este no dice (la marca, el
+   * modelo, la procedencia, la unidad), emparejándolos por la descripción; y si los totales
+   * no coinciden, se avisa.
+   */
+  function usarCotizacion(p) {
+    const c0 = p.deCot || {};
+    // datos y condiciones que el Formato 1 y el 5 no dijeron
+    ['razon', 'ruc', 'direccion', 'telefono', 'correo', 'representante', 'dni', 'contacto',
+     'plazo', 'validez', 'garantia', 'pago', 'lugar', 'marca', 'modelo', 'procedencia', 'moneda', 'igvIncluido'].forEach((k) => {
+      if (c0[k] && !p[k]) { p[k] = c0[k]; if (c0.donde && c0.donde[k]) p.donde[k] = c0.donde[k]; }
+    });
+    if (p.plazoDias == null && c0.plazoDias != null) p.plazoDias = c0.plazoDias;
+    if (p.validezDias == null && c0.validezDias != null) p.validezDias = c0.validezDias;
+    if (!p.items.length && p.totalDeclarado == null) {
+      p.items = p.itemsCot.slice();
+      if (p.totalCot) { p.totalDeclarado = p.totalCot.v; p.donde.total = p.totalCot.caja; }
+      if (p.items.length || p.totalCot) p.avisos.push('Los precios salen de su hoja de cotización (no se leyó un Formato 5 con precios).');
+      return;
+    }
+    const libres = new Set(p.itemsCot.map((_, k) => k));
+    p.items.forEach((it, k) => {
+      let mejor = -1, q = 0.25;
+      libres.forEach((j) => { const s = parecido(it.desc, p.itemsCot[j].desc); if (s > q) { q = s; mejor = j; } });
+      if (mejor < 0 && p.items.length === p.itemsCot.length && libres.has(k)) mejor = k;
+      if (mejor < 0) return;
+      libres.delete(mejor);
+      const c = p.itemsCot[mejor];
+      ['marca', 'modelo', 'procedencia', 'unidad'].forEach((x) => { if (c[x] && !it[x]) { it[x] = c[x]; it.deCotizacion = true; } });
+    });
+    if (p.totalCot && p.totalDeclarado != null && !casi(p.totalCot.v, p.totalDeclarado, 0.05)) {
+      p.avisos.push(`Su hoja de cotización dice ${fmt(p.totalCot.v)} y su Formato 5 dice ${fmt(p.totalDeclarado)}. Se tomó el Formato 5.`);
+    }
   }
 
   const fmt = (n) => (n == null || isNaN(n) ? '' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));

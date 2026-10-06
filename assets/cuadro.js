@@ -259,12 +259,14 @@
       h('button', { class: 'btn btn-fantasma', title: 'Copia lo que se leyó de cada hoja y cómo se interpretó: sirve para pedir ayuda si algo no sale', onclick: copiarDiagnostico }, 'Copiar diagnóstico'),
       h('button', { class: 'btn btn-suave', title: 'Copia el cuadro para pegarlo en Excel o en Word', onclick: copiarCuadro }, 'Copiar cuadro'),
       h('button', { class: 'btn btn-suave', onclick: bajarExcel }, 'Excel'),
+      h('button', { class: 'btn btn-suave', title: 'Descarga un trabajo para la app HNAL: en «Trabajos» → «Importar trabajo (.json)» llena solos el Cuadro de Validación y el Cuadro Comparativo', onclick: llevarAHnal }, 'Llevar a HNAL'),
       h('button', { class: 'btn btn-secundario', title: 'Agrega al expediente una hoja con este cuadro, como sustento', onclick: agregarHoja }, 'Agregar hoja resumen'),
       h('button', { class: 'btn btn-primario', onclick: cerrar }, 'Cerrar'));
   }
 
   const CAMPOS = [
-    ['marca', 'Marca'], ['plazo', 'Plazo de entrega'], ['validez', 'Validez de la oferta'], ['garantia', 'Garantía'], ['pago', 'Forma de pago'],
+    ['marca', 'Marca'], ['modelo', 'Modelo'], ['procedencia', 'Procedencia'],
+    ['plazo', 'Plazo de entrega'], ['validez', 'Validez de la oferta'], ['garantia', 'Garantía'], ['pago', 'Forma de pago'],
   ];
 
   /**
@@ -328,7 +330,8 @@
             return col(p, { class: 'cc-precio', 'data-item': k, onclick: () => { elegir(p.id); señalar(p, 'item', it); } },
               h('div', { class: 'cc-pu' }, it.pu != null ? dinero(it.pu, p.moneda) : '—', h('small', {}, ' c/u')),
               h('div', { class: 'cc-sub' }, sub),
-              it.marca ? h('div', { class: 'cc-marca' }, it.marca) : null);
+              it.marca ? h('div', { class: 'cc-marca', title: it.deCotizacion ? 'Sale de su hoja de cotización' : null }, it.marca) : null,
+              it.modelo || it.procedencia ? h('div', { class: 'cc-sub' }, [it.modelo && 'Modelo ' + it.modelo, it.procedencia].filter(Boolean).join(' · ')) : null);
           })));
       });
     }
@@ -365,7 +368,7 @@
   /** Los datos del Formato 1, para copiar uno por uno y pegarlos donde haga falta. */
   const DATOS = [
     ['razon', 'Razón social'], ['ruc', 'RUC'], ['direccion', 'Domicilio'], ['telefono', 'Teléfono'],
-    ['correo', 'Correo'], ['representante', 'Representante legal'], ['dni', 'DNI'],
+    ['correo', 'Correo'], ['representante', 'Representante legal'], ['dni', 'DNI'], ['contacto', 'Persona de contacto'],
   ];
   function datosDeTodos() {
     const ps = ev.postores;
@@ -597,7 +600,7 @@
 
   /* ---------- la hoja de verdad, al lado ---------- */
 
-  const ETQ_FORMATO = { 1: 'Formato 1', 5: 'Formato 5' };
+  const ETQ_FORMATO = { 1: 'Formato 1', 5: 'Formato 5', cot: 'Cotización' };
 
   function pintarVista() {
     const cab = $('#ofHojas'), cont = $('#ofVista');
@@ -726,9 +729,11 @@
       const desc = `Ítem ${f.n}: ${f.desc || ''}${cant ? ' (cant. ' + cant + ')' : ''}`;
       fila('item', desc + ' · precio unitario', ps.map((p) => { const it = f.celdas.get(p.id); return it && it.pu != null ? it.pu : null; }));
       fila('cifra', desc + ' · subtotal', ps.map((p) => { const it = f.celdas.get(p.id); return it ? it.total : null; }));
-      if (ps.some((p) => { const it = f.celdas.get(p.id); return it && it.marca; })) {
-        fila('texto', desc + ' · marca', ps.map((p) => { const it = f.celdas.get(p.id); return (it && it.marca) || ''; }));
-      }
+      [['marca', 'marca'], ['modelo', 'modelo'], ['procedencia', 'procedencia']].forEach(([k, t]) => {
+        if (ps.some((p) => { const it = f.celdas.get(p.id); return it && it[k]; })) {
+          fila('texto', desc + ' · ' + t, ps.map((p) => { const it = f.celdas.get(p.id); return (it && it[k]) || ''; }));
+        }
+      });
     });
     fila('total', 'PRECIO TOTAL (' + (ps.some((p) => p.moneda === 'USD') ? 'US$' : 'S/') + ')', ps.map((p) => (p.total != null ? p.total : null)));
     const menor = ev.res.ganadores.length ? postorDe(ev.res.ganadores[0]).total : null;
@@ -782,6 +787,67 @@
     } catch (e) {
       console.error(e);
       G.aviso('No se pudo armar el Excel: ' + e.message, 'error');
+    }
+  }
+
+  /**
+   * Un «trabajo» para la app HNAL (el generador de la Validación, el Memo, el Cuadro
+   * Comparativo y la Nota Informativa): el mismo .json que ella exporta, con los postores,
+   * los ítems, los precios y las marcas ya puestos. Allí se abre con «Importar trabajo».
+   * El Cuadro Comparativo de HNAL admite hasta 4 postores: van los 4 mejores.
+   */
+  function trabajoHnal() {
+    const orden = ev.postores.slice().sort((a, b) => {
+      const ra = rankDe(a.id), rb = rankDe(b.id);
+      return (a.cumple === false) - (b.cumple === false) || (ra ? ra.rank : 999) - (rb ? rb.rank : 999);
+    });
+    const cc = orden.slice(0, 4);
+    const filas = filasDeItems();
+    const num = (v) => (v == null || isNaN(v) ? '' : String(Math.round(v * 100) / 100));
+    const medida = (u) => (!u || /^(UND|UNID|UNIDAD|UNIDADES|UN|UNI|U)\.?$/i.test(u) ? 'UNIDAD' : String(u).toUpperCase());
+    const unidadDe = (f) => ([...f.celdas.values()].find((x) => x.unidad) || {}).unidad || '';
+    const marcaDe = (f, p) => { const it = f.celdas.get(p.id); return ((it && it.marca) || p.marca || '').toUpperCase(); };
+    const plazo = (p) => (p.plazoDias != null ? String(p.plazoDias) : ((/(\d+)/.exec(p.plazo || '') || [])[1] || ''));
+    // sin filas de ítems (solo se leyó el total): un ítem con el total de cada uno
+    const items = filas.length ? filas : [{ n: 1, desc: '', cant: 1, celdas: new Map(ev.postores.map((p) => [p.id, { pu: p.total, total: p.total }])) }];
+    const denom = items.length === 1 ? (items[0].desc || '') : '';
+    const gana = cc.findIndex((p) => ev.res.ganadores.includes(p.id));
+    const data = {
+      v: 4, ts: Date.now(), tipo: 'bien',
+      postores: orden.map((p) => ({ nombre: p.razon || '' })),
+      items: items.map((f) => ({ codigo: '', denom: f.desc || '', unidad: /^UNIDAD/i.test(medida(unidadDe(f))) ? 'UND' : medida(unidadDe(f)),
+        cantidad: num(f.cant), marcas: orden.map((p) => marcaDe(f, p)) })),
+      ccPostores: cc.map((p) => ({
+        nombre: p.razon || '', ruc: p.ruc || '', contacto: (p.contacto || p.representante || '').toUpperCase(),
+        telefono: p.telefono || '', email: p.correo || '', garantia: (p.garantia || '').toUpperCase(),
+        plazo_entrega: plazo(p), fecha_solicitud: '', fecha_recepcion: '',
+        se_dedica: 'SI', verifica: 'SI', cumple_rtm: p.cumple === false ? 'NO' : '', se_tomo: '',
+      })),
+      ccGanador: gana >= 0 ? gana : 0,
+      ccItems: items.map((f) => ({
+        codigo: '', descripcion: f.desc || '', medida: medida(unidadDe(f)), cantidad: num(f.cant),
+        precios: cc.map((p) => { const it = f.celdas.get(p.id); return it && it.pu != null ? num(it.pu) : ''; }),
+        marcas: cc.map((p) => marcaDe(f, p)), precioHist: '', marcaHist: '',
+      })),
+      memoFilas: orden.map((p) => ({ empresa: p.razon || '', ruc: p.ruc || '', obs: 'NINGUNA OBSERVACION' })),
+      inputs: { adquisicion: denom, 'cc-denom': denom, 'cc-objeto': 'bien' },
+    };
+    const m = ev.hojas[0];
+    const nombre = String((m && m.nombreGrupo) || 'EXPEDIENTE').replace(/\.pdf$/i, '').toUpperCase();
+    return { payload: { formato: 'hnal-trabajo', v: 1, nombre, ts: Date.now(), data }, nombre, sobran: orden.length - cc.length };
+  }
+
+  async function llevarAHnal() {
+    try {
+      const { payload, nombre, sobran } = trabajoHnal();
+      const base = nombre.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'EXPEDIENTE';
+      await G.guardarArchivo(new TextEncoder().encode(JSON.stringify(payload, null, 2)), 'TRABAJO_' + base + '.json',
+        'application/json', { aDescargas: true });
+      G.aviso('Listo, está en Descargas. En la app HNAL: Trabajos → «Importar trabajo (.json)» y luego «Abrir».'
+        + (sobran > 0 ? ` El Cuadro Comparativo de HNAL admite 4 postores: van los 4 de menor precio (quedan fuera ${sobran}).` : ''), 'ok');
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo armar el trabajo para HNAL: ' + e.message, 'error');
     }
   }
 

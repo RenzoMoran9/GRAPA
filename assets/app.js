@@ -4750,7 +4750,7 @@
           const cab = await G.leerCabecera(p);
           cabeceras.set(p.uid, cab.lineas);
           const f = G.ofertas.formatoDe(cab.lineas);
-          if (f === 1 || f === 5) hallados.set(p.uid, f);
+          if (f === 1 || f === 5 || f === 'cot') hallados.set(p.uid, f);
         } catch (e) {
           console.error(e);
           falladas++;
@@ -4805,21 +4805,26 @@
     pintar();
     const n1 = vivas.filter((p) => hallados.get(p.uid) === 1).length;
     const n5 = vivas.filter((p) => hallados.get(p.uid) === 5).length;
+    const nc = vivas.filter((p) => hallados.get(p.uid) === 'cot').length;
 
     // por paquete (o por archivo, si no hay paquete), en el orden del expediente
     const grupos = new Map();
     vivas.forEach((p) => {
       const k = p.paqueteId || p.fuenteId;
-      if (!grupos.has(k)) grupos.set(k, { nombre: nombreDePaqueteDe(p), f1: [], f5: [] });
-      grupos.get(k)[hallados.get(p.uid) === 1 ? 'f1' : 'f5'].push(p);
+      if (!grupos.has(k)) grupos.set(k, { nombre: nombreDePaqueteDe(p), f1: [], f5: [], cot: [] });
+      const f = hallados.get(p.uid);
+      grupos.get(k)[f === 1 ? 'f1' : f === 5 ? 'f5' : 'cot'].push(p);
     });
     const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
-    const resumen = el('p', 'formatos-resumen', `Se marcaron ${vivas.length} hojas: ${n1} del Formato 1 y ${n5} del Formato 5, de ${grupos.size} ${grupos.size === 1 ? 'paquete' : 'paquetes'}.`);
+    const resumen = el('p', 'formatos-resumen', `Se marcaron ${vivas.length} hojas: ${n1} del Formato 1, ${n5} del Formato 5`
+      + (nc ? ` y ${nc} de cotización del postor` : '') + `, de ${grupos.size} ${grupos.size === 1 ? 'paquete' : 'paquetes'}.`);
     const filas = [...grupos.values()].map((g) => {
       const fila = el('div', 'formatos-fila');
       fila.append(el('div', 'formatos-nombre', g.nombre));
       const chips = el('div', 'formatos-chips');
-      [['Formato 1', g.f1], ['Formato 5', g.f5]].forEach(([t, ps]) => {
+      [['Formato 1', g.f1], ['Formato 5', g.f5], ['Cotización', g.cot]].forEach(([t, ps]) => {
+        // la hoja de cotización es un extra: si no la hay, no falta nada
+        if (!ps.length && t === 'Cotización') return;
         if (!ps.length) { chips.append(Object.assign(el('span', 'formatos-chip falta', 'sin ' + t + ' aquí'), { title: 'No hay ' + t + ' en este paquete (puede estar en otro)' })); return; }
         ps.forEach((p) => {
           const sigue = continuaciones && continuaciones.has(p.uid);
@@ -4837,7 +4842,7 @@
     evaluar.type = 'button';
     evaluar.addEventListener('click', () => G.evaluarOfertas());
     caja.replaceChildren(resumen, ...filas, evaluar);
-    G.aviso(`Marqué ${vivas.length} hojas (Formatos 1 y 5). Ya puedes pulsar «Evaluar ofertas».`, 'ok');
+    G.aviso(`Marqué ${vivas.length} hojas (Formatos 1 y 5${nc ? ' y cotizaciones' : ''}). Ya puedes pulsar «Evaluar ofertas».`, 'ok');
   }
 
   async function revisarHojas() {
