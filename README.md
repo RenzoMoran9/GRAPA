@@ -362,15 +362,20 @@ y la gira.
 ### Evaluar ofertas
 
 1. Marca las hojas del **Formato 1** (datos del postor) y del **Formato 5**
-   (oferta con los precios) de cada postor. Se pueden marcar de varios archivos.
+   (oferta con los precios) de cada postor. No hace falta buscarlas: en
+   **Revisar → Ubicar y marcar los Formatos 1 y 5**, Pdflash lee el título de
+   cada hoja del expediente (también en escaneos), deja marcadas las que son
+   Formato 1 o 5 y dice, paquete por paquete, cuáles encontró y a cuáles les
+   falta alguno. Se puede marcar a mano o corregir lo marcado.
 2. **Evaluar ofertas** (barra flotante, menú *Editar*, o desde «Comparar»).
 3. Sale el cuadro comparativo: razón social, RUC, domicilio, teléfono, correo,
    representante, los ítems con su cantidad y precio, el total, el plazo de
    entrega, la validez, la garantía y la forma de pago, y arriba el **menor
    precio entre los que cumplen**, con la diferencia contra el siguiente.
 
-Cómo se agrupan las hojas en postores: cada archivo (o paquete) es un postor, y
-dentro de uno, un nuevo Formato 1 o un RUC distinto abre otro.
+Cómo se agrupan las hojas en postores: cada paquete (o archivo) es un postor, y
+dentro de uno, un nuevo Formato 1 o un RUC distinto abre otro. Si el Formato 1 y
+el 5 de un mismo postor están en paquetes distintos, se juntan por el RUC.
 
 Para no creerse un número mal leído:
 

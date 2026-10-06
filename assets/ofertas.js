@@ -107,15 +107,21 @@
 
   /* ---------- una hoja ---------- */
 
-  /** ¿Es el Formato 1 o el 5? null si no lo dice. */
+  /**
+   * ¿Es el Formato 1 o el 5? null si no lo dice. El título tiene que ir en un renglón corto
+   * de arriba: «Formato N° 5» dentro de una frase de las bases no es una hoja de ese formato.
+   */
   function formatoDe(lineas) {
     const cab = lineas.slice(0, 14).map((l) => plano(l.texto));
     for (const l of cab) {
-      const m = /FORMATO\s*(?:N\W{0,3}|NRO\W{0,2}|NUM\W{0,2})?\s*([1-9]|[SIl])\b/.exec(l);
+      if (l.length > 48) continue;
+      const m = /^\W{0,4}FORMATO\s*(?:N\W{0,3}|NRO\W{0,2}|NUM\W{0,2})?\s*([1-9]|[SIl])\b/.exec(l);
       if (m) return { '1': 1, I: 1, l: 1, S: 5 }[m[1]] || Number(m[1]);
     }
-    const todo = cab.join(' ');
-    if (/DATOS\s+DEL\s+POSTOR/.test(todo)) return 1;
+    const cortos = cab.filter((l) => l.length <= 60);
+    const todo = cortos.join(' ');
+    if (/DECLARACION\s+JURADA\s+DE\s+DATOS\s+DEL\s+POSTOR|^DATOS\s+DEL\s+POSTOR/.test(todo)) return 1;
+    if (cortos.some((l) => /^\W*PRECIO\s+DE\s+LA\s+OFERTA\W*$/.test(l))) return 5;
     if (/(OFERTA|PROPUESTA)\s+ECONOMICA|CARTA\s+DE\s+(COTIZACION|OFERTA)/.test(todo)) return 5;
     return null;
   }
@@ -490,6 +496,9 @@
       // (pasa cuando varios vienen juntos en un mismo archivo y no se lee el RUC)
       if (!nuevo && lec.formato === 5 && lec.tienePrecios && actual.formatos.includes(5)
           && (actual.items.length || actual.totalDeclarado != null) && !(ruc && ruc === actual.ruc)) nuevo = true;
+      // el mismo RUC en otro paquete es el mismo postor (el Formato 1 y el 5 en archivos aparte)
+      const previo = nuevo && ruc && postores.find((q) => q.ruc === ruc);
+      if (previo) { actual = previo; nuevo = false; }
       if (nuevo) {
         actual = {
           id: 'p' + (postores.length + 1), hojas: [], formatos: [], razon: '', ruc: '',

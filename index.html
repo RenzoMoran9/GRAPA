@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261005i">
+<link rel="stylesheet" href="assets/styles.css?v=20261005j">
 </head>
 <body>
 
@@ -233,8 +233,16 @@
     </section>
 
     <section class="bloque" data-bloque="revisar">
-      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg> Hojas en blanco y de lado</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg> Revisar y ubicar formatos</button>
       <div class="bloque-cuerpo">
+        <p class="revisar-titulo">Ubicar los Formatos 1 y 5</p>
+        <p class="nota">Lee el título de cada hoja (también en escaneos), encuentra el <b>Formato 1</b> y el <b>Formato 5</b> de cada postor y los deja marcados, listos para evaluar las ofertas.</p>
+        <button class="btn btn-primario ancho" id="btnUbicarFormatos" type="button">Ubicar y marcar los Formatos 1 y 5</button>
+        <div class="of-progreso" id="formatosProgreso" hidden><div class="of-barra"><i id="formatosBarra"></i></div></div>
+        <p class="nota revisar-estado" id="formatosEstado" aria-live="polite"></p>
+        <div class="formatos-resultado" id="formatosResultado" hidden></div>
+        <hr class="revisar-sep">
+        <p class="revisar-titulo">Hojas en blanco y de lado</p>
         <p class="nota">Encuentra los reversos en blanco que deja el escáner a doble cara y las hojas que entraron de lado, de cabeza o torcidas. No cambia nada hasta que lo pidas.</p>
         <button class="btn btn-primario ancho" id="btnRevisar" type="button">Revisar las hojas</button>
         <p class="nota revisar-estado" id="revisarEstado" aria-live="polite"></p>
@@ -741,13 +749,13 @@
       <ol>
         <li><strong>Abre</strong> el PDF que escaneaste y, encima, los anexos (indagación de mercado, cotizaciones, etc.).</li>
         <li><strong>Ordena</strong> arrastrando las miniaturas. El color del borde te dice de qué archivo viene cada página.</li>
-        <li><strong>Revisa</strong>: en «Hojas en blanco y de lado», Pdflash encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
+        <li><strong>Revisa</strong>: en «Revisar», Pdflash encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
         <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
         <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
         <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 3) y avanzas con los tres en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero.</li>
-        <li><strong>Evaluar ofertas:</strong> marca el Formato 1 y el Formato 5 de cada postor y pulsa <strong>Evaluar ofertas</strong>. Pdflash lee los datos y los precios (también de escaneos), arma el cuadro comparativo y marca el menor precio entre los que cumplen. Todo se puede corregir en el cuadro; al lado ves la hoja de verdad para comprobar.</li>
+        <li><strong>Evaluar ofertas:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong> (o márcalos tú) y pulsa <strong>Evaluar ofertas</strong>. Pdflash lee los datos y los precios (también de escaneos), arma el cuadro comparativo y marca el menor precio entre los que cumplen. Todo se puede corregir en el cuadro; al lado ves la hoja de verdad para comprobar.</li>
         <li><strong>Copiar texto:</strong> en «Ver en grande», pulsa <strong>Copiar texto</strong> (o la tecla T), arrastra un recuadro sobre lo que quieras y queda copiado, aunque la hoja sea un escaneo. Sirve para pasar razón social, RUC o precios a otro programa sin escribirlos.</li>
       </ol>
       <h4>Atajos</h4>
@@ -782,15 +790,15 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20261005i"></script>
-<script src="assets/buscar.js?v=20261005i"></script>
-<script src="assets/revisar.js?v=20261005i"></script>
-<script src="assets/ocr.js?v=20261005i"></script>
-<script src="assets/ofertas.js?v=20261005i"></script>
-<script src="assets/cuadro.js?v=20261005i"></script>
-<script src="assets/office.js?v=20261005i"></script>
-<script src="assets/expedientes.js?v=20261005i"></script>
-<script src="assets/firmas.js?v=20261005i"></script>
-<script src="assets/app.js?v=20261005i"></script>
+<script src="assets/core.js?v=20261005j"></script>
+<script src="assets/buscar.js?v=20261005j"></script>
+<script src="assets/revisar.js?v=20261005j"></script>
+<script src="assets/ocr.js?v=20261005j"></script>
+<script src="assets/ofertas.js?v=20261005j"></script>
+<script src="assets/cuadro.js?v=20261005j"></script>
+<script src="assets/office.js?v=20261005j"></script>
+<script src="assets/expedientes.js?v=20261005j"></script>
+<script src="assets/firmas.js?v=20261005j"></script>
+<script src="assets/app.js?v=20261005j"></script>
 </body>
 </html>

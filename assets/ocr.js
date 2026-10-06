@@ -513,7 +513,7 @@
   const cache = new Map();
   const clave = (p) => `${p.fuenteId}:${p.indice}:${G.norm(p.giro)}:${p.enderezo || 0}`;
   G.olvidarLecturas = (fuenteIds) => {
-    if (!fuenteIds) { cache.clear(); return; }
+    if (!fuenteIds) { cache.clear(); cacheCabecera.clear(); return; }
     const ids = new Set(fuenteIds);
     [...cache.keys()].forEach((k) => { if (ids.has(k.split(':')[0])) cache.delete(k); });
   };
@@ -569,6 +569,42 @@
       cache.delete(k);
       throw e;
     }
+  };
+
+
+  /* ---------- solo la cabecera de la hoja ----------
+     Para ubicar los Formatos hace falta leer el título de arriba de CADA hoja del
+     expediente, que pueden ser decenas. Leer solo el tercio de arriba cuesta una
+     fracción de leerla entera, y de un PDF con texto sale al instante.         */
+
+  const cacheCabecera = new Map();
+  G.leerCabecera = function (pagina) {
+    const k = clave(pagina);
+    if (cacheCabecera.has(k)) return cacheCabecera.get(k);
+    const p = (async () => {
+      if (await G.tieneTexto(pagina)) {
+        const lec = await G.leerLineas(pagina);
+        return { lineas: lec.lineas.filter((l) => l.y0 < 0.4), origen: 'texto' };
+      }
+      // si la hoja ya se leyó entera, se aprovecha
+      if (cache.has(k)) {
+        const lec = await cache.get(k);
+        return { lineas: lec.lineas.filter((l) => l.y0 < 0.4), origen: 'ocr' };
+      }
+      const grande = await G.renderGrande(pagina, 1800);
+      const alto = Math.round(grande.height * 0.36);
+      const c = document.createElement('canvas');
+      c.width = grande.width; c.height = alto;
+      c.getContext('2d').drawImage(grande, 0, 0, grande.width, alto, 0, 0, grande.width, alto);
+      const lec = await G.ocrLienzo(c);
+      // las posiciones salen respecto al trozo: se pasan a la hoja entera
+      const f = alto / grande.height;
+      lec.lineas.forEach((l) => { l.y0 *= f; l.y1 *= f; l.palabras.forEach((w) => { w.y0 *= f; w.y1 *= f; }); });
+      return { lineas: lec.lineas, origen: 'ocr' };
+    })();
+    cacheCabecera.set(k, p);
+    p.catch(() => cacheCabecera.delete(k));
+    return p;
   };
 
   /** ¿Ya está leída esta hoja (sin gastar tiempo en leerla)? */

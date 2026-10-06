@@ -4708,6 +4708,107 @@
     pintarMarcaRiel('#marcaRevisar', blancas.length + giradas.length);
   }
 
+  /* ---------------- ubicar los Formatos 1 y 5 ----------------
+     Lee el título de cada hoja, deja marcadas las que son Formato 1 o Formato 5 y dice,
+     paquete por paquete, cuáles encontró y cuáles faltan.                              */
+  const ubicacion = { corriendo: null };
+
+  function nombreDePaqueteDe(p) {
+    const paq = p.paqueteId && E.paquetes.get(p.paqueteId);
+    const f = E.fuentes.get(p.fuenteId);
+    return (paq && paq.nombre) || (f && f.nombre) || 'Sin nombre';
+  }
+
+  async function ubicarFormatos() {
+    const boton = $('#btnUbicarFormatos');
+    if (ubicacion.corriendo) { ubicacion.corriendo.cancelada = true; return; }
+    if (!E.paginas.length) { G.aviso('Primero abre el expediente.', 'error'); return; }
+    const tarea = (ubicacion.corriendo = { cancelada: false });
+    const lista = E.paginas.slice();
+    const estado = $('#formatosEstado'), barra = $('#formatosBarra');
+    $('#formatosProgreso').hidden = false;
+    $('#formatosResultado').hidden = true;
+    boton.textContent = 'Detener';
+    const hallados = new Map();      // uid → 1 o 5
+    let falladas = 0;
+    try {
+      for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
+        const p = lista[i];
+        estado.textContent = `Leyendo el título de la hoja ${i + 1} de ${lista.length}…`;
+        barra.style.width = Math.round(((i + 1) / lista.length) * 100) + '%';
+        try {
+          const cab = await G.leerCabecera(p);
+          const f = G.ofertas.formatoDe(cab.lineas);
+          if (f === 1 || f === 5) hallados.set(p.uid, f);
+        } catch (e) {
+          console.error(e);
+          falladas++;
+          if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); break; }
+        }
+      }
+    } finally {
+      ubicacion.corriendo = null;
+      boton.textContent = 'Ubicar y marcar los Formatos 1 y 5';
+      $('#formatosProgreso').hidden = true;
+    }
+    if (tarea.cancelada) { estado.textContent = 'Detenido. No se marcó nada.'; return; }
+    estado.textContent = falladas ? `${falladas} hoja(s) no se pudieron leer.` : '';
+    mostrarFormatos(lista, hallados);
+  }
+
+  /** Marca las hojas halladas y cuenta, paquete por paquete, lo que hay y lo que falta. */
+  function mostrarFormatos(lista, hallados) {
+    const caja = $('#formatosResultado');
+    const vivas = lista.filter((p) => E.paginas.includes(p) && hallados.has(p.uid));
+    caja.hidden = false;
+    if (!vivas.length) {
+      caja.replaceChildren(Object.assign(document.createElement('p'), {
+        className: 'formatos-resumen vacio-resumen',
+        textContent: 'No encontré ningún Formato 1 ni Formato 5. Si las hojas están torcidas o muy borrosas, marca a mano las que quieras evaluar.',
+      }));
+      return;
+    }
+    // las marcadas pasan a ser exactamente estas, y se ven en la vista de hojas
+    E.seleccion = new Set(vivas.map((p) => p.uid));
+    if (paqueteAbierto) cerrarPaquete();
+    vista = 'hojas';
+    pintar();
+    const n1 = vivas.filter((p) => hallados.get(p.uid) === 1).length;
+    const n5 = vivas.filter((p) => hallados.get(p.uid) === 5).length;
+
+    // por paquete (o por archivo, si no hay paquete), en el orden del expediente
+    const grupos = new Map();
+    vivas.forEach((p) => {
+      const k = p.paqueteId || p.fuenteId;
+      if (!grupos.has(k)) grupos.set(k, { nombre: nombreDePaqueteDe(p), f1: [], f5: [] });
+      grupos.get(k)[hallados.get(p.uid) === 1 ? 'f1' : 'f5'].push(p);
+    });
+    const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+    const resumen = el('p', 'formatos-resumen', `Se marcaron ${vivas.length} hojas: ${n1} del Formato 1 y ${n5} del Formato 5, de ${grupos.size} ${grupos.size === 1 ? 'paquete' : 'paquetes'}.`);
+    const filas = [...grupos.values()].map((g) => {
+      const fila = el('div', 'formatos-fila');
+      fila.append(el('div', 'formatos-nombre', g.nombre));
+      const chips = el('div', 'formatos-chips');
+      [['Formato 1', g.f1], ['Formato 5', g.f5]].forEach(([t, ps]) => {
+        if (!ps.length) { chips.append(Object.assign(el('span', 'formatos-chip falta', 'sin ' + t + ' aquí'), { title: 'No hay ' + t + ' en este paquete (puede estar en otro)' })); return; }
+        ps.forEach((p) => {
+          const b = el('button', 'formatos-chip', `${t} · p. ${E.paginas.indexOf(p) + 1}`);
+          b.type = 'button';
+          b.title = 'Ver esta hoja en grande';
+          b.addEventListener('click', () => abrirLector(p));
+          chips.append(b);
+        });
+      });
+      fila.append(chips);
+      return fila;
+    });
+    const evaluar = el('button', 'btn btn-primario ancho', 'Evaluar estas ofertas');
+    evaluar.type = 'button';
+    evaluar.addEventListener('click', () => G.evaluarOfertas());
+    caja.replaceChildren(resumen, ...filas, evaluar);
+    G.aviso(`Marqué ${vivas.length} hojas (Formatos 1 y 5). Ya puedes pulsar «Evaluar ofertas».`, 'ok');
+  }
+
   async function revisarHojas() {
     if (revision.corriendo) { revision.corriendo.cancelada = true; return; }
     if (!E.paginas.length) return;
@@ -4794,6 +4895,7 @@
 
   function conectarRevisar() {
     $('#btnRevisar').addEventListener('click', revisarHojas);
+    $('#btnUbicarFormatos').addEventListener('click', ubicarFormatos);
     $('#revisarBlancasMarcar').addEventListener('click', () => marcarLasDeRevision(activosEn(avisosRevision().blancas, 'b')));
     $('#revisarGiradasMarcar').addEventListener('click', () => marcarLasDeRevision(
       activosEn(avisosRevision().giradas, 'g').filter((x) => !x.r.deLadoSinSentido)));

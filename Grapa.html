@@ -1281,6 +1281,20 @@ td.of-mejor,.of-items td.of-mejor{color:var(--verde);font-weight:650}
   .of-der{flex:none;height:78vh;border-left:0;border-top:1px solid var(--borde-suave)}
 }
 
+/* ---------- ubicar los Formatos 1 y 5 ---------- */
+.revisar-sep{border:0;border-top:1px solid var(--borde-suave);margin:10px 0 6px;width:100%}
+.of-progreso{margin:2px 0 0}
+.of-progreso .of-barra{height:6px}
+.formatos-resultado{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.formatos-resumen{font-size:12.5px;font-weight:650;color:var(--verde);margin:0}
+.formatos-resumen.vacio-resumen{color:var(--aviso)}
+.formatos-fila{border:1px solid var(--borde-suave);border-radius:var(--radio-s);padding:6px 8px;display:flex;flex-direction:column;gap:4px;background:var(--fondo)}
+.formatos-nombre{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.formatos-chips{display:flex;flex-wrap:wrap;gap:4px}
+.formatos-chip{border:1px solid color-mix(in srgb,var(--verde) 45%,var(--borde));background:color-mix(in srgb,var(--verde) 10%,var(--fondo-2));color:var(--texto);border-radius:999px;padding:1px 9px;font-size:11.5px;cursor:pointer}
+.formatos-chip:hover{border-color:var(--verde)}
+.formatos-chip.falta{border-color:color-mix(in srgb,var(--aviso) 50%,var(--borde));background:color-mix(in srgb,var(--aviso) 10%,var(--fondo-2));color:var(--aviso);cursor:default}
+
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
 
@@ -1509,8 +1523,16 @@ td.of-mejor,.of-items td.of-mejor{color:var(--verde);font-weight:650}
     </section>
 
     <section class="bloque" data-bloque="revisar">
-      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg> Hojas en blanco y de lado</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg> Revisar y ubicar formatos</button>
       <div class="bloque-cuerpo">
+        <p class="revisar-titulo">Ubicar los Formatos 1 y 5</p>
+        <p class="nota">Lee el título de cada hoja (también en escaneos), encuentra el <b>Formato 1</b> y el <b>Formato 5</b> de cada postor y los deja marcados, listos para evaluar las ofertas.</p>
+        <button class="btn btn-primario ancho" id="btnUbicarFormatos" type="button">Ubicar y marcar los Formatos 1 y 5</button>
+        <div class="of-progreso" id="formatosProgreso" hidden><div class="of-barra"><i id="formatosBarra"></i></div></div>
+        <p class="nota revisar-estado" id="formatosEstado" aria-live="polite"></p>
+        <div class="formatos-resultado" id="formatosResultado" hidden></div>
+        <hr class="revisar-sep">
+        <p class="revisar-titulo">Hojas en blanco y de lado</p>
         <p class="nota">Encuentra los reversos en blanco que deja el escáner a doble cara y las hojas que entraron de lado, de cabeza o torcidas. No cambia nada hasta que lo pidas.</p>
         <button class="btn btn-primario ancho" id="btnRevisar" type="button">Revisar las hojas</button>
         <p class="nota revisar-estado" id="revisarEstado" aria-live="polite"></p>
@@ -2017,13 +2039,13 @@ td.of-mejor,.of-items td.of-mejor{color:var(--verde);font-weight:650}
       <ol>
         <li><strong>Abre</strong> el PDF que escaneaste y, encima, los anexos (indagación de mercado, cotizaciones, etc.).</li>
         <li><strong>Ordena</strong> arrastrando las miniaturas. El color del borde te dice de qué archivo viene cada página.</li>
-        <li><strong>Revisa</strong>: en «Hojas en blanco y de lado», Pdflash encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
+        <li><strong>Revisa</strong>: en «Revisar», Pdflash encuentra los reversos en blanco del escáner y las hojas de lado, de cabeza o torcidas, para borrarlas o enderezarlas de una vez.</li>
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
         <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
         <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
         <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 3) y avanzas con los tres en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero.</li>
-        <li><strong>Evaluar ofertas:</strong> marca el Formato 1 y el Formato 5 de cada postor y pulsa <strong>Evaluar ofertas</strong>. Pdflash lee los datos y los precios (también de escaneos), arma el cuadro comparativo y marca el menor precio entre los que cumplen. Todo se puede corregir en el cuadro; al lado ves la hoja de verdad para comprobar.</li>
+        <li><strong>Evaluar ofertas:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong> (o márcalos tú) y pulsa <strong>Evaluar ofertas</strong>. Pdflash lee los datos y los precios (también de escaneos), arma el cuadro comparativo y marca el menor precio entre los que cumplen. Todo se puede corregir en el cuadro; al lado ves la hoja de verdad para comprobar.</li>
         <li><strong>Copiar texto:</strong> en «Ver en grande», pulsa <strong>Copiar texto</strong> (o la tecla T), arrastra un recuadro sobre lo que quieras y queda copiado, aunque la hoja sea un escaneo. Sirve para pasar razón social, RUC o precios a otro programa sin escribirlos.</li>
       </ol>
       <h4>Atajos</h4>
@@ -4817,7 +4839,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
   const cache = new Map();
   const clave = (p) => `${p.fuenteId}:${p.indice}:${G.norm(p.giro)}:${p.enderezo || 0}`;
   G.olvidarLecturas = (fuenteIds) => {
-    if (!fuenteIds) { cache.clear(); return; }
+    if (!fuenteIds) { cache.clear(); cacheCabecera.clear(); return; }
     const ids = new Set(fuenteIds);
     [...cache.keys()].forEach((k) => { if (ids.has(k.split(':')[0])) cache.delete(k); });
   };
@@ -4873,6 +4895,42 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       cache.delete(k);
       throw e;
     }
+  };
+
+
+  /* ---------- solo la cabecera de la hoja ----------
+     Para ubicar los Formatos hace falta leer el título de arriba de CADA hoja del
+     expediente, que pueden ser decenas. Leer solo el tercio de arriba cuesta una
+     fracción de leerla entera, y de un PDF con texto sale al instante.         */
+
+  const cacheCabecera = new Map();
+  G.leerCabecera = function (pagina) {
+    const k = clave(pagina);
+    if (cacheCabecera.has(k)) return cacheCabecera.get(k);
+    const p = (async () => {
+      if (await G.tieneTexto(pagina)) {
+        const lec = await G.leerLineas(pagina);
+        return { lineas: lec.lineas.filter((l) => l.y0 < 0.4), origen: 'texto' };
+      }
+      // si la hoja ya se leyó entera, se aprovecha
+      if (cache.has(k)) {
+        const lec = await cache.get(k);
+        return { lineas: lec.lineas.filter((l) => l.y0 < 0.4), origen: 'ocr' };
+      }
+      const grande = await G.renderGrande(pagina, 1800);
+      const alto = Math.round(grande.height * 0.36);
+      const c = document.createElement('canvas');
+      c.width = grande.width; c.height = alto;
+      c.getContext('2d').drawImage(grande, 0, 0, grande.width, alto, 0, 0, grande.width, alto);
+      const lec = await G.ocrLienzo(c);
+      // las posiciones salen respecto al trozo: se pasan a la hoja entera
+      const f = alto / grande.height;
+      lec.lineas.forEach((l) => { l.y0 *= f; l.y1 *= f; l.palabras.forEach((w) => { w.y0 *= f; w.y1 *= f; }); });
+      return { lineas: lec.lineas, origen: 'ocr' };
+    })();
+    cacheCabecera.set(k, p);
+    p.catch(() => cacheCabecera.delete(k));
+    return p;
   };
 
   /** ¿Ya está leída esta hoja (sin gastar tiempo en leerla)? */
@@ -5043,15 +5101,21 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   /* ---------- una hoja ---------- */
 
-  /** ¿Es el Formato 1 o el 5? null si no lo dice. */
+  /**
+   * ¿Es el Formato 1 o el 5? null si no lo dice. El título tiene que ir en un renglón corto
+   * de arriba: «Formato N° 5» dentro de una frase de las bases no es una hoja de ese formato.
+   */
   function formatoDe(lineas) {
     const cab = lineas.slice(0, 14).map((l) => plano(l.texto));
     for (const l of cab) {
-      const m = /FORMATO\s*(?:N\W{0,3}|NRO\W{0,2}|NUM\W{0,2})?\s*([1-9]|[SIl])\b/.exec(l);
+      if (l.length > 48) continue;
+      const m = /^\W{0,4}FORMATO\s*(?:N\W{0,3}|NRO\W{0,2}|NUM\W{0,2})?\s*([1-9]|[SIl])\b/.exec(l);
       if (m) return { '1': 1, I: 1, l: 1, S: 5 }[m[1]] || Number(m[1]);
     }
-    const todo = cab.join(' ');
-    if (/DATOS\s+DEL\s+POSTOR/.test(todo)) return 1;
+    const cortos = cab.filter((l) => l.length <= 60);
+    const todo = cortos.join(' ');
+    if (/DECLARACION\s+JURADA\s+DE\s+DATOS\s+DEL\s+POSTOR|^DATOS\s+DEL\s+POSTOR/.test(todo)) return 1;
+    if (cortos.some((l) => /^\W*PRECIO\s+DE\s+LA\s+OFERTA\W*$/.test(l))) return 5;
     if (/(OFERTA|PROPUESTA)\s+ECONOMICA|CARTA\s+DE\s+(COTIZACION|OFERTA)/.test(todo)) return 5;
     return null;
   }
@@ -5426,6 +5490,9 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
       // (pasa cuando varios vienen juntos en un mismo archivo y no se lee el RUC)
       if (!nuevo && lec.formato === 5 && lec.tienePrecios && actual.formatos.includes(5)
           && (actual.items.length || actual.totalDeclarado != null) && !(ruc && ruc === actual.ruc)) nuevo = true;
+      // el mismo RUC en otro paquete es el mismo postor (el Formato 1 y el 5 en archivos aparte)
+      const previo = nuevo && ruc && postores.find((q) => q.ruc === ruc);
+      if (previo) { actual = previo; nuevo = false; }
       if (nuevo) {
         actual = {
           id: 'p' + (postores.length + 1), hojas: [], formatos: [], razon: '', ruc: '',
@@ -12170,6 +12237,107 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
     pintarMarcaRiel('#marcaRevisar', blancas.length + giradas.length);
   }
 
+  /* ---------------- ubicar los Formatos 1 y 5 ----------------
+     Lee el título de cada hoja, deja marcadas las que son Formato 1 o Formato 5 y dice,
+     paquete por paquete, cuáles encontró y cuáles faltan.                              */
+  const ubicacion = { corriendo: null };
+
+  function nombreDePaqueteDe(p) {
+    const paq = p.paqueteId && E.paquetes.get(p.paqueteId);
+    const f = E.fuentes.get(p.fuenteId);
+    return (paq && paq.nombre) || (f && f.nombre) || 'Sin nombre';
+  }
+
+  async function ubicarFormatos() {
+    const boton = $('#btnUbicarFormatos');
+    if (ubicacion.corriendo) { ubicacion.corriendo.cancelada = true; return; }
+    if (!E.paginas.length) { G.aviso('Primero abre el expediente.', 'error'); return; }
+    const tarea = (ubicacion.corriendo = { cancelada: false });
+    const lista = E.paginas.slice();
+    const estado = $('#formatosEstado'), barra = $('#formatosBarra');
+    $('#formatosProgreso').hidden = false;
+    $('#formatosResultado').hidden = true;
+    boton.textContent = 'Detener';
+    const hallados = new Map();      // uid → 1 o 5
+    let falladas = 0;
+    try {
+      for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
+        const p = lista[i];
+        estado.textContent = `Leyendo el título de la hoja ${i + 1} de ${lista.length}…`;
+        barra.style.width = Math.round(((i + 1) / lista.length) * 100) + '%';
+        try {
+          const cab = await G.leerCabecera(p);
+          const f = G.ofertas.formatoDe(cab.lineas);
+          if (f === 1 || f === 5) hallados.set(p.uid, f);
+        } catch (e) {
+          console.error(e);
+          falladas++;
+          if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); break; }
+        }
+      }
+    } finally {
+      ubicacion.corriendo = null;
+      boton.textContent = 'Ubicar y marcar los Formatos 1 y 5';
+      $('#formatosProgreso').hidden = true;
+    }
+    if (tarea.cancelada) { estado.textContent = 'Detenido. No se marcó nada.'; return; }
+    estado.textContent = falladas ? `${falladas} hoja(s) no se pudieron leer.` : '';
+    mostrarFormatos(lista, hallados);
+  }
+
+  /** Marca las hojas halladas y cuenta, paquete por paquete, lo que hay y lo que falta. */
+  function mostrarFormatos(lista, hallados) {
+    const caja = $('#formatosResultado');
+    const vivas = lista.filter((p) => E.paginas.includes(p) && hallados.has(p.uid));
+    caja.hidden = false;
+    if (!vivas.length) {
+      caja.replaceChildren(Object.assign(document.createElement('p'), {
+        className: 'formatos-resumen vacio-resumen',
+        textContent: 'No encontré ningún Formato 1 ni Formato 5. Si las hojas están torcidas o muy borrosas, marca a mano las que quieras evaluar.',
+      }));
+      return;
+    }
+    // las marcadas pasan a ser exactamente estas, y se ven en la vista de hojas
+    E.seleccion = new Set(vivas.map((p) => p.uid));
+    if (paqueteAbierto) cerrarPaquete();
+    vista = 'hojas';
+    pintar();
+    const n1 = vivas.filter((p) => hallados.get(p.uid) === 1).length;
+    const n5 = vivas.filter((p) => hallados.get(p.uid) === 5).length;
+
+    // por paquete (o por archivo, si no hay paquete), en el orden del expediente
+    const grupos = new Map();
+    vivas.forEach((p) => {
+      const k = p.paqueteId || p.fuenteId;
+      if (!grupos.has(k)) grupos.set(k, { nombre: nombreDePaqueteDe(p), f1: [], f5: [] });
+      grupos.get(k)[hallados.get(p.uid) === 1 ? 'f1' : 'f5'].push(p);
+    });
+    const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+    const resumen = el('p', 'formatos-resumen', `Se marcaron ${vivas.length} hojas: ${n1} del Formato 1 y ${n5} del Formato 5, de ${grupos.size} ${grupos.size === 1 ? 'paquete' : 'paquetes'}.`);
+    const filas = [...grupos.values()].map((g) => {
+      const fila = el('div', 'formatos-fila');
+      fila.append(el('div', 'formatos-nombre', g.nombre));
+      const chips = el('div', 'formatos-chips');
+      [['Formato 1', g.f1], ['Formato 5', g.f5]].forEach(([t, ps]) => {
+        if (!ps.length) { chips.append(Object.assign(el('span', 'formatos-chip falta', 'sin ' + t + ' aquí'), { title: 'No hay ' + t + ' en este paquete (puede estar en otro)' })); return; }
+        ps.forEach((p) => {
+          const b = el('button', 'formatos-chip', `${t} · p. ${E.paginas.indexOf(p) + 1}`);
+          b.type = 'button';
+          b.title = 'Ver esta hoja en grande';
+          b.addEventListener('click', () => abrirLector(p));
+          chips.append(b);
+        });
+      });
+      fila.append(chips);
+      return fila;
+    });
+    const evaluar = el('button', 'btn btn-primario ancho', 'Evaluar estas ofertas');
+    evaluar.type = 'button';
+    evaluar.addEventListener('click', () => G.evaluarOfertas());
+    caja.replaceChildren(resumen, ...filas, evaluar);
+    G.aviso(`Marqué ${vivas.length} hojas (Formatos 1 y 5). Ya puedes pulsar «Evaluar ofertas».`, 'ok');
+  }
+
   async function revisarHojas() {
     if (revision.corriendo) { revision.corriendo.cancelada = true; return; }
     if (!E.paginas.length) return;
@@ -12256,6 +12424,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 
   function conectarRevisar() {
     $('#btnRevisar').addEventListener('click', revisarHojas);
+    $('#btnUbicarFormatos').addEventListener('click', ubicarFormatos);
     $('#revisarBlancasMarcar').addEventListener('click', () => marcarLasDeRevision(activosEn(avisosRevision().blancas, 'b')));
     $('#revisarGiradasMarcar').addEventListener('click', () => marcarLasDeRevision(
       activosEn(avisosRevision().giradas, 'g').filter((x) => !x.r.deLadoSinSentido)));

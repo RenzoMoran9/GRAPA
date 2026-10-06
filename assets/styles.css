@@ -1261,3 +1261,17 @@ td.of-mejor,.of-items td.of-mejor{color:var(--verde);font-weight:650}
   .of-izq{flex:none;overflow:visible}
   .of-der{flex:none;height:78vh;border-left:0;border-top:1px solid var(--borde-suave)}
 }
+
+/* ---------- ubicar los Formatos 1 y 5 ---------- */
+.revisar-sep{border:0;border-top:1px solid var(--borde-suave);margin:10px 0 6px;width:100%}
+.of-progreso{margin:2px 0 0}
+.of-progreso .of-barra{height:6px}
+.formatos-resultado{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.formatos-resumen{font-size:12.5px;font-weight:650;color:var(--verde);margin:0}
+.formatos-resumen.vacio-resumen{color:var(--aviso)}
+.formatos-fila{border:1px solid var(--borde-suave);border-radius:var(--radio-s);padding:6px 8px;display:flex;flex-direction:column;gap:4px;background:var(--fondo)}
+.formatos-nombre{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.formatos-chips{display:flex;flex-wrap:wrap;gap:4px}
+.formatos-chip{border:1px solid color-mix(in srgb,var(--verde) 45%,var(--borde));background:color-mix(in srgb,var(--verde) 10%,var(--fondo-2));color:var(--texto);border-radius:999px;padding:1px 9px;font-size:11.5px;cursor:pointer}
+.formatos-chip:hover{border-color:var(--verde)}
+.formatos-chip.falta{border-color:color-mix(in srgb,var(--aviso) 50%,var(--borde));background:color-mix(in srgb,var(--aviso) 10%,var(--fondo-2));color:var(--aviso);cursor:default}
