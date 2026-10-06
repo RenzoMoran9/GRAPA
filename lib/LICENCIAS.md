@@ -13,5 +13,8 @@ Grapa funciona sin conexión porque trae sus dependencias dentro de `lib/`.
 | `../assets/inter-latin.woff2` (tipografía) | [Inter](https://rsms.me/inter/) (Rasmus Andersson) | 4.0 | SIL Open Font License 1.1 |
 | `ocr/tesseract-wasm.js`, `ocr/tesseract-worker.js`, `ocr/tesseract-core.wasm` | [tesseract-wasm](https://github.com/robertknight/tesseract-wasm) (con Tesseract OCR y Leptonica) | 0.11.0 | BSD-2-Clause (Tesseract y Leptonica: Apache-2.0 / BSD-2) |
 | `ocr/spa.traineddata` | modelo de español «fast» de [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) | — | Apache-2.0 |
+| `ocr/ort.wasm.bundle.min.mjs`, `ocr/ort-wasm-simd-threaded.wasm` | [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) (Microsoft) | 1.23.0 | MIT |
+| `ocr/paddle-det.onnx`, `ocr/paddle-rec.onnx`, `ocr/paddle-dic.txt` | modelos PP-OCRv6 *tiny* de [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (detección y reconocimiento, con su diccionario), en formato ONNX tal como los publica [ppu-paddle-ocr-models](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models) | v6 tiny | Apache-2.0 |
+| `ocr/paddle-worker.js` | propio: el lector PaddleOCR que corre en un Worker | — | — |
 
-Las cuatro piezas de `ocr/` solo se cargan cuando hay que leer un escaneo (copiar su texto o evaluar ofertas). Ver `ocr/LICENCIA-tesseract-wasm.md` para el único cambio hecho al motor.
+Las piezas de `ocr/` solo se cargan cuando hay que leer un escaneo (ubicar formatos, copiar su texto o evaluar ofertas). El lector principal es PaddleOCR; Tesseract queda de respaldo para los navegadores donde aquel no arranca. Ver `ocr/LICENCIA-tesseract-wasm.md` para el único cambio hecho al motor de Tesseract.

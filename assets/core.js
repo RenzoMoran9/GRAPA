@@ -466,10 +466,14 @@
     }, vigente);
   };
 
-  /** Render de una página a canvas, en grande (para el editor de firma / recorte). */
-  G.renderGrande = async function (pagina, anchoMax) {
+  /**
+   * Render de una página a canvas, en grande (para el editor de firma / recorte).
+   * `doc`: otra copia abierta del mismo PDF (el lector de escaneos dibuja con las suyas,
+   * cada una en su hilo, para no hacer fila detrás de la pantalla).
+   */
+  G.renderGrande = async function (pagina, anchoMax, doc) {
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
-    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    const pag = await (doc || fuente.doc).getPage(pagina.indice + 1);
     const base = pag.getViewport({ scale: 1, rotation: G.norm(pagina.giro) });
     const escala = Math.min(anchoMax / base.width, 3500 / base.width);
     const vp = pag.getViewport({ scale: escala, rotation: G.norm(pagina.giro) });

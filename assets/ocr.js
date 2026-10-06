@@ -22,6 +22,13 @@
     worker: 'tesseract-worker.js',
     wasm: 'tesseract-core.wasm',
     modelo: 'spa.traineddata',
+    // PaddleOCR: el lector principal. Tesseract queda de respaldo si este no arranca
+    pworker: 'paddle-worker.js',
+    ort: 'ort.wasm.bundle.min.mjs',
+    ortwasm: 'ort-wasm-simd-threaded.wasm',
+    pdet: 'paddle-det.onnx',
+    prec: 'paddle-rec.onnx',
+    pdic: 'paddle-dic.txt',
   };
   const ANCHO_HOJA = 2200;      // píxeles de ancho al leer una hoja entera (~265 ppp)
   const ANCHO_ZONA = 2600;      // y al leer solo un trozo, que merece más detalle
@@ -88,12 +95,191 @@
     try { const m = await anterior; if (m && m.cliente) await m.cliente.destroy(); } catch (e) { /* ya estaba caído */ }
   }
 
+  /* ---------- PaddleOCR: varios lectores a la vez ----------
+     Cada lector es un Worker con su propia copia de los modelos. Con varios, mientras
+     uno lee una hoja otro lee la siguiente: la computadora usa más de un núcleo. */
+
+  const paddle = { arranque: null, libres: [], todos: [], cola: [], fallo: null };
+  const LECTORES = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+
+  function urlDe(bytes, tipo) { return URL.createObjectURL(new Blob([bytes], { type: tipo })); }
+
+  function arrancarPaddle() {
+    if (paddle.arranque) return paddle.arranque;
+    paddle.arranque = (async () => {
+      if (typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap === 'undefined') {
+        throw new Error('navegador sin OffscreenCanvas');
+      }
+      avisarEstado('Preparando el lector de texto…');
+      const nombres = ['pworker', 'ort', 'ortwasm', 'pdet', 'prec', 'pdic'];
+      const b = {};
+      (await Promise.all(nombres.map(bytesDe))).forEach((v, i) => { b[nombres[i]] = v; });
+      // Un solo Worker con ONNX Runtime y el lector juntos: abierta con doble clic (file://),
+      // la página no deja que un Worker cargue otras piezas. El «export» del motor se vuelve
+      // una constante `ort` que el lector usa.
+      let motor = new TextDecoder().decode(b.ort).replace(/export\s*\{([^}]*)\}\s*;?\s*$/, (m, lista) =>
+        'const ort = {' + lista.split(',').map((par) => {
+          const [interno, , publico] = par.trim().split(/\s+/);
+          return (publico || interno) + ': ' + interno;
+        }).join(', ') + '};');
+      if (!/const ort = \{/.test(motor)) throw new Error('no se reconoció el motor ONNX');
+      // la dirección del .wasm se calcula aunque los bytes ya vienen dados, y desde un Worker
+      // hecho con un blob esa cuenta falla: se deja el nombre a secas, que no se usa
+      motor = motor.split('new URL("ort-wasm-simd-threaded.wasm",import.meta.url).href').join('"ort-wasm-simd-threaded.wasm"');
+      // y un Worker de tipo módulo no arranca desde file://: se vuelve un script común, con la
+      // dirección del propio Worker en lugar de import.meta.url
+      motor = 'var urlOrt = self.location.href;\n' + motor.split('import.meta.url').join('urlOrt');
+      const urlWorker = urlDe(motor + '\n' + new TextDecoder().decode(b.pworker), 'text/javascript');
+      const dic = new TextDecoder().decode(b.pdic);
+      const uno = () => new Promise((ok, mal) => {
+        const w = new Worker(urlWorker);
+        w.onmessage = (e) => {
+          if (e.data.tipo === 'listo') { w.onmessage = null; ok(w); }
+          else { w.terminate(); mal(new Error(e.data.mensaje || 'el lector no arrancó')); }
+        };
+        w.onerror = (e) => { w.terminate(); mal(new Error(e.message || 'el lector no arrancó')); };
+        // cada lector se lleva su copia: los bytes se clonan, no se transfieren
+        w.postMessage({ tipo: 'iniciar', wasm: b.ortwasm.buffer, det: b.pdet.buffer, rec: b.prec.buffer, dic });
+      });
+      // el primero tiene que arrancar; los demás se suman cuando estén
+      const primero = await uno();
+      sumarLector(primero);
+      for (let i = 1; i < LECTORES; i++) uno().then(sumarLector, (e) => console.warn('Un lector extra no arrancó', e));
+      avisarEstado('');
+      return true;
+    })().catch((e) => {
+      avisarEstado('');
+      paddle.fallo = e;
+      console.warn('PaddleOCR no arrancó; se usa Tesseract.', e);
+      return false;
+    });
+    return paddle.arranque;
+  }
+
+  function sumarLector(w) {
+    w.trabajo = null;
+    w.onmessage = (e) => {
+      const t = w.trabajo;
+      w.trabajo = null;
+      if (t) {
+        if (e.data.tipo === 'leida') { if (G.depurarOcr) console.info('paddle', JSON.stringify(e.data.ms)); t.ok(e.data.palabras); }
+        else t.mal(new Error(e.data.mensaje || 'falló la lectura'));
+      }
+      paddle.libres.push(w);
+      repartir();
+    };
+    paddle.todos.push(w);
+    paddle.libres.push(w);
+    repartir();
+  }
+
+  function repartir() {
+    while (paddle.libres.length && paddle.cola.length) {
+      const w = paddle.libres.shift();
+      const t = paddle.cola.shift();
+      w.trabajo = t;
+      w.postMessage(Object.assign({ tipo: 'leer', imagen: t.imagen }, t.opciones), [t.imagen]);
+    }
+  }
+
+  async function paddleLienzo(lienzo, opciones) {
+    const imagen = await createImageBitmap(lienzo);
+    const palabras = await new Promise((ok, mal) => {
+      paddle.cola.push({ imagen, opciones: opciones || {}, ok, mal });
+      repartir();
+    });
+    return { lineas: agruparPorAltura(palabras), origen: 'ocr', motor: 'paddle' };
+  }
+
+  /** ¿Lee PaddleOCR? (arranca el motor si hace falta). */
+  async function usaPaddle() {
+    if (G.motorOcr === 'tesseract') return false;
+    return arrancarPaddle();
+  }
+  /** Cuántas hojas conviene leer a la vez. */
+  G.lectoresOcr = () => (paddle.fallo || G.motorOcr === 'tesseract' ? 1 : LECTORES);
+
   // el motor lee de a una imagen: las demás esperan su turno
   let cola = Promise.resolve();
   function enCola(fn) {
     const r = cola.then(fn, fn);
     cola = r.catch(() => {});
     return r;
+  }
+
+  /* ---------- dibujar las hojas para leerlas, en hilos aparte ----------
+     pdf.js descomprime cada escaneo en su hilo, de a uno: con decenas de hojas eso
+     es lo que más tarda. Para leer se abren otras copias del PDF, cada una con su
+     propio hilo, y las hojas se reparten entre ellas. Si algo falla, se dibuja como
+     siempre.                                                                    */
+
+  const copias = new Map();     // fuenteId → Promise<[PDFDocumentProxy]>
+  const COPIAS = Math.max(1, Math.min(3, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
+  let urlHiloPdf = null;
+  let turnoCopia = 0;
+
+  async function hiloPdf() {
+    if (urlHiloPdf) return urlHiloPdf;
+    const dentro = document.getElementById('pdfjs-worker');
+    let codigo;
+    if (dentro) codigo = dentro.textContent;
+    else codigo = await (await fetch(G.pdfjsLib.GlobalWorkerOptions.workerSrc)).text();
+    urlHiloPdf = URL.createObjectURL(new Blob([codigo], { type: 'text/javascript' }));
+    return urlHiloPdf;
+  }
+
+  function copiasDe(fuenteId) {
+    if (copias.has(fuenteId)) return copias.get(fuenteId);
+    const p = (async () => {
+      const fuente = G.estado.fuentes.get(fuenteId);
+      const url = await hiloPdf();
+      const lista = [];
+      for (let i = 0; i < COPIAS; i++) {
+        const worker = new G.pdfjsLib.PDFWorker({ port: new Worker(url) });
+        lista.push(await G.pdfjsLib.getDocument({ data: fuente.bytes.slice(0), worker, isEvalSupported: false }).promise);
+      }
+      return lista;
+    })();
+    copias.set(fuenteId, p);
+    p.catch(() => {});
+    return p;
+  }
+
+  function soltarCopias(fuenteIds) {
+    [...copias.keys()].forEach((id) => {
+      if (fuenteIds && !fuenteIds.has(id)) return;
+      const p = copias.get(id);
+      copias.delete(id);
+      p.then((docs) => docs.forEach((d) => { const w = d.loadingTask && d.loadingTask._worker; d.destroy(); if (w) w.destroy(); }), () => {});
+    });
+  }
+
+  /** Una de las copias del PDF de la hoja, por turno (o el PDF de siempre, si no se pudo abrir). */
+  G.copiaParaLeer = async function (fuenteId) {
+    const fuente = G.estado.fuentes.get(fuenteId);
+    if (!fuente || !fuente.bytes) return fuente && fuente.doc;
+    try {
+      const docs = await copiasDe(fuenteId);
+      return docs[turnoCopia++ % docs.length];
+    } catch (e) {
+      return fuente.doc;
+    }
+  };
+  /** Cuántas hojas conviene dibujar a la vez. */
+  G.copiasParaLeer = () => COPIAS;
+
+  /** La hoja dibujada para leerla (con su giro y su enderezado), en uno de los hilos aparte. */
+  async function dibujarParaLeer(pagina, ancho) {
+    const fuente = G.estado.fuentes.get(pagina.fuenteId);
+    if (fuente && fuente.bytes) {
+      try {
+        const docs = await copiasDe(pagina.fuenteId);
+        return await G.renderGrande(pagina, ancho, docs[turnoCopia++ % docs.length]);
+      } catch (e) {
+        console.warn('No se pudo dibujar aparte; se dibuja en la pantalla', e);
+      }
+    }
+    return G.renderGrande(pagina, ancho);
   }
 
   /* ---------- de palabras sueltas a renglones ---------- */
@@ -258,8 +444,8 @@
     return borrar;
   }
 
-  /** Devuelve un lienzo nuevo: enderezado y sin rayas. */
-  function prepararEscaneo(lienzo) {
+  /** Devuelve un lienzo nuevo: enderezado y sin rayas (con `soloEnderezar`, con sus rayas). */
+  function prepararEscaneo(lienzo, soloEnderezar) {
     const W = lienzo.width, H = lienzo.height;
     let g = grises(lienzo);
     const grados = torcidaDe(g, W, H);
@@ -277,6 +463,8 @@
       fuente = r;
       g = grises(r);
     }
+    // PaddleOCR separa bien la letra de la raya: a él solo le hace falta la hoja derecha
+    if (soloEnderezar) return fuente;
     const umbral = umbralOtsu(g);
     const borrar = rayasDe(g, W, H, umbral);
     // la raya tiene un borde gris: se borran también dos puntos a cada lado
@@ -310,7 +498,7 @@
    * Reconoce el texto de un lienzo. Las posiciones salen en fracciones del
    * lienzo. `alProgreso(0..1)` se llama mientras trabaja.
    */
-  G.ocrLienzo = function (lienzo, alProgreso) {
+  function tesseractLienzo(lienzo, alProgreso) {
     return enCola(async () => {
       const { cliente } = await cargarMotor();
       const W = lienzo.width, H = lienzo.height;
@@ -335,6 +523,12 @@
         if (imagen.close) imagen.close();
       }
     });
+  }
+
+  /** Lee un lienzo con el lector que esté disponible (PaddleOCR o, si no, Tesseract). */
+  G.ocrLienzo = async function (lienzo, alProgreso, opciones) {
+    if (await usaPaddle()) return paddleLienzo(lienzo, opciones);
+    return tesseractLienzo(lienzo, alProgreso);
   };
 
 
@@ -363,9 +557,9 @@
   }
 
   /** La hoja de la página, con un giro de más: se vuelve a dibujar, para no perder detalle. */
-  async function lienzoGirado(pagina, extra, ancho) {
+  async function lienzoGirado(pagina, extra, ancho, soloEnderezar) {
     const copia = Object.assign({}, pagina, { giro: G.norm((pagina.giro || 0) + extra) });
-    return prepararEscaneo(await G.renderGrande(copia, ancho || ANCHO_HOJA));
+    return prepararEscaneo(await dibujarParaLeer(copia, ancho || ANCHO_HOJA), soloEnderezar);
   }
 
   /* ---------- lo que Tesseract se deja sin leer ----------
@@ -465,7 +659,7 @@
           ctx.drawImage(lienzo, x0, y0, an, alto, margen, margen, an * f, alto * f);
           ctx.filter = 'none';
           llamadas++;
-          const r = await G.ocrLienzo(c, alProgreso);
+          const r = await tesseractLienzo(c, alProgreso);
           if (G.depurarOcr) console.info('trozo', x0, y0, an, alto, 'f=' + f, JSON.stringify(r.lineas.map((l) => l.texto)));
           r.lineas.forEach((l) => l.palabras.forEach((w) => {
             // lo recuperado se exige más: las firmas, los sellos y los logos también tienen tinta
@@ -487,7 +681,29 @@
     return res;
   }
 
+  /**
+   * Con PaddleOCR. Lee la hoja tal cual; si sale pobre (está de cabeza o de lado), se prueba
+   * primero el giro que sugiere la tinta de la hoja (revisar.js, que es casi gratis) y luego
+   * los demás, parando en cuanto uno salga bien: cada lectura de más cuesta segundos.
+   */
+  async function leerBienOrientadaPaddle(pagina) {
+    let mejor = await G.ocrLienzo(await lienzoGirado(pagina, 0, ANCHO_HOJA, true));
+    let q = calidad(mejor);
+    if (q >= 10) return mejor;
+    const inicial = q, original = mejor;
+    const sugerido = G.revisarHoja ? await G.revisarHoja(pagina).then((r) => r.giro, () => 0) : 0;
+    const orden = [sugerido].concat([180, 90, 270]).filter((g, i, a) => g && a.indexOf(g) === i);
+    for (const grados of orden) {
+      const alt = await G.ocrLienzo(await lienzoGirado(pagina, grados, ANCHO_HOJA, true));
+      const qa = calidad(alt);
+      if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; }
+      if (q >= 10 && q >= inicial * 2) break;
+    }
+    return q < 8 || q < inicial * 2 ? original : mejor;
+  }
+
   async function leerBienOrientada(pagina, alProgreso, ancho) {
+    if (await usaPaddle()) return leerBienOrientadaPaddle(pagina);
     const ancha = ancho || ANCHO_HOJA;
     let lienzo = await lienzoGirado(pagina, 0, ancha);
     let mejor = await G.ocrLienzo(lienzo, alProgreso);
@@ -513,6 +729,7 @@
   const cache = new Map();
   const clave = (p) => `${p.fuenteId}:${p.indice}:${G.norm(p.giro)}:${p.enderezo || 0}`;
   G.olvidarLecturas = (fuenteIds) => {
+    soltarCopias(fuenteIds ? new Set(fuenteIds) : null);
     if (!fuenteIds) { cache.clear(); cacheCabecera.clear(); return; }
     const ids = new Set(fuenteIds);
     [...cache.keys()].forEach((k) => { if (ids.has(k.split(':')[0])) cache.delete(k); });
@@ -591,12 +808,14 @@
         const lec = await cache.get(k);
         return { lineas: lec.lineas.filter((l) => l.y0 < 0.4), origen: 'ocr' };
       }
-      const grande = await G.renderGrande(pagina, 1800);
+      // PaddleOCR lee bien un título a unos 160 ppp; Tesseract necesita más detalle
+      const grande = await dibujarParaLeer(pagina, (await usaPaddle()) ? 1150 : 1800);
       const alto = Math.round(grande.height * 0.36);
       const c = document.createElement('canvas');
       c.width = grande.width; c.height = alto;
       c.getContext('2d').drawImage(grande, 0, 0, grande.width, alto, 0, 0, grande.width, alto);
-      const lec = await G.ocrLienzo(c);
+      // del título basta lo corto o lo centrado: los párrafos no se leen (PaddleOCR)
+      const lec = await G.ocrLienzo(c, null, { maxAncho: 0.7, soloTitulos: true });
       // las posiciones salen respecto al trozo: se pasan a la hoja entera
       const f = alto / grande.height;
       lec.lineas.forEach((l) => { l.y0 *= f; l.y1 *= f; l.palabras.forEach((w) => { w.y0 *= f; w.y1 *= f; }); });

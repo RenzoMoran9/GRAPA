@@ -27,6 +27,9 @@ const CREDITOS = `<!--
     · Inter 4 — SIL OFL 1.1 — https://github.com/rsms/inter
     · tesseract-wasm 0.11 (Tesseract OCR y Leptonica) — BSD-2-Clause / Apache-2.0 — https://github.com/robertknight/tesseract-wasm
     · Modelo de idioma español «tessdata_fast» — Apache-2.0 — https://github.com/tesseract-ocr/tessdata_fast
+    · ONNX Runtime Web 1.23.0 — MIT — https://github.com/microsoft/onnxruntime
+    · Modelos PaddleOCR PP-OCRv6 tiny (detección y reconocimiento) — Apache-2.0 — https://github.com/PaddlePaddle/PaddleOCR
+      (en formato ONNX, de https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models — Apache-2.0)
 -->
 `;
 
@@ -56,12 +59,18 @@ for (const ruta of GUIONES) {
   if (/<\/script/i.test(js)) throw new Error('cierre de script dentro de ' + ruta);
   // pdf-lib lleva el carácter de reemplazo literal dentro de cadenas
   js = js.replaceAll('�', '\\ufffd');
-  partes.push(`<!-- ${ruta} -->\n<script>\n${js}\n</script>`);
+  // el de pdf.js lleva nombre: el lector de escaneos lo vuelve a usar en hilos aparte
+  const id = ruta === 'lib/pdf.worker.min.js' ? ' id="pdfjs-worker"' : '';
+  partes.push(`<!-- ${ruta} -->\n<script${id}>\n${js}\n</script>`);
 }
 
-// El lector de texto para escaneos (Tesseract) va dentro, comprimido, para que Grapa.html lo
-// tenga sin internet. Ocupa unos 2,7 MB y no se toca hasta que se pide leer un escaneo.
-const OCR = { lib: 'tesseract-wasm.js', worker: 'tesseract-worker.js', wasm: 'tesseract-core.wasm', modelo: 'spa.traineddata' };
+// Los lectores de texto para escaneos van dentro, comprimidos, para que Grapa.html los tenga
+// sin internet: PaddleOCR (el principal, con ONNX Runtime) y Tesseract (de respaldo). No se
+// tocan hasta que se pide leer un escaneo.
+const OCR = {
+  lib: 'tesseract-wasm.js', worker: 'tesseract-worker.js', wasm: 'tesseract-core.wasm', modelo: 'spa.traineddata',
+  pworker: 'paddle-worker.js', ort: 'ort.wasm.bundle.min.mjs', ortwasm: 'ort-wasm-simd-threaded.wasm', pdet: 'paddle-det.onnx', prec: 'paddle-rec.onnx', pdic: 'paddle-dic.txt',
+};
 for (const [id, archivo] of Object.entries(OCR)) {
   const gz = gzipSync(readFileSync(RAIZ + 'lib/ocr/' + archivo), { level: 9 }).toString('base64');
   partes.push(`<script type="text/plain" id="ocr-${id}">${gz}</script>`);

@@ -173,8 +173,9 @@ etiqueta en su miniatura. **No cambia nada hasta que lo pides**:
   ni una mota; un «V° B°» con una rúbrica ya **no** es una hoja en blanco.
 - La hoja torcida se endereza dentro del PDF que sale, girando lo que trae
   la hoja; los folios y las firmas que pongas van derechos, como siempre.
-- Cada hoja escaneada tarda menos de medio segundo en revisarse; las que
-  traen texto, casi nada.
+- Las hojas se revisan varias a la vez, cada una dibujada en su propio hilo:
+  un expediente escaneado de 35 hojas tarda unos 15 segundos; las que traen
+  texto, casi nada.
 
 Qué no hace todavía:
 
@@ -351,13 +352,15 @@ No corrige texto de escaneos: ahí no hay letras, hay una foto.
 
 ## Evaluar ofertas y copiar texto (también de escaneos)
 
-Pdflash trae su propio **lector de texto para escaneos** (Tesseract, en español),
-que corre dentro del navegador: sin servidor, sin internet y sin que ningún
-documento salga de tu computadora. Se carga solo la primera vez que hace falta
-(unos 4 MB en la web; en `Grapa.html` va dentro del archivo). Una hoja con texto
-de verdad se lee tal cual, sin reconocimiento; una escaneada se endereza, se le
-borran las rayas de las tablas y se lee. Si sale al revés o de lado, lo detecta
-y la gira.
+Pdflash trae su propio **lector de texto para escaneos**, PaddleOCR, que corre
+dentro del navegador: sin servidor, sin internet y sin que ningún documento salga
+de tu computadora. Lee bien la letra chica, las tablas, los correos y los números
+de un escaneo, con tildes y eñes. Se carga solo la primera vez que hace falta
+(unos 8 MB en la web; en `Grapa.html` va dentro del archivo) y usa varios
+núcleos de la computadora: lee varias hojas a la vez. Una hoja con texto de
+verdad se lee tal cual, sin reconocimiento; una escaneada se endereza y se lee.
+Si sale al revés o de lado, lo detecta y la gira. En un navegador muy antiguo,
+donde PaddleOCR no arranca, lee con Tesseract, el lector de antes.
 
 ### Evaluar ofertas
 
@@ -368,10 +371,20 @@ y la gira.
    Formato 1 o 5 y dice, paquete por paquete, cuáles encontró y a cuáles les
    falta alguno. Se puede marcar a mano o corregir lo marcado.
 2. **Evaluar ofertas** (barra flotante, menú *Editar*, o desde «Comparar»).
-3. Sale el cuadro comparativo: razón social, RUC, domicilio, teléfono, correo,
-   representante, los ítems con su cantidad y precio, el total, el plazo de
-   entrega, la validez, la garantía y la forma de pago, y arriba el **menor
-   precio entre los que cumplen**, con la diferencia contra el siguiente.
+3. Sale el **cuadro comparativo**, como el del expediente: cada postor es una
+   columna (con su puesto, *Cumple*, razón social y RUC) y cada fila un
+   concepto: los ítems con su precio unitario, cantidad × precio = subtotal y
+   marca (el menor unitario de cada ítem, en verde), el **precio total**,
+   cuánto más cuesta frente al menor, la marca, el plazo de entrega, la
+   validez, la garantía y la forma de pago. Arriba, el **menor precio entre
+   los que cumplen**. Debajo, los **datos de los postores** del Formato 1
+   (domicilio, teléfono, correo, representante legal, DNI), también un
+   postor por columna, y los ítems del postor elegido, para corregirlos.
+
+Si la tabla de precios del Formato 5 sigue en la hoja de al lado, **Ubicar** la
+marca también («Formato 5 (sigue)»). La descripción, la unidad, la marca y la
+procedencia de cada ítem salen cada una en su sitio, por la columna de la tabla
+en que están.
 
 Cómo se agrupan las hojas en postores: cada paquete (o archivo) es un postor, y
 dentro de uno, un nuevo Formato 1 o un RUC distinto abre otro. Si el Formato 1 y
@@ -390,11 +403,13 @@ Para no creerse un número mal leído:
   algo no salió).
 
 El cuadro es **editable**: corrige una cifra o desmarca *Cumple* y el ganador se
-recalcula al instante. Cada dato se copia con su botón, y puedes llevarte el
-resultado como **Copiar cuadro** (para pegar en Excel), **Excel** o **Agregar
-hoja resumen** (una página con el cuadro, para dejar el sustento en el
-expediente). Gana el menor precio total; si se adjudica por ítem, mira
-«Comparación por ítem».
+recalcula al instante. Toca el nombre de un postor para ver sus hojas a la
+derecha; al entrar en una casilla, se marca en la hoja de dónde salió el dato.
+Cada dato se copia con su botón, y puedes llevarte el resultado como **Copiar
+cuadro** (para pegar en Excel o Word), **Excel** o **Agregar hoja resumen** (el
+mismo cuadro en una hoja apaisada, para dejar el sustento en el expediente).
+Gana el menor precio total; si se adjudica por ítem, mira el menor precio
+unitario de cada fila.
 
 ### Copiar texto
 
@@ -470,7 +485,8 @@ assets/
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
 lib/                  pdf-lib, pdf.js y JSZip incluidos (ver lib/LICENCIAS.md)
-lib/ocr/              el lector de escaneos (tesseract-wasm y el idioma español)
+lib/ocr/              el lector de escaneos: PaddleOCR (ONNX Runtime y sus modelos)
+                      y, de respaldo, tesseract-wasm con el idioma español
 construir.mjs         arma Grapa.html, el archivo único
 servidor.mjs          servidor estático opcional, sin dependencias
 ```
