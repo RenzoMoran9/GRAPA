@@ -351,13 +351,15 @@ No corrige texto de escaneos: ahí no hay letras, hay una foto.
 
 ## Evaluar ofertas y copiar texto (también de escaneos)
 
-Pdflash trae su propio **lector de texto para escaneos** (Tesseract, en español),
-que corre dentro del navegador: sin servidor, sin internet y sin que ningún
-documento salga de tu computadora. Se carga solo la primera vez que hace falta
-(unos 4 MB en la web; en `Grapa.html` va dentro del archivo). Una hoja con texto
-de verdad se lee tal cual, sin reconocimiento; una escaneada se endereza, se le
-borran las rayas de las tablas y se lee. Si sale al revés o de lado, lo detecta
-y la gira.
+Pdflash trae su propio **lector de texto para escaneos**, PaddleOCR, que corre
+dentro del navegador: sin servidor, sin internet y sin que ningún documento salga
+de tu computadora. Lee bien la letra chica, las tablas, los correos y los números
+de un escaneo, con tildes y eñes. Se carga solo la primera vez que hace falta
+(unos 8 MB en la web; en `Grapa.html` va dentro del archivo) y usa varios
+núcleos de la computadora: lee varias hojas a la vez. Una hoja con texto de
+verdad se lee tal cual, sin reconocimiento; una escaneada se endereza y se lee.
+Si sale al revés o de lado, lo detecta y la gira. En un navegador muy antiguo,
+donde PaddleOCR no arranca, lee con Tesseract, el lector de antes.
 
 ### Evaluar ofertas
 
@@ -470,7 +472,8 @@ assets/
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
 lib/                  pdf-lib, pdf.js y JSZip incluidos (ver lib/LICENCIAS.md)
-lib/ocr/              el lector de escaneos (tesseract-wasm y el idioma español)
+lib/ocr/              el lector de escaneos: PaddleOCR (ONNX Runtime y sus modelos)
+                      y, de respaldo, tesseract-wasm con el idioma español
 construir.mjs         arma Grapa.html, el archivo único
 servidor.mjs          servidor estático opcional, sin dependencias
 ```

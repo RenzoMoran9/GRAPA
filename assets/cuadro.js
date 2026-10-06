@@ -109,16 +109,25 @@
     ev = sesion;
     const n = marcadas.length;
     const baja = G.alEstadoOcr((t) => { if (t && ev === sesion) pintarProgreso(sesion.i || 0, n, t); });
+    // todas las hojas se piden de una vez: el lector las reparte entre sus núcleos
+    let listas = 0;
+    const pedidas = marcadas.map((m) => G.leerLineas(m.pagina).then((lec) => {
+      listas++;
+      if (ev === sesion && !sesion.cancelado) pintarProgreso(listas - 1, n, 'Reconociendo el texto de las hojas…', 1);
+      return lec;
+    }, (e) => {
+      listas++;
+      return { e };
+    }));
     try {
       for (let i = 0; i < n; i++) {
         sesion.i = i;
         if (sesion.cancelado || modal.hidden) { sesion.cancelado = true; return; }
         const m = marcadas[i];
-        pintarProgreso(i, n, G.hojaLeida(m.pagina) ? '' : 'Reconociendo el texto de la hoja…');
-        let lec;
-        try {
-          lec = await G.leerLineas(m.pagina, { alProgreso: (f) => { if (ev === sesion) pintarProgreso(i, n, 'Reconociendo el texto de la hoja…', f); } });
-        } catch (e) {
+        if (i === 0) pintarProgreso(0, n, G.hojaLeida(m.pagina) ? '' : 'Reconociendo el texto de las hojas…');
+        let lec = await pedidas[i];
+        if (lec.e) {
+          const e = lec.e;
           console.error(e);
           if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); cerrar(); return; }
           lec = { lineas: [], origen: 'texto', fallo: true, error: e && e.message ? e.message : String(e) };
@@ -149,6 +158,10 @@
     const sucia = !a.tienePrecios || a.precios.items.some((it) => it.parcial || it.inferida);
     const sinNada = !a.tienePrecios && !a.ident.ruc && !a.ident.razon;
     if (!((hablaDePrecios && sucia) || sinNada)) return lec;
+    // una hoja con texto de verdad solo se lee como imagen si de su texto no salió ningún precio
+    if (lec.origen === 'texto' && a.tienePrecios) return lec;
+    // PaddleOCR ya lee la letra chica: volver a leer más grande no le aporta y cuesta segundos
+    if (lec.origen !== 'texto' && lec.motor === 'paddle') return lec;
     const opciones = lec.origen === 'texto' ? { forzarOcr: true } : { alta: true };
     pintarProgreso(i, n, 'Volviendo a leer con más cuidado…');
     try {

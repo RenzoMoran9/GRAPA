@@ -114,9 +114,12 @@
   function formatoDe(lineas) {
     const cab = lineas.slice(0, 14).map((l) => plano(l.texto));
     for (const l of cab) {
-      if (l.length > 48) continue;
-      const m = /^\W{0,4}FORMATO\s*(?:N\W{0,3}|NRO\W{0,2}|NUM\W{0,2})?\s*([1-9]|[SIl])\b/.exec(l);
-      if (m) return { '1': 1, I: 1, l: 1, S: 5 }[m[1]] || Number(m[1]);
+      // «FORMATO N° 05», «Formato Nº 01», «FORMATO N.° 5 - PRECIO DE LA OFERTA»; el escaneo
+      // lee a veces el cero como O y el 1 como I o l
+      const m = /^\W{0,4}FORMATO\s*(?:N\W{0,3}|NRO\W{0,2}|NUM\W{0,2})?\s*[0O]?([1-9]|[SIl])\b/.exec(l);
+      if (m && (l.length <= 48 || (l.length <= 80 && /^\W{0,4}FORMATO\s*\S{0,6}\s*\S{1,2}\s*[-–—:.]/.test(l)))) {
+        return { '1': 1, I: 1, l: 1, S: 5 }[m[1]] || Number(m[1]);
+      }
     }
     const cortos = cab.filter((l) => l.length <= 60);
     const todo = cortos.join(' ');
@@ -124,6 +127,20 @@
     if (cortos.some((l) => /^\W*PRECIO\s+DE\s+LA\s+OFERTA\W*$/.test(l))) return 5;
     if (/(OFERTA|PROPUESTA)\s+ECONOMICA|CARTA\s+DE\s+(COTIZACION|OFERTA)/.test(todo)) return 5;
     return null;
+  }
+
+  /**
+   * ¿Es esta hoja la continuación de una tabla de precios? (la que sigue a un Formato 5 cuando
+   * los ítems no caben en una hoja). Arriba trae filas de ítems o el total, y no un título propio.
+   */
+  function pareceContinuacion(lineas) {
+    if (!lineas.length || formatoDe(lineas)) return false;
+    const cab = lineas.slice(0, 12);
+    const t = plano(cab.map((l) => l.texto).join(' '));
+    if (/DECLARACION\s+JURADA|CARTA\s|SENORES|SEÑORES|CONSTANCIA|FICHA\s+RUC|REGISTRO\s+NACIONAL|MEMORANDO|RESOLUCION|ANEXO/.test(t)) return false;
+    const filas = cab.filter((l) => { const f = filaDeItem(l.texto, true); return f && !f.parcial; }).length;
+    const total = cab.some((l) => /\bTOTAL\b/.test(plano(l.texto)) && montosDe(l.texto, true).montos.some((m) => m.decimales));
+    return filas >= 1 || total;
   }
 
   const TERMINA_VALOR = /\s{2,}(?=[A-ZÁÉÍÓÚÑa-záéíóúñ.° ]{2,30}:)|\s+R\.?U\.?C\b/;
@@ -153,9 +170,11 @@
   const RX = {
     // «empresa» a secas no vale (sale en «representante de la empresa»): solo con dos puntos
     razon: /(?:RAZON\s+SOCIAL|DENOMINACION|NOMBRE\s+DEL\s+POSTOR|NOMBRE\s+DEL\s+PROVEEDOR|EMPRESA(?=\s*:))(?:\s+DEL\s+(?:POSTOR|PROVEEDOR))?(?:\s+O\s+RAZON\s+SOCIAL)?/,
-    domicilio: /(?:DOMICILIO(?:\s+(?:LEGAL|FISCAL))?|DIRECCION(?:\s+(?:LEGAL|FISCAL))?)/,
+    domicilio: /(?:DOMICILIO(?:\s+(?:LEGAL|FISCAL|PROCESAL))?|DIRECCION(?:\s+(?:LEGAL|FISCAL|DE\s+NOTIFICACION(?:ES)?))?)(?:\s+PARA\s+NOTIFICACIONES)?/,
     telefono: /(?:\bTEL[EÉ]?FONOS?\b|\bTELEF\.?|\bTELF?\.|\bCELULAR\b|\bCEL\b)(?:\s*\/\s*(?:CELULAR|FAX))?/,
-    representante: /(?:REPRESENTANTE\s+LEGAL|APODERADO|NOMBRE\s+DEL\s+REPRESENTANTE)/,
+    // con dos puntos: «representante legal de la empresa …» en una frase no es la etiqueta
+    representante: /(?:REPRESENTANTE\s+LEGAL|APODERADO|NOMBRE\s+DEL\s+REPRESENTANTE(?:\s+LEGAL)?)(?=\s*:)/,
+    marca: /(?:^|[^A-Z])MARCA(?=\s*:)/,
     plazo: [etiqueta('plazo de entrega'), etiqueta('plazo de ejecucion'), etiqueta('plazo de prestacion'),
       etiqueta('plazo de atencion'), etiqueta('tiempo de entrega')],
     validez: [/(?:VALIDEZ|VIGENCIA)\s+DE\s+(?:LA\s+)?(?:OFERTA|COTIZACION|PROPUESTA)/, /(?:^|[^A-Z])\w?ALIDEZ\s+DE(?:\s+LA)?(?:\s+(?:OFERTA|COTIZACION|PROPUESTA))?/],
@@ -220,10 +239,40 @@
       id.ruc = ruc;
       if (lineaRuc[ruc] != null) donde.ruc = lineaRuc[ruc];
     }
-    const d = buscarValor(lineas, RX.domicilio); if (d) id.direccion = d.v;
+    const d = buscarValor(lineas, RX.domicilio);
+    if (d) {
+      let v = d.v;
+      // la dirección que sigue en el renglón de abajo: «(ALT. DE LA AV. …) LIMA - LIMA»
+      const sig = lineas[d.i + 1];
+      if (sig && !/:/.test(sig.texto) && sig.texto.length < 90 && !montosDe(sig.texto).montos.some((m) => m.decimales)
+          && (/^\s*[(]/.test(sig.texto) || /\b(?:LIMA|CALLAO|DISTRITO|PROVINCIA|URB\.?|MZA?\.?|LOTE|AV\.?|JR\.?)\b/.test(plano(sig.texto)))
+          && sig.y0 - lineas[d.i].y1 < (lineas[d.i].y1 - lineas[d.i].y0) * 1.2) v = limpiar(v + ' ' + sig.texto);
+      id.direccion = v;
+      donde.direccion = d.i;
+    }
     const t = buscarValor(lineas, RX.telefono);
-    if (t) { const tel = t.v.replace(/[^\d\s()+\-/]/g, '').replace(/\s{2,}/g, ' ').trim(); if (/\d{5}/.test(tel.replace(/\D/g, ''))) id.telefono = tel; }
-    const rl = buscarValor(lineas, RX.representante); if (rl) id.representante = rl.v;
+    if (t) {
+      // del número para adelante: «Fijo / Móvil: 969-719-123» → «969-719-123»
+      const tel = t.v.replace(/[^\d\s()+\-/]/g, '').replace(/\(\s*\)/g, '').replace(/^[\s/\-]+|[\s/\-]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+      if (/\d{5}/.test(tel.replace(/\D/g, ''))) { id.telefono = tel; donde.telefono = t.i; }
+    }
+    // «El que se suscribe, NOMBRE, identificado con DNI …» / «…, en mi calidad de representante…»:
+    // la frase de todos los Formatos 1 dice quién firma
+    const frase = lineas.map((l) => l.texto).join(' ');
+    const fp = plano(frase);
+    const ms = /(?:EL|LA)\s+QUE\s+(?:SE\s+)?(?:SUSCRIBE|SUSCRIBO)\W+(?:(?:DON|DONA|SR\.?|SRA\.?|EL\s+SENOR|LA\s+SENORA)\s+)?/.exec(fp);
+    if (ms) {
+      const desde = ms.index + ms[0].length;
+      const fin = /\s*[.,;]?\s*(?:,|IDENTIFICAD[OA]|CON\s+(?:DNI|D\.N\.I|DOCUMENTO)|EN\s+MI\s+CALIDAD|DNI\b|D\.N\.I|REPRESENTANTE|EN\s+CALIDAD)/.exec(fp.slice(desde));
+      const nombre = limpiar(frase.slice(desde, desde + (fin ? fin.index : 0)).replace(/[.,;:]+$/, ''));
+      if (fin && nombre.length >= 5 && nombre.length <= 70 && /^[A-Za-zÁÉÍÓÚÑáéíóúñ .'-]+$/.test(nombre)) {
+        id.representante = nombre;
+        const li = lineas.findIndex((l) => l.texto.includes(nombre.split(' ')[0]));
+        if (li >= 0) donde.representante = li;
+      }
+    }
+    const rl = !id.representante && buscarValor(lineas, RX.representante);
+    if (rl) { id.representante = rl.v; donde.representante = rl.i; }
     // «Nombre: … / Cargo: Representante legal» al pie de una carta, sin la etiqueta «representante legal»
     if (!id.representante) {
       for (let i = 0; i < lineas.length - 1; i++) {
@@ -247,7 +296,8 @@
     }
     for (let i = 0; i < lineas.length; i++) {
       const p = plano(lineas[i].texto);
-      const m = /(?:^|[^A-Z])(?:DNI|D\.N\.I\.?|DOC\w*\.?\s+DE\s+IDENTIDAD)\W{0,6}([0-9OIlSB]{8})\b/.exec(p);
+      // «DNI N° …»; el escaneo a veces junta «DNIN°»
+      const m = /(?:^|[^A-Z])(?:DNI|D\.N\.I\.?|DOC\w*\.?\s+DE\s+IDENTIDAD)\W{0,4}(?:N\W{0,3})?\W{0,3}([0-9OIlSB]{8})\b/.exec(p);
       if (m) { id.dni = comoDigitos(lineas[i].texto.slice(m.index + m[0].length - 8, m.index + m[0].length)); break; }
     }
     return id;
@@ -397,6 +447,99 @@
     return '';
   }
 
+  /* ---------- columnas de la tabla de precios ----------
+     La cabecera de la tabla dice dónde está cada columna. Con eso, cada palabra de una fila
+     va a su columna por su posición: la descripción no se mezcla con la unidad, la marca
+     o la procedencia, y la marca de cada postor sale aparte.                           */
+
+  const COLUMNAS = [
+    ['n', /^(?:N[°ºO.]?|NRO\.?|ITEM|ITE|ITEMS)$/],
+    ['unidad', /^(?:UNIDAD|U\.?M\.?|UND\.?|MEDIDA|U\/M|UNID\.?)$/],
+    ['desc', /^(?:DESCRIPCION|DENOMINACION|DETALLE|EQUIPOS?|BIENES?|PRODUCTOS?|ARTICULOS?|CONCEPTO|SERVICIOS?|NOMBRE)$/],
+    ['marca', /^MARCA$/],
+    ['proc', /^(?:PROCEDENCIA|PROCE|ORIGEN|PAIS)$/],
+    ['modelo', /^MODELO$/],
+    ['cant', /^(?:CANT\.?|CANTIDAD|CANT\.?\(?\w*\)?)$/],
+    ['pu', /^(?:P\.?\s?UNIT\.?|UNITARIO|P\.?U\.?|UNIT\.?|V\.?\s?UNIT\.?)$/],
+    ['total', /^(?:TOTAL|IMPORTE|SUBTOTAL|P\.?\s?TOTAL)$/],
+  ];
+
+  function tipoDeColumna(palabra) {
+    const t = plano(palabra).replace(/[():;,]+$/g, '').replace(/^[(]+/, '');
+    const c = COLUMNAS.find(([, rx]) => rx.test(t));
+    return c ? c[0] : null;
+  }
+
+  /** La cabecera de la tabla: { linea, hasta, cols: [{ tipo, x }] } ordenadas de izquierda a derecha, o null. */
+  function cabeceraDeTabla(lineas) {
+    for (let i = 0; i < lineas.length; i++) {
+      const l = lineas[i];
+      if (!l.palabras || !ES_CABECERA.test(plano(l.texto)) || /\d[.,]\d{2}/.test(l.texto)) continue;
+      // la cabecera puede ocupar dos o tres renglones («PRECIO / UNITARIO»)
+      const alto = Math.max(l.y1 - l.y0, 1e-4);
+      let hasta = i;
+      while (hasta + 1 < lineas.length && hasta < i + 3 && lineas[hasta + 1].y0 - lineas[hasta].y1 < alto * 1.2
+        && !montosDe(lineas[hasta + 1].texto).montos.some((m) => m.decimales)
+        && lineas[hasta + 1].palabras && lineas[hasta + 1].palabras.some((w) => tipoDeColumna(w.t))) hasta++;
+      const cols = [];
+      for (let k = i; k <= hasta; k++) {
+        lineas[k].palabras.forEach((w) => {
+          const tipo = tipoDeColumna(w.t);
+          if (!tipo) return;
+          const x = (w.x0 + w.x1) / 2;
+          const ya = cols.find((c) => c.tipo === tipo || Math.abs(c.x - x) < 0.02);
+          if (ya) { if (ya.tipo === tipo) ya.x = (ya.x + x) / 2; return; }
+          cols.push({ tipo, x });
+        });
+      }
+      const tipos = new Set(cols.map((c) => c.tipo));
+      if (cols.length >= 3 && tipos.has('desc') && (tipos.has('cant') || tipos.has('pu') || tipos.has('total'))) {
+        cols.sort((a, b) => a.x - b.x);
+        return { linea: i, hasta, cols };
+      }
+    }
+    return null;
+  }
+
+  /** La columna en la que cae una palabra. */
+  function columnaDe(cab, w) {
+    const x = (w.x0 + w.x1) / 2;
+    const cs = cab.cols;
+    for (let k = 0; k < cs.length - 1; k++) if (x < (cs[k].x + cs[k + 1].x) / 2) return cs[k].tipo;
+    return cs[cs.length - 1].tipo;
+  }
+
+  const DE_CIFRAS = new Set(['n', 'cant', 'pu', 'total']);
+  const esMoneda = (t) => /^(?:S\/\.?|US\$|\$|USD|PEN|SOLES)$/i.test(t.replace(/[()]/g, ''));
+
+  /**
+   * Reparte las palabras de un renglón entre las columnas de texto. Las cifras de la fila
+   * (`cifras`: el número de ítem, la cantidad, el unitario y el total) quedan fuera; una
+   * palabra con letras nunca es de una columna de cifras (la descripción de una celda ancha
+   * se mete bajo la cabecera de al lado): va a la columna de texto más cercana. Devuelve
+   * también `cant` si en la columna de la cantidad hay una cifra suelta.
+   */
+  function textoPorColumna(cab, linea, cifras) {
+    const r = {};
+    const textos = cab.cols.filter((c) => !DE_CIFRAS.has(c.tipo));
+    (linea.palabras || []).forEach((w) => {
+      let tipo = columnaDe(cab, w);
+      if (esMoneda(w.t)) return;
+      const v = leerMonto(w.t);
+      if (DE_CIFRAS.has(tipo)) {
+        if (v != null && cifras && cifras.has(v)) return;
+        if (v != null && tipo === 'cant' && !cifras) { r.cant = v; return; }
+        if (v != null && tipo !== 'n' && /[.,]\d{2}$/.test(w.t)) return;
+        if (!textos.length) return;
+        const x = (w.x0 + w.x1) / 2;
+        tipo = textos.reduce((a, b) => (Math.abs(b.x - x) < Math.abs(a.x - x) ? b : a)).tipo;
+      }
+      (r[tipo] = r[tipo] || []).push(w.t);
+    });
+    Object.keys(r).forEach((k) => { if (k !== 'cant') r[k] = limpiar(r[k].join(' ')); });
+    return r;
+  }
+
   /** Los ítems y todo lo que dice una hoja de precios (Formato 5). */
   function leerPrecios(lineas) {
     const items = [];
@@ -449,6 +592,9 @@
         }
       }
     }
+    // con la cabecera de la tabla, cada palabra va a su columna
+    const cab = cabeceraDeTabla(lineas);
+    if (cab && items.length && cab.cols.some((c) => c.tipo === 'desc')) repartirColumnas(lineas, cab, items, esFila);
     // los ítems siguen el orden de la tabla: si no traen número se les da
     items.forEach((it, k) => { if (it.n == null) it.n = k + 1; });
 
@@ -459,10 +605,55 @@
     const ga = buscarValor(lineas, RX.garantia); if (ga) cond.garantia = ga.v;
     const pa = primero(lineas, RX.pago); if (pa) cond.pago = pa.v;
     const lu = buscarValor(lineas, RX.lugar); if (lu) cond.lugar = lu.v;
+    const ma = buscarValor(lineas, RX.marca); if (ma && !/^[(*_.\-]|COLOCAR/i.test(ma.v)) cond.marca = ma.v;
     return {
       items, subtotal: tot.subtotal, igv: tot.igv, totales: tot.totales, cond,
       moneda: leerMoneda(lineas), igvIncluido: leerIgv(lineas), dudosas,
     };
+  }
+
+  /**
+   * Arma la descripción, la unidad, la marca y la procedencia de cada ítem con las columnas.
+   * Los renglones sueltos de texto entre la cabecera y el total (la celda de la descripción
+   * partida en varios renglones, arriba o abajo de las cifras) van al ítem más cercano.
+   */
+  function repartirColumnas(lineas, cab, items, esFila) {
+    const filas = items.filter((it) => it.linea != null && !it.desdeBloque);
+    if (!filas.length) return;
+    const centro = (l) => (l.y0 + l.y1) / 2;
+    const cifrasDe = (it) => new Set([it.n, it.cant, it.pu, it.total].filter((v) => v != null));
+    const partes = new Map(filas.map((it) => [it, [{ y: centro(lineas[it.linea]), cols: textoPorColumna(cab, lineas[it.linea], cifrasDe(it)) }]]));
+    const ultima = Math.max(...filas.map((it) => it.linea));
+    for (let i = cab.hasta + 1; i < lineas.length && i <= ultima + 3; i++) {
+      if (filas.some((it) => it.linea === i)) continue;
+      const l = lineas[i];
+      const p = plano(l.texto);
+      if (/\bTOTAL\b|\bIGV\b|:/.test(p) || montosDe(l.texto).montos.some((m) => m.decimales)) { if (i > ultima) break; continue; }
+      const cols = textoPorColumna(cab, l);
+      if (!Object.keys(cols).length || l.texto.length > 90) continue;
+      // al ítem cuya fila de cifras está más cerca, y no muy lejos
+      const y = centro(l);
+      const alto = l.y1 - l.y0;
+      let mejor = null, dist = Infinity;
+      filas.forEach((it) => { const d = Math.abs(centro(lineas[it.linea]) - y); if (d < dist) { dist = d; mejor = it; } });
+      if (!mejor || dist > alto * 3.2) continue;
+      // la cantidad escrita en un renglón aparte (celda centrada a lo alto) confirma la deducida
+      if (cols.cant != null && mejor.inferida && cols.cant === mejor.cant) mejor.inferida = false;
+      delete cols.cant;
+      if (!Object.keys(cols).length) continue;
+      partes.get(mejor).push({ y, cols });
+      esFila.add(i);
+    }
+    filas.forEach((it) => {
+      const ps = partes.get(it).sort((a, b) => a.y - b.y);
+      const junta = (tipo) => limpiar(ps.map((q) => q.cols[tipo] || '').join(' '));
+      const desc = junta('desc');
+      if (desc) it.desc = desc.replace(/(?:\s+(?:[S58$]\/?\.?))+$/, '');
+      const und = junta('unidad'); if (und) it.unidad = und;
+      const marca = junta('marca'); if (marca) it.marca = marca;
+      const proc = junta('proc'); if (proc) it.procedencia = proc;
+      const modelo = junta('modelo'); if (modelo) it.modelo = modelo;
+    });
   }
 
   /** Todo lo que se puede sacar de una hoja. */
@@ -504,7 +695,7 @@
           id: 'p' + (postores.length + 1), hojas: [], formatos: [], razon: '', ruc: '',
           direccion: '', telefono: '', correo: '', correoDudoso: false, representante: '', dni: '',
           items: [], total: null, totalDeclarado: null, subtotal: null, igv: null, moneda: '', igvIncluido: '',
-          plazo: '', plazoDias: null, validez: '', validezDias: null, garantia: '', pago: '', lugar: '',
+          plazo: '', plazoDias: null, validez: '', validezDias: null, garantia: '', pago: '', lugar: '', marca: '',
           cumple: true, avisos: [], extra: [], dudosas: [], origen: new Set(), donde: {},
         };
         postores.push(actual);
@@ -547,13 +738,15 @@
       p.dudosas.push(...pr.dudosas);
     }
     const c = pr.cond;
-    ['plazo', 'validez', 'garantia', 'pago', 'lugar'].forEach((k) => { if (c[k] && !p[k]) p[k] = c[k]; });
+    ['plazo', 'validez', 'garantia', 'pago', 'lugar', 'marca'].forEach((k) => { if (c[k] && !p[k]) p[k] = c[k]; });
     if (c.plazoDias != null && p.plazoDias == null) p.plazoDias = c.plazoDias;
     if (c.validezDias != null && p.validezDias == null) p.validezDias = c.validezDias;
   }
 
   function cerrarPostor(p) {
     p.items.forEach((it, k) => { it.n = k + 1; });
+    // la marca del postor: la que dice su hoja o, si no, la de sus ítems
+    if (!p.marca) p.marca = [...new Set(p.items.map((it) => it.marca).filter(Boolean))].join(' / ');
     recalcular(p);
   }
 
@@ -700,7 +893,7 @@
   }
 
   const API = {
-    plano, leerMonto, montosDe, rucValido, formatoDe, leerIdentidad, leerPrecios, leerHoja,
+    plano, leerMonto, montosDe, rucValido, formatoDe, pareceContinuacion, leerIdentidad, leerPrecios, leerHoja,
     armarPostores, recalcular, evaluar, compararItems, aTexto, fmt, nombreCorto, diasDe,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

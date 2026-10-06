@@ -2349,6 +2349,7 @@
     });
     G.olvidarDocs();
     G.olvidarBusqueda(sueltas);
+    if (G.olvidarLecturas) G.olvidarLecturas(sueltas);
   }
 
   /* ---------------- enviar hojas a otro tablero ---------------- */
@@ -4725,27 +4726,53 @@
     if (!E.paginas.length) { G.aviso('Primero abre el expediente.', 'error'); return; }
     const tarea = (ubicacion.corriendo = { cancelada: false });
     const lista = E.paginas.slice();
+    const continuaciones = new Set();
     const estado = $('#formatosEstado'), barra = $('#formatosBarra');
     $('#formatosProgreso').hidden = false;
     $('#formatosResultado').hidden = true;
     boton.textContent = 'Detener';
     const hallados = new Map();      // uid → 1 o 5
-    let falladas = 0;
-    try {
-      for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
+    const cabeceras = new Map();     // uid → renglones de arriba, para ver qué hoja sigue al Formato 5
+    let falladas = 0, hechas = 0, rota = false;
+    // Varias hojas a la vez: las que traen texto salen al instante y los escaneos se
+    // reparten entre los lectores que haya (uno por núcleo libre).
+    const aLaVez = (G.lectoresOcr ? G.lectoresOcr() : 1) + 1;
+    let siguiente = 0;
+    const lector = async () => {
+      while (!tarea.cancelada && !rota) {
+        const i = siguiente++;
+        if (i >= lista.length) return;
         const p = lista[i];
-        estado.textContent = `Leyendo el título de la hoja ${i + 1} de ${lista.length}…`;
-        barra.style.width = Math.round(((i + 1) / lista.length) * 100) + '%';
         try {
           const cab = await G.leerCabecera(p);
+          cabeceras.set(p.uid, cab.lineas);
           const f = G.ofertas.formatoDe(cab.lineas);
           if (f === 1 || f === 5) hallados.set(p.uid, f);
         } catch (e) {
           console.error(e);
           falladas++;
-          if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); break; }
+          if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); rota = true; }
         }
+        hechas++;
+        estado.textContent = `Leyendo los títulos: ${hechas} de ${lista.length} hojas…`;
+        barra.style.width = Math.round((hechas / lista.length) * 100) + '%';
       }
+    };
+    try {
+      estado.textContent = `Leyendo los títulos: 0 de ${lista.length} hojas…`;
+      await Promise.all(Array.from({ length: aLaVez }, lector));
+      // la tabla de precios que sigue en la hoja de al lado también es del Formato 5
+      lista.forEach((p, i) => {
+        if (hallados.get(p.uid) !== 5) return;
+        const grupo = (q) => q.paqueteId || q.fuenteId;
+        for (let j = i + 1; j < lista.length && j <= i + 3; j++) {
+          const q = lista[j];
+          if (grupo(q) !== grupo(p) || hallados.has(q.uid)) break;
+          if (!G.ofertas.pareceContinuacion(cabeceras.get(q.uid) || [])) break;
+          hallados.set(q.uid, 5);
+          continuaciones.add(q.uid);
+        }
+      });
     } finally {
       ubicacion.corriendo = null;
       boton.textContent = 'Ubicar y marcar los Formatos 1 y 5';
@@ -4753,11 +4780,11 @@
     }
     if (tarea.cancelada) { estado.textContent = 'Detenido. No se marcó nada.'; return; }
     estado.textContent = falladas ? `${falladas} hoja(s) no se pudieron leer.` : '';
-    mostrarFormatos(lista, hallados);
+    mostrarFormatos(lista, hallados, continuaciones);
   }
 
   /** Marca las hojas halladas y cuenta, paquete por paquete, lo que hay y lo que falta. */
-  function mostrarFormatos(lista, hallados) {
+  function mostrarFormatos(lista, hallados, continuaciones) {
     const caja = $('#formatosResultado');
     const vivas = lista.filter((p) => E.paginas.includes(p) && hallados.has(p.uid));
     caja.hidden = false;
@@ -4792,7 +4819,8 @@
       [['Formato 1', g.f1], ['Formato 5', g.f5]].forEach(([t, ps]) => {
         if (!ps.length) { chips.append(Object.assign(el('span', 'formatos-chip falta', 'sin ' + t + ' aquí'), { title: 'No hay ' + t + ' en este paquete (puede estar en otro)' })); return; }
         ps.forEach((p) => {
-          const b = el('button', 'formatos-chip', `${t} · p. ${E.paginas.indexOf(p) + 1}`);
+          const sigue = continuaciones && continuaciones.has(p.uid);
+          const b = el('button', 'formatos-chip', `${t}${sigue ? ' (sigue)' : ''} · p. ${E.paginas.indexOf(p) + 1}`);
           b.type = 'button';
           b.title = 'Ver esta hoja en grande';
           b.addEventListener('click', () => abrirLector(p));
