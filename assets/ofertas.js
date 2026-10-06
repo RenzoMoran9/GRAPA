@@ -152,7 +152,8 @@
     if (!m) return null;
     let v = l.texto.slice(m.index + m[0].length).replace(/^[\s:.\-–—_;,]+/, '');
     v = v.split(TERMINA_VALOR)[0];
-    v = limpiar(v);
+    // «5 días calendarios,» → sin la coma que sigue a la frase
+    v = limpiar(v).replace(/[\s,;]+$/, '');
     if (v) return v;
     const sig = lineas[i + 1];
     if (sig && !/^[A-ZÁÉÍÓÚÑ ]{3,40}:/.test(sig.texto.trim())) return limpiar(sig.texto.split(/\s{3,}/)[0]);
