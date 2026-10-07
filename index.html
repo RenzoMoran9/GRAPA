@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261006b">
+<link rel="stylesheet" href="assets/styles.css?v=20261007a">
 </head>
 <body>
 
@@ -99,7 +99,6 @@
         <button class="menu-item" role="menuitem" data-clic="#btnSelNada"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg> Quitar la selección</button>
         <button class="menu-item" role="menuitem" data-clic="#btnSelInvertir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recoger"/></svg> Invertir la selección</button>
         <span class="menu-sep" role="separator"></span>
-        <button class="menu-item" role="menuitem" data-clic="#btnEvaluar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ofertas"/></svg> Evaluar ofertas…</button>
         <span class="menu-sep" role="separator"></span>
         <button class="menu-item" role="menuitem" data-clic="#btnDuplicar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-duplicar"/></svg> Duplicar<kbd>Ctrl+D</kbd></button>
         <button class="menu-item" role="menuitem" data-clic="#btnEliminar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg> Eliminar<kbd>Supr</kbd></button>
@@ -479,7 +478,6 @@
           <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
           <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
           <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
-          <button class="btn btn-mini" id="lectorEvaluar" hidden title="Lee los Formatos 1 y 5 de las hojas que estás comparando y dice quién gana el menor precio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ofertas"/></svg> Evaluar ofertas</button>
           <button class="btn btn-mini" id="lectorCopiarTexto" title="Marca con el cursor un trozo de la hoja y se copia su texto (también si es un escaneo). T"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copiar-texto"/></svg> Copiar texto</button>
           <button class="btn btn-mini" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
           <button class="btn btn-mini" id="lectorEditarTexto" title="Corregir el texto de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Texto</button>
@@ -533,7 +531,6 @@
       <span class="bs-sep"></span>
       <button class="bs-btn" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Extraer</button>
       <button class="bs-btn" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-comparar"/></svg> Comparar</button>
-      <button class="bs-btn" id="btnEvaluar" title="Lee los Formatos 1 y 5 de las hojas marcadas, compara los precios y dice quién gana"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ofertas"/></svg> Evaluar ofertas</button>
       <span class="enviar-caja">
         <button class="bs-btn bs-destacado" id="btnEnviar" type="button" hidden title="Copia o mueve las hojas marcadas a otro tablero">Enviar a… <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
         <div class="menu-enviar" id="menuEnviar" hidden></div>
@@ -755,7 +752,7 @@
         <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
         <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
         <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 3) y avanzas con los tres en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero.</li>
-        <li><strong>Evaluar ofertas:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong> (o márcalos tú) y pulsa <strong>Evaluar ofertas</strong>. Pdflash lee los datos y los precios (también de escaneos), arma el cuadro comparativo y marca el menor precio entre los que cumplen. Todo se puede corregir en el cuadro; al lado ves la hoja de verdad para comprobar.</li>
+        <li><strong>Ubicar formatos:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong>. Pdflash lee el título de cada hoja (también en escaneos) y deja marcados el Formato 1, el Formato 5 y la hoja de cotización de cada empresa, si la trae. Desde ahí las ves una al lado de otra o las sacas a un PDF aparte.</li>
         <li><strong>Copiar texto:</strong> en «Ver en grande», pulsa <strong>Copiar texto</strong> (o la tecla T), arrastra un recuadro sobre lo que quieras y queda copiado, aunque la hoja sea un escaneo. Sirve para pasar razón social, RUC o precios a otro programa sin escribirlos.</li>
       </ol>
       <h4>Atajos</h4>
@@ -790,15 +787,14 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20261006b"></script>
-<script src="assets/buscar.js?v=20261006b"></script>
-<script src="assets/revisar.js?v=20261006b"></script>
-<script src="assets/ocr.js?v=20261006b"></script>
-<script src="assets/ofertas.js?v=20261006b"></script>
-<script src="assets/cuadro.js?v=20261006b"></script>
-<script src="assets/office.js?v=20261006b"></script>
-<script src="assets/expedientes.js?v=20261006b"></script>
-<script src="assets/firmas.js?v=20261006b"></script>
-<script src="assets/app.js?v=20261006b"></script>
+<script src="assets/core.js?v=20261007a"></script>
+<script src="assets/buscar.js?v=20261007a"></script>
+<script src="assets/revisar.js?v=20261007a"></script>
+<script src="assets/ocr.js?v=20261007a"></script>
+<script src="assets/ofertas.js?v=20261007a"></script>
+<script src="assets/office.js?v=20261007a"></script>
+<script src="assets/expedientes.js?v=20261007a"></script>
+<script src="assets/firmas.js?v=20261007a"></script>
+<script src="assets/app.js?v=20261007a"></script>
 </body>
 </html>

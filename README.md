@@ -350,7 +350,7 @@ No corrige texto de escaneos: ahí no hay letras, hay una foto.
 > sigue siendo un programa independiente. Por eso el editor vive en su propio
 > repositorio.
 
-## Evaluar ofertas y copiar texto (también de escaneos)
+## Ubicar formatos y copiar texto (también de escaneos)
 
 Pdflash trae su propio **lector de texto para escaneos**, PaddleOCR, que corre
 dentro del navegador: sin servidor, sin internet y sin que ningún documento salga
@@ -362,66 +362,22 @@ verdad se lee tal cual, sin reconocimiento; una escaneada se endereza y se lee.
 Si sale al revés o de lado, lo detecta y la gira. En un navegador muy antiguo,
 donde PaddleOCR no arranca, lee con Tesseract, el lector de antes.
 
-### Evaluar ofertas
+### Ubicar los Formatos 1 y 5 y la cotización de cada empresa
 
-1. Marca las hojas del **Formato 1** (datos del postor) y del **Formato 5**
-   (oferta con los precios) de cada postor. No hace falta buscarlas: en
-   **Revisar → Ubicar y marcar los Formatos 1 y 5**, Pdflash lee el título de
-   cada hoja del expediente (también en escaneos), deja marcadas las que son
-   Formato 1 o 5 y dice, paquete por paquete, cuáles encontró y a cuáles les
-   falta alguno. Se puede marcar a mano o corregir lo marcado.
-2. **Evaluar ofertas** (barra flotante, menú *Editar*, o desde «Comparar»).
-3. Sale el **cuadro comparativo**, como el del expediente: cada postor es una
-   columna (con su puesto, *Cumple*, razón social y RUC) y cada fila un
-   concepto: los ítems con su precio unitario, cantidad × precio = subtotal y
-   marca (el menor unitario de cada ítem, en verde), el **precio total**,
-   cuánto más cuesta frente al menor, la marca, el plazo de entrega, la
-   validez, la garantía y la forma de pago. Arriba, el **menor precio entre
-   los que cumplen**. Debajo, los **datos de los postores** del Formato 1
-   (domicilio, teléfono, correo, representante legal, DNI), también un
-   postor por columna, y los ítems del postor elegido, para corregirlos.
+En **Revisar → Ubicar y marcar los Formatos 1 y 5**, Pdflash lee el título de cada
+hoja del expediente (también en escaneos) y deja marcadas, de cada empresa:
 
-Si la tabla de precios del Formato 5 sigue en la hoja de al lado, **Ubicar** la
-marca también («Formato 5 (sigue)»), pero sus filas solo se suman si con ellas el
-total del Formato 5 cuadra; si no, se dejan fuera y se avisa. Los correos impresos
-(Gmail, Outlook) nunca se toman por hojas de precios, aunque nombren el ítem.
+- el **Formato 1** (datos del postor);
+- el **Formato 5** (precio de la oferta), y la hoja que lo continúa si la tabla de
+  precios sigue en la siguiente («Formato 5 (sigue)»);
+- su **hoja de cotización** (su carta, su proforma, su «oferta económica»), si la
+  trae: suele tener la marca, el modelo y la procedencia que el Formato 5 calla.
 
-**Ubicar** marca también la **hoja de cotización** del propio postor (su carta, su
-proforma, su «oferta económica»): suele traer lo que el Formato 5 calla. El Formato 1
-y el 5 mandan; la cotización completa lo que les falte (marca, modelo, procedencia,
-validez, forma de pago) y, si el postor no trajo Formato 5, sus precios son la oferta.
-
-**Llevar a HNAL** descarga un *trabajo* para la app HNAL: en *Trabajos → Importar
-trabajo (.json)* quedan llenos el Cuadro de Validación (postores y marcas) y el
-Cuadro Comparativo (RUC, contacto, teléfono, correo, garantía, plazo, precio y marca
-de cada ítem, y el ganador). Las fechas de solicitud y de recepción se ponen allí. La descripción, la unidad, la marca y la
-procedencia de cada ítem salen cada una en su sitio, por la columna de la tabla
-en que están.
-
-Cómo se agrupan las hojas en postores: cada paquete (o archivo) es un postor, y
-dentro de uno, un nuevo Formato 1 o un RUC distinto abre otro. Si el Formato 1 y
-el 5 de un mismo postor están en paquetes distintos, se juntan por el RUC.
-
-Para no creerse un número mal leído:
-
-- cada ítem tiene que cuadrar (cantidad × precio unitario = total);
-- el total que escribió el postor se contrasta con la suma de sus ítems;
-- el RUC se comprueba con su dígito de control (no se «corrige» solo: se avisa);
-- una fila cuyas cifras no cuadran no se tira: se conserva su total y se avisa
-  de cuál no cuadra; si el escaneo es de letra chica, se vuelve a leer con más
-  detalle antes de rendirse;
-- lo dudoso sale en **Revisa antes de decidir**, y al lado se ve la hoja de
-  verdad para cotejar, con el **texto leído** debajo (para entender por qué
-  algo no salió).
-
-El cuadro es **editable**: corrige una cifra o desmarca *Cumple* y el ganador se
-recalcula al instante. Toca el nombre de un postor para ver sus hojas a la
-derecha; al entrar en una casilla, se marca en la hoja de dónde salió el dato.
-Cada dato se copia con su botón, y puedes llevarte el resultado como **Copiar
-cuadro** (para pegar en Excel o Word), **Excel** o **Agregar hoja resumen** (el
-mismo cuadro en una hoja apaisada, para dejar el sustento en el expediente).
-Gana el menor precio total; si se adjudica por ítem, mira el menor precio
-unitario de cada fila.
+Reconoce «FORMATO N° 05», «Nº 01» y títulos largos. Los correos impresos (Gmail,
+Outlook) y las hojas de la propia entidad que *piden* la cotización no se marcan,
+aunque nombren el ítem. Dice, paquete por paquete, qué encontró y qué falta, y
+desde ahí las ves **una al lado de otra** o las **sacas a un PDF** aparte. Se
+puede marcar a mano o corregir lo marcado.
 
 ### Copiar texto
 
@@ -490,8 +446,7 @@ assets/
   core.js             estado, lectura de PDF, miniaturas, geometría y armado final
   buscar.js           el texto de cada hoja: qué palabra está dónde
   ocr.js              leer una hoja: texto de verdad o reconocimiento de un escaneo
-  ofertas.js          leer Formatos 1 y 5, armar postores y decidir el menor precio
-  cuadro.js           la pantalla de «Evaluar ofertas»
+  ofertas.js          reconocer cada hoja: Formato 1, Formato 5, cotización, correo
   revisar.js          hojas en blanco, de lado, de cabeza o torcidas
   expedientes.js      guardado del trabajo (IndexedDB) y carpeta de salida
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo

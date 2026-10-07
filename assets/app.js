@@ -3156,24 +3156,6 @@
     }
   }
 
-  /** Para «Evaluar ofertas»: las hojas marcadas, en el orden del expediente. */
-  G.evaluacion = {
-    marcadas() {
-      return E.paginas.filter((p) => E.seleccion.has(p.uid)).map((p) => {
-        const paq = p.paqueteId && E.paquetes.get(p.paqueteId);
-        const fuente = E.fuentes.get(p.fuenteId);
-        // un paquete puede juntar varios archivos: entonces el archivo dice más que el paquete
-        const variosArchivos = !!paq && new Set(E.paginas.filter((q) => q.paqueteId === p.paqueteId).map((q) => q.fuenteId)).size > 1;
-        return {
-          id: p.uid, pagina: p, grupo: p.paqueteId || p.fuenteId,
-          nombreGrupo: (paq && paq.nombre) || (fuente && fuente.nombre) || '',
-          nombreArchivo: (fuente && fuente.nombre) || '', variosArchivos,
-          numero: E.paginas.indexOf(p) + 1,
-        };
-      });
-    },
-    anadir: (archivos) => anadir(archivos, null),
-  };
 
   /** Abre en grande, una al lado de otra, solo las hojas marcadas. */
   function compararMarcadas() {
@@ -4079,7 +4061,6 @@
     if (!(indice >= 0)) indice = 0;
     lector.abierto = true;
     $('#lector').hidden = false;
-    $('#lectorEvaluar').hidden = !lector.soloMarcadas;
     construirLector();
     irAHoja(indice, true);
     pintarSegVista();
@@ -4838,11 +4819,18 @@
       fila.append(chips);
       return fila;
     });
-    const evaluar = el('button', 'btn btn-primario ancho', 'Evaluar estas ofertas');
-    evaluar.type = 'button';
-    evaluar.addEventListener('click', () => G.evaluarOfertas());
-    caja.replaceChildren(resumen, ...filas, evaluar);
-    G.aviso(`Marqué ${vivas.length} hojas (Formatos 1 y 5${nc ? ' y cotizaciones' : ''}). Ya puedes pulsar «Evaluar ofertas».`, 'ok');
+    // lo que se hace con ellas: mirarlas una al lado de otra, o llevárselas aparte
+    const acciones = el('div', 'formatos-acciones');
+    const ver = el('button', 'btn btn-primario', vivas.length > 1 ? 'Verlas una al lado de otra' : 'Verla en grande');
+    ver.type = 'button';
+    ver.addEventListener('click', () => (vivas.length > 1 ? $('#btnComparar').click() : abrirLector(vivas[0])));
+    const sacar = el('button', 'btn btn-secundario', 'Sacarlas a un PDF');
+    sacar.type = 'button';
+    sacar.title = 'Baja las hojas marcadas en un solo PDF, a Descargas';
+    sacar.addEventListener('click', () => $('#btnDescargarSel').click());
+    acciones.append(ver, sacar);
+    caja.replaceChildren(resumen, ...filas, acciones);
+    G.aviso(`Marqué ${vivas.length} hojas (Formatos 1 y 5${nc ? ' y cotizaciones' : ''}).`, 'ok');
   }
 
   async function revisarHojas() {
@@ -5315,8 +5303,6 @@
     });
     $('#btnVerPeso').addEventListener('click', calcularPeso);
     $('#btnComparar').addEventListener('click', compararMarcadas);
-    $('#btnEvaluar').addEventListener('click', () => G.evaluarOfertas());
-    $('#lectorEvaluar').addEventListener('click', () => G.evaluarOfertas());
     $('#lectorColumnas').addEventListener('change', (ev) => {
       lector.columnas = Number(ev.target.value) || 1;
       aplicarZoomLector();
