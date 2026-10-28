@@ -3583,17 +3583,23 @@
     return EDITOR_PUBLICADO;
   }
 
+  /* Cada envío lleva su número, y lo que vuelve del editor dice de qué envío
+     es: así, si entre medias se le mandó otra cosa, cada corrección vuelve a
+     SUS hojas y no a las del último envío. */
   const puente = { ventana: null, listo: false, arrancando: false, pendiente: null,
-                   enviadas: null, reloj: null, tarea: null, tablero: null };
+                   reloj: null, alSaludar: null, envios: new Map(), ultimo: 0 };
 
   function mandarAlEditor() {
     if (!puente.pendiente || !puente.listo) return;
     if (!puente.ventana || puente.ventana.closed) return;
     const carga = puente.pendiente;
-    puente.pendiente = null;
     clearTimeout(puente.reloj);
+    // no se suelta hasta que el editor acuse recibo: si la pestaña se estaba
+    // recargando justo entonces, el mensaje se pierde y se repite al saludar
+    if (carga.mandado) return;
+    carga.mandado = true;
     puente.ventana.postMessage(
-      { grapa: 'documento', nombre: carga.nombre, bytes: carga.bytes, tarea: carga.tarea || null }, '*');
+      { grapa: 'documento', envio: carga.envio, nombre: carga.nombre, bytes: carga.bytes, tarea: carga.tarea || null }, '*');
     G.aviso(carga.tarea === 'buscable'
       ? 'El editor está leyendo las hojas escaneadas. Al terminar vuelven solas aquí.'
       : 'Documento enviado al editor de texto.', 'ok');
@@ -3618,6 +3624,22 @@
     return objs.map((p) => Object.assign({}, p, { sellos: [] }));
   }
 
+  /**
+   * ¿Esa pestaña es ya un editor abierto? Se le pregunta y se espera un
+   * momento la respuesta. Si lo es, se le manda la hoja tal cual: recargarlo
+   * se llevaba por delante lo que tuviera sin devolver —el navegador paraba
+   * en «¿Salir del sitio?» con la hoja de antes congelada en pantalla— y,
+   * mientras, aquí se daba por muerto y se le cerraba la pestaña.
+   */
+  function saludarEditor(v) {
+    return new Promise((listo) => {
+      const reloj = setTimeout(() => { puente.alSaludar = null; listo(false); }, 3000);
+      puente.alSaludar = () => { clearTimeout(reloj); puente.alSaludar = null; listo(true); };
+      try { v.postMessage({ grapa: 'hola' }, '*'); }
+      catch (e) { clearTimeout(reloj); puente.alSaludar = null; listo(false); }
+    });
+  }
+
   async function editarTexto(cuales, opciones) {
     const tarea = (opciones && opciones.tarea) || null;
     const objs = (cuales && cuales.length) ? cuales
@@ -3639,18 +3661,31 @@
     puente.pendiente = null;
     clearTimeout(puente.reloj);
 
-    const destino = await urlEditorTexto();
+    // una pestaña recién abierta está en blanco; si no, es la de antes
+    let enBlanco;
+    try { enBlanco = v.location.href === 'about:blank'; } catch (e) { enBlanco = false; }
+    const yaAbierto = !enBlanco && await saludarEditor(v);
     if (v.closed) return;
-    try { v.location.replace(destino); } catch (e) { v.location.href = destino; }
+    if (yaAbierto) {
+      try { v.focus(); } catch (e) {}
+    } else {
+      const destino = await urlEditorTexto();
+      if (v.closed) return;
+      try { v.location.replace(destino); } catch (e) { v.location.href = destino; }
 
-    puente.reloj = setTimeout(() => {
-      if (puente.listo || puente.arrancando) return;
-      // Ahí no hay ningún editor: la pestaña solo estorba, y un 404 no explica nada.
-      try { if (puente.ventana && !puente.ventana.closed) puente.ventana.close(); } catch (e) {}
-      G.aviso('Ahí no hay ningún editor, así que cerré la pestaña. Guarda '
-        + '«GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
-        + 'en «Archivo de salida» → «Editor de texto».', 'error');
-    }, 12000);
+      puente.reloj = setTimeout(() => {
+        if (puente.listo || puente.arrancando) return;
+        // Ahí no hay ningún editor: la pestaña solo estorba, y un 404 no explica
+        // nada. Solo se cierra la que abrimos en blanco: una que ya estaba puede
+        // tener algo del usuario.
+        if (enBlanco) {
+          try { if (puente.ventana && !puente.ventana.closed) puente.ventana.close(); } catch (e) {}
+        }
+        G.aviso((enBlanco ? 'Ahí no hay ningún editor, así que cerré la pestaña. ' : 'La pestaña del editor no responde. ')
+          + 'Guarda «GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
+          + 'en «Archivo de salida» → «Editor de texto».', 'error');
+      }, 12000);
+    }
 
     G.cargando(true, objs.length > 1
       ? `Preparando ${objs.length} hojas para el editor…`
@@ -3658,11 +3693,12 @@
     try {
       const bytes = await G.construirPdf(paraElEditor(objs), { alProgresar: (t) => G.progreso(t) });
       const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
-      // para poder devolver la corrección a su sitio exacto
-      puente.enviadas = objs.map((x) => x.uid);
-      puente.tablero = tableroActivo.id;     // a ese tablero vuelve lo corregido, esté donde esté el usuario
-      puente.tarea = tarea;
-      puente.pendiente = { nombre: base + '.pdf', bytes, tarea };
+      // para poder devolver la corrección a su sitio exacto, y a ese tablero
+      // vuelve lo corregido, esté donde esté el usuario
+      const envio = ++puente.ultimo;
+      puente.envios.set(envio, { enviadas: objs.map((x) => x.uid), tablero: tableroActivo.id });
+      for (const k of puente.envios.keys()) if (k <= envio - 5) puente.envios.delete(k);
+      puente.pendiente = { envio, nombre: base + '.pdf', bytes, tarea };
       mandarAlEditor();
     } catch (e) {
       console.error(e);
@@ -3685,26 +3721,49 @@
     // distingue «no hay editor ahí» de «lo hay, pero tarda en arrancar».
     if (d.grapa === 'editor-arrancando') { puente.arrancando = true; return; }
 
-    if (d.grapa === 'editor-listo') { puente.listo = true; mandarAlEditor(); return; }
+    if (d.grapa === 'editor-listo') {
+      puente.listo = true;
+      if (puente.alSaludar) puente.alSaludar();
+      // si se recargó con el envío ya mandado, se le vuelve a mandar
+      if (puente.pendiente) puente.pendiente.mandado = false;
+      mandarAlEditor();
+      return;
+    }
+
+    if (d.grapa === 'documento-recibido') {
+      if (puente.pendiente && puente.pendiente.envio === d.envio) puente.pendiente = null;
+      return;
+    }
+
+    // tenía cambios sin devolver y el usuario prefirió quedárselos
+    if (d.grapa === 'documento-rechazado') {
+      if (puente.pendiente && puente.pendiente.envio === d.envio) puente.pendiente = null;
+      puente.envios.delete(d.envio);
+      G.aviso('El editor tiene cambios que aún no devolviste, así que no se le cambió el documento. '
+        + 'Devuélvelos (o descártalos allí) y vuelve a mandar la hoja.', 'error');
+      return;
+    }
 
     if (d.grapa === 'documento-editado') {
       const bytes = d.bytes instanceof Uint8Array ? d.bytes : new Uint8Array(d.bytes || []);
       if (!bytes.length) { G.aviso('El editor devolvió un documento vacío.', 'error'); return; }
       const base = G.nombreSeguro(String(d.nombre || 'documento'), 'documento').replace(/\.pdf$/i, '');
       const cambios = Number(d.cambios) || 0, buscable = d.tarea === 'buscable' ? d : null;
+      // un editor de antes no dice de qué envío es: será del último
+      const envio = puente.envios.get(d.envio != null ? d.envio : puente.ultimo) || null;
       // Lo corregido vuelve al tablero que mandó las hojas. Si mientras tanto se
       // cambió de tablero, se va a aquel primero: no se mezcla con otro expediente.
-      if (puente.tablero && tableroActivo.id !== puente.tablero) {
-        const origen = tableros.find((x) => x.id === puente.tablero);
+      if (envio && envio.tablero && tableroActivo.id !== envio.tablero) {
+        const origen = tableros.find((x) => x.id === envio.tablero);
         if (!origen) {
-          puente.enviadas = null;
+          envio.enviadas = null;
           G.aviso('El tablero que mandó esas hojas ya se cerró: lo que volvió del editor no se aplicó.', 'error');
           return;
         }
         activarTablero(origen.id, { interno: true });
         G.aviso(`Lo corregido vuelve al tablero ${numeroDe(origen)}.`, 'ok');
       }
-      recibirDelEditor(bytes, base, cambios, buscable);
+      recibirDelEditor(bytes, base, cambios, buscable, envio);
     }
   });
 
@@ -3762,11 +3821,11 @@
    * para no viajar pegados. Si el número no cuadra —porque en el editor se
    * hizo otra cosa— entra como documento aparte y no se toca nada.
    */
-  async function recibirDelEditor(bytes, base, cuantos, buscable) {
-    const enviadas = (puente.enviadas || [])
+  async function recibirDelEditor(bytes, base, cuantos, buscable, envio) {
+    const enviadas = ((envio && envio.enviadas) || [])
       .map((u) => E.paginas.find((x) => x.uid === u))
       .filter(Boolean);
-    puente.enviadas = null;
+    if (envio) envio.enviadas = null;
 
     G.cargando(true, 'Recogiendo lo corregido…');
     try {
@@ -3794,7 +3853,7 @@
         E.seleccion = new Set(r.paginas.map((x) => x.uid));
         // la pestaña del editor sigue abierta con estas hojas: si se corrige algo más
         // y se vuelve a devolver, tiene que reemplazar ESTAS, no entrar como documento nuevo
-        puente.enviadas = r.paginas.map((x) => x.uid);
+        if (envio) envio.enviadas = r.paginas.map((x) => x.uid);
         pintar();
         if (buscable) { avisarBuscables(buscable); return; }
         G.aviso(cuantos
