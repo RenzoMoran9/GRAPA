@@ -255,6 +255,16 @@ otro día con **Guardar** (o **Ctrl+Mayús+S**): la primera vez pide un nombre y
 después actualiza el mismo guardado. **Exportar PDF** (**Ctrl+S**) arma el PDF
 terminado. Todo se queda en tu equipo.
 
+### Imprimir
+Cada hoja y cada paquete traen su botón de **imprimir** (la impresora), y
+también lo hay en «Ver en grande» y en la barra de las hojas marcadas.
+**Imprimir** (o **Ctrl+P**) saca las hojas marcadas o, si no hay ninguna, todas
+las que estás viendo. Salen como al exportar, con sus folios, firmas y sellos,
+y sin comprimir. Se abre el cuadro de impresión del navegador, donde eliges la
+impresora, las copias y si va a doble cara. Abriendo `Grapa.html` desde el
+disco, el navegador no deja imprimir desde dentro de la página: el PDF se abre
+en otra pestaña y ahí se imprime con Ctrl+P.
+
 ### Carpeta de destino
 Si eliges una carpeta, el PDF terminado se escribe ahí directamente, sin pasar
 por Descargas, y al dividir se escriben todos los archivos de una. Si ya existe
@@ -409,6 +419,7 @@ salga tal como se ve.
 | `P` | Plegar o desplegar el panel lateral |
 | `Ctrl+O` | Abrir archivos |
 | `Ctrl+S` | Exportar PDF |
+| `Ctrl+P` | Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta) |
 | `Ctrl+Mayús+S` | Guardar el expediente (para retomarlo otro día) |
 | `Alt+1`, `Alt+2`, `Alt+3` | Cambiar de tablero |
 | `Ctrl+F` | Buscar una palabra en todas las hojas · `Enter` pasa a la siguiente |

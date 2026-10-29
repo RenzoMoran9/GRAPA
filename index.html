@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261028a">
+<link rel="stylesheet" href="assets/styles.css?v=20261029a">
 </head>
 <body>
 
@@ -33,6 +33,7 @@
   <g id="i-nuevo"><path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z"/><path d="M14 3v4h4"/><path d="M12 11v6"/><path d="M9 14h6"/></g>
   <g id="i-abrir"><path d="M4 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4.5l2 3H18a2 2 0 0 1 2 2v1"/><path d="m3.4 20 2.3-7.2a1 1 0 0 1 1-.8H22l-2.3 7.2a1 1 0 0 1-1 .8Z"/></g>
   <g id="i-externo"><path d="M15 3h6v6"/><path d="M10.5 13.5 21 3"/><path d="M18 13.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5.5"/></g>
+  <g id="i-imprimir"><path d="M6.5 9V3.5h11V9"/><path d="M6.5 17.5h-2a1.5 1.5 0 0 1-1.5-1.5v-5.5A1.5 1.5 0 0 1 4.5 9h15a1.5 1.5 0 0 1 1.5 1.5V16a1.5 1.5 0 0 1-1.5 1.5h-2"/><path d="M6.5 14h11v6.5h-11z"/></g>
   <g id="i-guardar"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M3.5 17v2a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2"/></g>
   <g id="i-comparar"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></g>
   <g id="i-revisar"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="m9 12.5 2 2 4-4.5"/></g>
@@ -84,6 +85,7 @@
         <span class="menu-sep" role="separator"></span>
         <button class="menu-item" role="menuitem" data-clic="#btnGuardarExp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Guardar expediente<kbd>Ctrl+Mayús+S</kbd></button>
         <button class="menu-item" role="menuitem" data-clic="#btnGuardar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF<kbd>Ctrl+S</kbd></button>
+        <button class="menu-item" role="menuitem" data-clic="#btnImprimir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg> Imprimir<kbd>Ctrl+P</kbd></button>
         <span class="menu-sep" role="separator"></span>
         <button class="menu-item" role="menuitem" data-clic="#btnEditarTexto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
         <button class="menu-item" role="menuitem" id="btnEditorExterno" title="Guarda el PDF en Descargas y abre otra web para que lo subas ahí"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a otra web</button>
@@ -131,6 +133,7 @@
     <span class="separador-vertical"></span>
     <button class="btn btn-secundario" id="btnAbrir" title="Abrir archivos (Ctrl+O)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir</button>
     <button class="btn btn-secundario" id="btnEditarTexto" title="Abre el editor de texto y le pasa las hojas marcadas (o todas, si no hay ninguna marcada)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
+    <button class="btn btn-secundario" id="btnImprimir" title="Imprime las hojas marcadas, o todas las que estás viendo si no hay ninguna marcada (Ctrl+P)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg> Imprimir</button>
     <button class="btn btn-secundario" id="btnGuardarExp" title="Guarda este expediente para retomarlo otro día (Ctrl+Mayús+S). Se queda en este navegador."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Guardar</button>
     <button class="btn btn-primario" id="btnGuardar" title="Arma el PDF terminado y lo baja (Ctrl+S)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF</button>
   </div>
@@ -480,6 +483,7 @@
           <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
           <button class="btn btn-mini" id="lectorCopiarTexto" title="Marca con el cursor un trozo de la hoja y se copia su texto (también si es un escaneo). T"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copiar-texto"/></svg> Copiar texto</button>
           <button class="btn btn-mini" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
+          <button class="btn btn-mini" id="lectorImprimir" title="Imprimir esta hoja" aria-label="Imprimir esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg></button>
           <button class="btn btn-mini" id="lectorEditarTexto" title="Corregir el texto de esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Texto</button>
           <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
           <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
@@ -530,6 +534,7 @@
       <button class="bs-btn" id="btnSaltoPos">Mover</button>
       <span class="bs-sep"></span>
       <button class="bs-btn" id="btnDescargarSel" title="Baja las hojas marcadas en un solo PDF, a Descargas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Extraer</button>
+      <button class="bs-btn" id="btnImprimirSel" title="Imprime solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg> Imprimir</button>
       <button class="bs-btn" id="btnComparar" title="Abre en grande, una al lado de otra, solo las hojas marcadas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-comparar"/></svg> Comparar</button>
       <span class="enviar-caja">
         <button class="bs-btn bs-destacado" id="btnEnviar" type="button" hidden title="Copia o mueve las hojas marcadas a otro tablero">Enviar a… <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
@@ -750,6 +755,7 @@
         <li><strong>Firma</strong>: crea tu firma una sola vez desde un escaneo y colócala con un clic donde la necesites.</li>
         <li><strong>Folia</strong> el expediente. Por defecto se numera como en papel: la última hoja es el folio 1 y se cuenta hacia arriba, de modo que lo que adjuntes encima no obliga a renumerar lo anterior.</li>
         <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
+        <li><strong>Imprimir:</strong> cada hoja y cada paquete tienen su botón de imprimir; <strong>Imprimir</strong> (o Ctrl+P) saca las hojas marcadas, o todas las que estás viendo. Salen con sus folios y firmas, como al exportar.</li>
         <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
         <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 3) y avanzas con los tres en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero.</li>
         <li><strong>Ubicar formatos:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong>. Pdflash lee el título de cada hoja (también en escaneos) y deja marcados el Formato 1, el Formato 5 y la hoja de cotización de cada empresa, si la trae. Desde ahí las ves una al lado de otra o las sacas a un PDF aparte.</li>
@@ -759,6 +765,7 @@
       <table class="tabla-atajos">
         <tr><td>Ctrl+O</td><td>Abrir archivos</td></tr>
         <tr><td>Ctrl+S</td><td>Exportar PDF</td></tr>
+        <tr><td>Ctrl+P</td><td>Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta)</td></tr>
         <tr><td>Ctrl+Mayús+S</td><td>Guardar el expediente (para retomarlo después)</td></tr>
         <tr><td>Alt+1, 2 o 3</td><td>Cambiar de tablero</td></tr>
         <tr><td>Ctrl+F</td><td>Buscar una palabra en todas las hojas · Enter pasa a la siguiente</td></tr>
@@ -787,14 +794,14 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20261028a"></script>
-<script src="assets/buscar.js?v=20261028a"></script>
-<script src="assets/revisar.js?v=20261028a"></script>
-<script src="assets/ocr.js?v=20261028a"></script>
-<script src="assets/ofertas.js?v=20261028a"></script>
-<script src="assets/office.js?v=20261028a"></script>
-<script src="assets/expedientes.js?v=20261028a"></script>
-<script src="assets/firmas.js?v=20261028a"></script>
-<script src="assets/app.js?v=20261028a"></script>
+<script src="assets/core.js?v=20261029a"></script>
+<script src="assets/buscar.js?v=20261029a"></script>
+<script src="assets/revisar.js?v=20261029a"></script>
+<script src="assets/ocr.js?v=20261029a"></script>
+<script src="assets/ofertas.js?v=20261029a"></script>
+<script src="assets/office.js?v=20261029a"></script>
+<script src="assets/expedientes.js?v=20261029a"></script>
+<script src="assets/firmas.js?v=20261029a"></script>
+<script src="assets/app.js?v=20261029a"></script>
 </body>
 </html>

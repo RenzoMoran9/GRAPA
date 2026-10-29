@@ -494,6 +494,7 @@
       ['Ver', 'Abrir este paquete y trabajar sus hojas', () => abrirPaquete(paquete.id)],
       [icono('editar'), 'Cambiar el nombre', () => renombrarPaquete(paquete.id)],
       [icono('mas'), 'Añadir más archivos a este paquete', () => anadirAPaquete(paquete.id)],
+      [icono('imprimir'), 'Imprimir el paquete entero', () => imprimirHojas(paginas, `«${paquete.nombre}»`)],
       [icono('cerrar'), 'Quitar el paquete entero del taller', async () => {
         const sigue = await G.confirmar({
           titulo: 'Quitar el paquete',
@@ -649,6 +650,7 @@
       [icono('firma'), 'Colocar firma o sello', () => abrirFirmar(pagina)],
       [icono('texto'), 'Corregir el texto de esta hoja', () => editarTexto([pagina])],
       [icono('guardar'), 'Descargar solo esta hoja', () => descargarHoja(pagina)],
+      [icono('imprimir'), 'Imprimir esta hoja', () => imprimirHojas([pagina], 'la hoja ' + (E.paginas.indexOf(pagina) + 1))],
       [icono('duplicar'), 'Duplicar', () => { marcar(); duplicar([pagina]); }],
       [icono('borrar'), 'Eliminar', () => { marcar(); eliminar([pagina]); }, 'peligro'],
     ].forEach(([txt, titulo, fn, clase]) => {
@@ -3200,6 +3202,87 @@
     }
   }
 
+  /* ---------------- imprimir ----------------
+     Se arma el PDF de esas hojas tal como saldría al exportarlo —con sus
+     folios, firmas y sellos—, pero sin comprimir: al papel va el detalle
+     entero. Ese PDF se carga en un marco invisible y se le pide al visor de
+     PDF del navegador que lo imprima, así sale su cuadro de impresión de
+     siempre (impresora, copias, a doble cara…). Imprimir la pantalla de
+     Pdflash no serviría: lo que se ve son miniaturas. */
+  let marcoImpresion = null;
+
+  async function imprimirHojas(objs, que) {
+    if (!objs || !objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    G.cargando(true, objs.length === 1 ? 'Preparando la hoja para imprimir…'
+      : `Preparando ${objs.length} hojas para imprimir…`);
+    let bytes;
+    try {
+      bytes = await G.construirPdf(objs, Object.assign(opcionesSalida(objs), { comprimir: null }));
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo preparar la impresión: ' + e.message, 'error');
+      return;
+    } finally {
+      G.cargando(false);
+    }
+    mandarAImprimir(bytes, que || (objs.length === 1 ? 'la hoja' : `las ${objs.length} hojas`));
+  }
+
+  function mandarAImprimir(bytes, que) {
+    // la impresión anterior ya salió: se suelta su PDF de la memoria
+    if (marcoImpresion) {
+      URL.revokeObjectURL(marcoImpresion.dataset.url);
+      marcoImpresion.remove();
+      marcoImpresion = null;
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    // Si el navegador no deja imprimir desde el marco (Firefox, Safari), se
+    // abre el PDF en otra pestaña, que trae su propio botón de imprimir.
+    const enOtraPestana = () => {
+      const v = window.open(url, '_blank');
+      if (v) G.aviso(`Abrí ${que} en otra pestaña: imprime desde ahí con Ctrl+P.`, 'ok');
+      else G.aviso('El navegador bloqueó la pestaña para imprimir. Permite las ventanas emergentes '
+        + 'para Pdflash y vuelve a intentarlo.', 'error');
+    };
+    const f = document.createElement('iframe');
+    f.className = 'marco-impresion';
+    f.title = 'Impresión';
+    f.tabIndex = -1;
+    f.setAttribute('aria-hidden', 'true');
+    f.dataset.url = url;
+    let lanzado = false;
+    f.addEventListener('load', () => {
+      if (lanzado) return;
+      lanzado = true;
+      // un respiro para que el visor de PDF termine de montarse
+      setTimeout(() => {
+        try {
+          f.contentWindow.focus();
+          f.contentWindow.print();
+        } catch (e) {
+          enOtraPestana();
+        }
+      }, 400);
+    });
+    f.src = url;
+    document.body.appendChild(f);
+    marcoImpresion = f;
+  }
+
+  /** Lo que se ve: la hoja del lector, las marcadas o, si no hay, todas. */
+  function imprimirLoQueSeVe() {
+    if (!E.paginas.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    if (lector.abierto) {
+      const p = paginaActualLector();
+      if (p) { imprimirHojas([p], 'la hoja ' + (E.paginas.indexOf(p) + 1)); return; }
+    }
+    const marcadas = hojasVisibles().filter((p) => E.seleccion.has(p.uid));
+    if (marcadas.length) { imprimirHojas(marcadas, marcadas.length === 1 ? 'la hoja marcada' : `las ${marcadas.length} hojas marcadas`); return; }
+    const todas = hojasVisibles();
+    const paq = paqueteAbierto && E.paquetes.get(paqueteAbierto);
+    imprimirHojas(todas, paq ? `«${paq.nombre}»` : (todas.length === 1 ? 'la hoja' : `las ${todas.length} hojas`));
+  }
+
   /* ---------------- editor externo ---------------- */
   const EDITOR_POR_DEFECTO = 'https://pdfguru.com/app/account';
   const CLAVE_EDITOR = 'grapa.editor.url';
@@ -5028,6 +5111,8 @@
     if (ctrl && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
     if (ctrl && ev.key.toLowerCase() === 's' && ev.shiftKey) { ev.preventDefault(); guardarExpedienteActual(); return; }
     if (ctrl && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
+    // Ctrl+P imprime las hojas, no la pantalla de Pdflash
+    if (ctrl && !ev.altKey && ev.key.toLowerCase() === 'p') { ev.preventDefault(); imprimirLoQueSeVe(); return; }
     // Ctrl+F busca dentro del expediente: la del navegador no ve el texto de
     // las hojas, que en pantalla son imágenes
     if (ctrl && ev.key.toLowerCase() === 'f' && !$$('.modal:not([hidden])').length) {
@@ -5349,6 +5434,12 @@
     });
     $('#btnVolverPaquetes').addEventListener('click', cerrarPaquete);
     $('#btnDescargarSel').addEventListener('click', descargarSeleccion);
+    $('#btnImprimirSel').addEventListener('click', () => {
+      const objs = seleccionadas();
+      if (!objs.length) { G.aviso('Marca primero las hojas que quieres imprimir.', 'error'); return; }
+      imprimirHojas(objs, objs.length === 1 ? 'la hoja marcada' : `las ${objs.length} hojas marcadas`);
+    });
+    $('#btnImprimir').addEventListener('click', imprimirLoQueSeVe);
     $('#buscarGuardados').addEventListener('input', () => pintarGuardados());
     $('#pesoSalida').addEventListener('change', (ev) => {
       pintarNotaPeso();
@@ -5524,6 +5615,10 @@
     $('#lectorFirmar').addEventListener('click', () => {
       const p = paginaActualLector();
       if (p) abrirFirmar(p);
+    });
+    $('#lectorImprimir').addEventListener('click', () => {
+      const p = paginaActualLector();
+      if (p) imprimirHojas([p], 'la hoja ' + (E.paginas.indexOf(p) + 1));
     });
     $('#lectorEditarTexto').addEventListener('click', () => {
       const p = paginaActualLector();
