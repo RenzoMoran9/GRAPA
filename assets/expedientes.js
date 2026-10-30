@@ -45,6 +45,71 @@
     try { localStorage.setItem('pdflash.cambio', JSON.stringify(msg)); } catch (e) {}
   }
 
+  /* =========================================================
+     Cada ventana, su autoguardado
+     Con dos ventanas de Pdflash abiertas a la vez, las dos escribían en el
+     mismo autoguardado («__auto1») y la última pisaba a la otra: al volver,
+     el trabajo de una había desaparecido. Ahora cada ventana firma los suyos
+     con un número propio, nuevo en cada carga, y al arrancar solo se ofrece
+     recuperar lo de las ventanas que ya no están abiertas.
+     Para saber cuáles siguen vivas, cada una sostiene un cerrojo del
+     navegador (Web Locks) mientras está abierta; donde no lo hay, deja un
+     latido en localStorage cada 10 segundos.
+     ========================================================= */
+  const PREFIJO_CERROJO = 'pdflash-ventana:';
+  const PREFIJO_LATIDO = 'pdflash.latido:';
+  const idPropio = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const hayCerrojos = () => !!(navigator.locks && navigator.locks.request && navigator.locks.query);
+
+  function latir() {
+    try { localStorage.setItem(PREFIJO_LATIDO + idPropio, String(Date.now())); } catch (e) {}
+  }
+  const ventanaLista = (async () => {
+    if (hayCerrojos()) {
+      await new Promise((listo) => {
+        try {
+          // se queda con él mientras la pestaña viva: la promesa no se resuelve nunca
+          navigator.locks.request(PREFIJO_CERROJO + idPropio, () => { listo(); return new Promise(() => {}); })
+            .catch(() => listo());
+        } catch (e) { listo(); }
+      });
+    }
+    latir();
+    setInterval(latir, 10000);
+    window.addEventListener('pagehide', () => { try { localStorage.removeItem(PREFIJO_LATIDO + idPropio); } catch (e) {} });
+    window.addEventListener('pageshow', (ev) => { if (ev.persisted) latir(); });
+  })();
+
+  /** Los números de las OTRAS ventanas de Pdflash que siguen abiertas. */
+  async function ventanasVivas() {
+    await ventanaLista;
+    const vivas = new Set();
+    let porCerrojo = false;
+    if (hayCerrojos()) {
+      try {
+        const q = await navigator.locks.query();
+        (q.held || []).concat(q.pending || []).forEach((c) => {
+          if (c.name && c.name.startsWith(PREFIJO_CERROJO)) vivas.add(c.name.slice(PREFIJO_CERROJO.length));
+        });
+        porCerrojo = true;
+      } catch (e) { /* sin consulta: se mira el latido */ }
+    }
+    try {
+      const ahora = Date.now();
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(PREFIJO_LATIDO)) continue;
+        const edad = ahora - Number(localStorage.getItem(k) || 0);
+        if (edad > 86400000) { localStorage.removeItem(k); continue; }   // de otro día: se limpia
+        if (!porCerrojo && edad < 30000) vivas.add(k.slice(PREFIJO_LATIDO.length));
+      }
+    } catch (e) {}
+    vivas.delete(idPropio);
+    return vivas;
+  }
+
+  G.ventana = { id: () => idPropio, lista: ventanaLista, vivas: ventanasVivas };
+
   function abrir() {
     if (promesaBd) return promesaBd;
     promesaBd = new Promise((ok, no) => {

@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261029a">
+<link rel="stylesheet" href="assets/styles.css?v=20261030a">
 </head>
 <body>
 
@@ -411,7 +411,15 @@
          la altura del título, y no encima del panel de herramientas. -->
     <div class="tableros" id="tableros">
       <div class="tableros-lista" id="tablerosLista" role="tablist" aria-label="Tableros abiertos"></div>
-      <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 3 a la vez. Alt+1, Alt+2 y Alt+3 cambian de tablero."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> Nuevo tablero</button>
+      <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 10 a la vez. Alt+1 … Alt+9 (y Alt+0, el décimo) cambian de tablero." aria-label="Nuevo tablero"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> <span class="tablero-nuevo-txt">Nuevo tablero</span></button>
+      <span class="lista-tableros-caja">
+        <button class="tableros-todos" id="btnTodosTableros" type="button" hidden aria-haspopup="true" aria-expanded="false" title="Ver todos los tableros: portada, hojas y si están guardados, foliados y firmados" aria-label="Ver todos los tableros abiertos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
+        <div class="todos-tableros" id="menuTodosTableros" hidden></div>
+      </span>
+      <span class="sin-guardar-caja">
+        <button class="tableros-sin-guardar" id="btnSinGuardar" type="button" hidden aria-haspopup="true" aria-expanded="false"><i class="punto-sucio"></i> <span id="sinGuardarTexto">sin guardar</span></button>
+        <div class="menu-enviar menu-tira" id="menuSinGuardar" hidden></div>
+      </span>
       <span class="tableros-cupo" id="tablerosCupo"></span>
     </div>
 
@@ -734,6 +742,7 @@
       <p class="confirmar-mensaje" id="confirmarMensaje"></p>
       <div class="fila-botones">
         <button class="btn btn-suave" id="confirmarNo">Cancelar</button>
+        <button class="btn btn-suave" id="confirmarOtro" hidden></button>
         <button class="btn btn-primario" id="confirmarSi">Continuar</button>
       </div>
     </div>
@@ -757,7 +766,8 @@
         <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
         <li><strong>Imprimir:</strong> cada hoja y cada paquete tienen su botón de imprimir; <strong>Imprimir</strong> (o Ctrl+P) saca las hojas marcadas, o todas las que estás viendo. Salen con sus folios y firmas, como al exportar.</li>
         <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
-        <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 3) y avanzas con los tres en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero.</li>
+        <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 10) y avanzas con todos en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero. La flecha junto a las pestañas los muestra todos de un vistazo, con su portada y si están guardados, foliados y firmados.</li>
+        <li><strong>Lo que no está guardado:</strong> la pestaña lleva un punto naranja y, arriba a la derecha, <strong>«N sin guardar»</strong> dice cuántos expedientes tienen cambios sin guardar; al pulsarlo los ves y los guardas de uno en uno o todos a la vez. Al cerrar un tablero, vaciarlo o reemplazarlo te ofrece <strong>Guardar y …</strong> antes de perder nada, y si llevas 10 minutos sin guardar, te lo recuerda.</li>
         <li><strong>Ubicar formatos:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong>. Pdflash lee el título de cada hoja (también en escaneos) y deja marcados el Formato 1, el Formato 5 y la hoja de cotización de cada empresa, si la trae. Desde ahí las ves una al lado de otra o las sacas a un PDF aparte.</li>
         <li><strong>Copiar texto:</strong> en «Ver en grande», pulsa <strong>Copiar texto</strong> (o la tecla T), arrastra un recuadro sobre lo que quieras y queda copiado, aunque la hoja sea un escaneo. Sirve para pasar razón social, RUC o precios a otro programa sin escribirlos.</li>
       </ol>
@@ -767,7 +777,7 @@
         <tr><td>Ctrl+S</td><td>Exportar PDF</td></tr>
         <tr><td>Ctrl+P</td><td>Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta)</td></tr>
         <tr><td>Ctrl+Mayús+S</td><td>Guardar el expediente (para retomarlo después)</td></tr>
-        <tr><td>Alt+1, 2 o 3</td><td>Cambiar de tablero</td></tr>
+        <tr><td>Alt+1 … Alt+9, Alt+0</td><td>Cambiar de tablero (Alt+0 es el décimo)</td></tr>
         <tr><td>Ctrl+F</td><td>Buscar una palabra en todas las hojas · Enter pasa a la siguiente</td></tr>
         <tr><td>Ctrl+Z / Ctrl+Y</td><td>Deshacer / Rehacer</td></tr>
         <tr><td>Ctrl+A</td><td>Seleccionar todas las páginas</td></tr>
@@ -794,14 +804,14 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/core.js?v=20261029a"></script>
-<script src="assets/buscar.js?v=20261029a"></script>
-<script src="assets/revisar.js?v=20261029a"></script>
-<script src="assets/ocr.js?v=20261029a"></script>
-<script src="assets/ofertas.js?v=20261029a"></script>
-<script src="assets/office.js?v=20261029a"></script>
-<script src="assets/expedientes.js?v=20261029a"></script>
-<script src="assets/firmas.js?v=20261029a"></script>
-<script src="assets/app.js?v=20261029a"></script>
+<script src="assets/core.js?v=20261030a"></script>
+<script src="assets/buscar.js?v=20261030a"></script>
+<script src="assets/revisar.js?v=20261030a"></script>
+<script src="assets/ocr.js?v=20261030a"></script>
+<script src="assets/ofertas.js?v=20261030a"></script>
+<script src="assets/office.js?v=20261030a"></script>
+<script src="assets/expedientes.js?v=20261030a"></script>
+<script src="assets/firmas.js?v=20261030a"></script>
+<script src="assets/app.js?v=20261030a"></script>
 </body>
 </html>

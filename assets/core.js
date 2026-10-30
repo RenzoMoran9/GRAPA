@@ -224,6 +224,9 @@
     await G.prepararMotor();
     G.olvidarDocs();
     for (const f of fuentes) {
+      // Si otro tablero ya la tiene abierta, se usa esa: volver a abrirla
+      // dejaba el documento anterior de pdf.js ocupando memoria sin dueño.
+      if (G.estado.fuentes.has(f.id)) continue;
       const doc = await pdfjsLib.getDocument({
         data: f.bytes.slice(0),
         isEvalSupported: false,

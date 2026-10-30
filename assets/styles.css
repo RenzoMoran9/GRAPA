@@ -530,6 +530,9 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 }
 .aviso.ok{border-left-color:var(--verde)}
 .aviso.error{border-left-color:var(--rojo)}
+/* un aviso con botón («Guardar») sí recibe el clic */
+.aviso:has(.aviso-accion){pointer-events:auto}
+.aviso-accion{display:inline-flex;margin:8px 0 0;font-weight:600}
 @keyframes entra{from{opacity:0;transform:translateY(8px)}}
 .cargando{
   position:fixed;inset:0;background:rgba(12,16,22,.5);display:grid;place-items:center;z-index:90;
@@ -936,17 +939,26 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .buscar-escaneadas .nota{margin:0 0 8px}
 
 
-/* ---------- tableros: hasta tres expedientes a la vez ---------- */
+/* ---------- tableros: hasta diez expedientes a la vez ---------- */
 .tableros{
   height:var(--tableros-alto);box-sizing:border-box;display:flex;align-items:flex-end;gap:6px;flex:none;
   padding:0 22px;background:var(--fondo-3);border-bottom:1px solid var(--borde);
   position:relative;z-index:20;
 }
-.tableros-lista{display:flex;align-items:flex-end;gap:2px;min-width:0;flex:0 1 auto}
+/* La tira se desplaza de lado cuando no caben (la rueda del ratón también la
+   mueve). La barra de desplazamiento no se ve: la pestaña activa siempre se
+   trae a la vista y los atajos Alt+número llegan a cualquiera. */
+.tableros-lista{
+  display:flex;align-items:flex-end;gap:2px;min-width:0;flex:0 1 auto;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  /* un píxel de más abajo: la pestaña activa tapa la raya de la barra */
+  height:calc(100% + 1px);margin-bottom:-1px;
+}
+.tableros-lista::-webkit-scrollbar{display:none}
 .tablero{
   --color-tablero:var(--acento);
   position:relative;display:flex;align-items:center;gap:8px;height:34px;box-sizing:border-box;
-  min-width:150px;max-width:300px;padding:0 6px 0 12px;
+  flex:0 1 auto;min-width:150px;max-width:300px;padding:0 6px 0 12px;
   border:1px solid transparent;border-bottom:0;border-radius:9px 9px 0 0;
   color:var(--texto-2);font-size:13px;font-weight:500;cursor:pointer;user-select:none;
   transition:background .12s,color .12s;
@@ -964,7 +976,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .tablero-punto{width:8px;height:8px;border-radius:50%;background:var(--color-tablero);flex:none}
 .tablero-nombre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tablero-meta{color:var(--texto-3);font-size:12px;font-weight:400;flex:none}
-.tablero-estado{display:none;width:7px;height:7px;border-radius:50%;background:var(--texto-2);margin-left:auto;flex:none}
+.tablero-estado{display:none;width:7px;height:7px;border-radius:50%;background:var(--aviso);margin-left:auto;flex:none}
 .tablero.est-nuevo .tablero-estado,.tablero.est-sucio .tablero-estado{display:block}
 .tablero-estado + .tablero-cerrar{margin-left:0}
 .tablero-cerrar{
@@ -984,8 +996,92 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .tablero-nuevo:hover{border-style:solid;color:var(--texto);background:var(--fondo-2)}
 .tablero-nuevo .ico{width:14px;height:14px}
 .tablero-nuevo[hidden]{display:none}
-.tableros-cupo{align-self:center;margin-left:auto;font-size:12px;color:var(--texto-3)}
+.tableros-cupo{align-self:center;margin-left:auto;font-size:12px;color:var(--texto-3);white-space:nowrap;flex:none}
 .tableros-cupo.lleno{padding:3px 9px;border:1px dashed var(--borde);border-radius:7px}
+.tablero-nuevo{flex:none}
+/* con más de cuatro, pestañas estrechas: el número de hojas sale al apuntar */
+.tableros.muchos .tablero{min-width:150px;max-width:210px;gap:6px;padding-left:10px}
+.tableros.muchos .tablero:not(.activo):not(:hover):not(:focus-within) .tablero-cerrar{display:none}
+.tableros.muchos .tablero-meta{display:none}
+.tableros.muchos .tablero-nuevo{padding:0 7px}
+.tableros.muchos .tablero-nuevo-txt{display:none}
+
+/* lo que no está guardado, a la vista aunque su pestaña no se vea */
+.sin-guardar-caja{position:relative;align-self:center;flex:none;margin-left:auto}
+.sin-guardar-caja + .tableros-cupo{margin-left:4px}
+.tableros-sin-guardar{
+  display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--aviso) 45%,var(--borde));
+  background:color-mix(in srgb,var(--aviso) 10%,var(--fondo-2));color:var(--aviso);
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.tableros-sin-guardar:hover{border-color:var(--aviso)}
+.tableros-sin-guardar[hidden]{display:none}
+/* los menús de la tira bajan (el de «Enviar a…» sube) y se ciñen al borde derecho */
+.menu-enviar.menu-tira{
+  bottom:auto;top:calc(100% + 8px);left:auto;right:0;transform:none;
+  min-width:360px;max-width:min(440px,calc(100vw - 32px));max-height:min(70vh,560px);overflow-y:auto;
+}
+.menu-tira .menu-enviar-nombre{display:flex;flex-direction:column;line-height:1.25}
+.menu-tira .menu-enviar-nombre b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.menu-tira .menu-enviar-nombre small{font-size:11.5px;color:var(--texto-3)}
+.menu-tira .menu-enviar-nombre small.sucio{color:var(--aviso)}
+.menu-tira .menu-enviar-fila.actual{background:var(--fondo-3)}
+.menu-tira .menu-enviar-fila[role="button"]{cursor:pointer}
+.menu-sin-guardar-todos{margin-top:6px}
+.menu-tira-atajo{font:inherit;font-size:11px;color:var(--texto-3);flex:none;padding-right:4px}
+
+/* todos los tableros de un vistazo: se despliega bajo la tira, a lo ancho del taller */
+.lista-tableros-caja{align-self:center;flex:none}
+.todos-tableros{
+  position:absolute;top:calc(100% + 6px);right:22px;z-index:60;
+  width:min(980px,calc(100% - 44px));max-height:min(72vh,640px);overflow:auto;
+  padding:14px;display:flex;flex-direction:column;gap:12px;
+  background:var(--fondo-2);color:var(--texto);border:1px solid var(--borde);border-radius:var(--radio);box-shadow:var(--sombra-fuerte);
+}
+.todos-tableros[hidden]{display:none}
+.tt-cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px}
+.tt-pendientes{font-size:12px;font-weight:600;color:var(--aviso)}
+.tt-cab-acciones{margin-left:auto;display:flex;gap:6px}
+.tt-rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.tt-tarjeta{
+  --color-tablero:var(--acento);position:relative;display:flex;flex-direction:column;min-width:0;
+  border:1px solid var(--borde);border-radius:10px;overflow:hidden;background:var(--fondo);cursor:pointer;
+  transition:border-color .12s,box-shadow .12s;
+}
+.tt-tarjeta::before{content:"";height:4px;background:var(--color-tablero);flex:none}
+.tt-tarjeta:hover{border-color:var(--texto-3)}
+.tt-tarjeta:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.tt-tarjeta.actual{box-shadow:0 0 0 2px var(--color-tablero)}
+.tt-portada{position:relative;height:118px;background:var(--fondo-3);display:flex;justify-content:center;align-items:flex-start;overflow:hidden;padding-top:12px}
+.tt-portada img{width:52%;height:auto;max-width:100%;background:#fff;border-radius:2px;box-shadow:0 1px 8px rgba(0,0,0,.16)}
+.tt-num{position:absolute;left:8px;top:8px;min-width:20px;text-align:center;background:var(--color-tablero);color:#fff;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 6px;font-variant-numeric:tabular-nums}
+.tt-blanco{align-self:center;font-size:12px;color:var(--texto-3)}
+.tt-cuerpo{display:flex;flex-direction:column;gap:6px;padding:10px 11px 11px;flex:1}
+.tt-nombre{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.tt-meta{font-size:11.5px;color:var(--texto-3)}
+.tt-chips{display:flex;flex-wrap:wrap;gap:4px}
+.tt-chip{font-size:11px;border-radius:999px;padding:0 8px;border:1px solid var(--borde);color:var(--texto-2);background:var(--fondo-2);white-space:nowrap}
+.tt-chip.ok{color:var(--verde);border-color:color-mix(in srgb,var(--verde) 40%,var(--borde))}
+.tt-chip.no{color:var(--aviso);font-weight:600;border-color:color-mix(in srgb,var(--aviso) 45%,var(--borde));background:color-mix(in srgb,var(--aviso) 9%,var(--fondo-2))}
+.tt-acciones{display:flex;gap:6px;margin-top:auto;padding-top:4px}
+.tt-acciones .btn{flex:1}
+/* «Guardar» es lo principal en las tarjetas y en el menú de lo que no está guardado */
+.tt-acciones .btn-mini.btn-primario,.tt-cab .btn-mini.btn-primario,.menu-tira .btn-mini.btn-primario{
+  background:var(--acento);color:var(--sobre-acento);font-weight:600}
+.tt-acciones .btn-mini.btn-primario:hover:not(:disabled),.tt-cab .btn-mini.btn-primario:hover:not(:disabled),
+.menu-tira .btn-mini.btn-primario:hover:not(:disabled){background:var(--acento-oscuro);color:var(--sobre-acento)}
+.tableros-todos{
+  display:inline-grid;place-items:center;width:28px;height:26px;padding:0;border:1px solid var(--borde);
+  border-radius:7px;background:var(--fondo-2);color:var(--texto-2);cursor:pointer;
+}
+.tableros-todos:hover{color:var(--texto);border-color:var(--texto-3)}
+.tableros-todos .ico{width:15px;height:15px}
+.tableros-todos[hidden]{display:none}
+/* un degradado avisa de que hay más pestañas a un lado */
+.tableros-lista.mas-izq{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px);mask-image:linear-gradient(90deg,transparent,#000 28px)}
+.tableros-lista.mas-der{-webkit-mask-image:linear-gradient(270deg,transparent,#000 28px);mask-image:linear-gradient(270deg,transparent,#000 28px)}
+.tableros-lista.mas-izq.mas-der{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
 
 /* enviar hojas a otro tablero */
 .enviar-caja{position:relative;display:inline-flex}
