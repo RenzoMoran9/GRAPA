@@ -9,17 +9,26 @@
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
   /* ---------------- avisos y capa de carga ---------------- */
-  G.aviso = function (texto, tipo) {
+  /** «accion» ({texto, fn}) pone un botón en el aviso, y entonces dura más. */
+  G.aviso = function (texto, tipo, accion) {
     const caja = $('#avisos');
     const el = document.createElement('div');
     el.className = 'aviso ' + (tipo || '');
     el.textContent = texto;
+    if (accion && accion.texto && accion.fn) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-mini aviso-accion';
+      b.textContent = accion.texto;
+      b.addEventListener('click', () => { el.remove(); accion.fn(); });
+      el.appendChild(b);
+    }
     caja.appendChild(el);
     setTimeout(() => {
       el.style.transition = 'opacity .3s';
       el.style.opacity = '0';
       setTimeout(() => el.remove(), 320);
-    }, tipo === 'error' ? 5200 : 3200);
+    }, accion ? 9000 : tipo === 'error' ? 5200 : 3200);
   };
 
   /**
@@ -64,34 +73,52 @@
     });
   };
 
+  /**
+   * Devuelve true (aceptar), false (cancelar) o, si se pidió una tercera
+   * salida con «otro», 'otro'. Sirve para «Guardar y cerrar» / «Cerrar sin
+   * guardar» / «Cancelar»: antes solo se podía perder lo hecho o volver atrás.
+   */
   G.confirmar = function (opciones) {
     const o = opciones || {};
     return new Promise((resolve) => {
       const modal = $('#modalConfirmar');
       const si = $('#confirmarSi');
       const no = $('#confirmarNo');
+      const otro = $('#confirmarOtro');
       $('#confirmarTitulo').textContent = o.titulo || '¿Continuar?';
       $('#confirmarMensaje').textContent = o.mensaje || '';
       si.textContent = o.aceptar || 'Continuar';
       si.className = 'btn ' + (o.peligro ? 'btn-primario btn-riesgo' : 'btn-primario');
+      otro.hidden = !o.otro;
+      otro.textContent = o.otro || '';
+      otro.className = 'btn btn-suave' + (o.otroPeligro ? ' btn-peligro-suave' : '');
 
       const cerrar = (valor) => {
         modal.hidden = true;
         si.removeEventListener('click', alSi);
         no.removeEventListener('click', alNo);
+        otro.removeEventListener('click', alOtro);
         modal.removeEventListener('click', alFondo);
         document.removeEventListener('keydown', alTecla, true);
         resolve(valor);
       };
       const alSi = () => cerrar(true);
       const alNo = () => cerrar(false);
+      const alOtro = () => cerrar('otro');
       const alFondo = (ev) => { if (ev.target === modal) cerrar(false); };
       const alTecla = (ev) => {
         if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(false); }
-        else if (ev.key === 'Enter') { ev.stopPropagation(); cerrar(true); }
+        else if (ev.key === 'Enter') {
+          // Enter es el botón que tiene el foco: con «Cancelar» enfocado no puede aceptar
+          ev.stopPropagation();
+          ev.preventDefault();
+          const f = document.activeElement;
+          cerrar(f === otro ? 'otro' : f === no ? false : true);
+        }
       };
       si.addEventListener('click', alSi);
       no.addEventListener('click', alNo);
+      otro.addEventListener('click', alOtro);
       modal.addEventListener('click', alFondo);
       document.addEventListener('keydown', alTecla, true);
       modal.hidden = false;
@@ -118,7 +145,10 @@
   };
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
-  const MAX_TABLEROS = 3;
+  // Diez a la vez: con tres se quedaba corto para llevar en paralelo los
+  // expedientes de una semana. Los PDF de origen se comparten, así que un
+  // tablero más no duplica nada que ya esté abierto en otro.
+  const MAX_TABLEROS = 10;
   const tableros = [];          // los abiertos, en el orden de sus pestañas
   let tableroActivo = null;     // el que se está viendo
   let contadorTablero = 0;
@@ -142,6 +172,17 @@
     E.paginas = d.paginas;
     if (d.paquetes) E.paquetes = new Map(d.paquetes.map((q) => [q.id, q]));
     E.seleccion = new Set(d.seleccion.filter((u) => d.paginas.some((p) => p.uid === u)));
+    // Si al vaciarse el tablero se soltó el expediente guardado que se
+    // editaba, al volver las hojas vuelve con ellas: si no, deshacer un
+    // «borrar todo» dejaba el trabajo como nuevo y «Guardar» creaba otro.
+    const t = tableroActivo;
+    if (d.paginas.length && !expedienteAbierto && t && t.aparcado) {
+      expedienteAbierto = t.aparcado.expediente;
+      t.firmaGuardada = t.aparcado.firmaGuardada;
+      t.guardadoEn = t.aparcado.guardadoEn;
+      nombreManual = t.aparcado.nombreManual;
+      t.aparcado = null;
+    }
     pintar();
   }
   function marcar() {
@@ -801,6 +842,11 @@
     // Nuevo o borrando las hojas: el nombre escrito para el documento
     // anterior no lo puede heredar el siguiente.
     if (!E.paginas.length) {
+      // se aparta por si un Ctrl+Z devuelve las hojas (ver aplicarInstantanea)
+      if (expedienteAbierto && tableroActivo) {
+        tableroActivo.aparcado = { expediente: expedienteAbierto, firmaGuardada: tableroActivo.firmaGuardada,
+          guardadoEn: tableroActivo.guardadoEn, nombreManual };
+      }
       expedienteAbierto = null;
       nombreManual = false;
       if ($('#guardarNombre').value) $('#guardarNombre').value = '';
@@ -1338,9 +1384,18 @@
     const tarjeta = ev.target.closest && ev.target.closest('.pag');
     if (!tarjeta) return null;
     const r = tarjeta.getBoundingClientRect();
+    const antes = ev.clientX < r.left + r.width / 2;
+    // Sobre la tarjeta de un paquete: antes o después del paquete ENTERO. La
+    // tarjeta lleva el uid de su portada, y «después de la portada» caía
+    // dentro del paquete.
+    if (tarjeta.dataset.paquete) {
+      const suyas = E.paginas.filter((p) => p.paqueteId === tarjeta.dataset.paquete);
+      if (!suyas.length) return null;
+      return antes ? E.paginas.indexOf(suyas[0]) : E.paginas.indexOf(suyas[suyas.length - 1]) + 1;
+    }
     const pos = E.paginas.findIndex((p) => p.uid === tarjeta.dataset.uid);
     if (pos < 0) return null;
-    return ev.clientX < r.left + r.width / 2 ? pos : pos + 1;
+    return antes ? pos : pos + 1;
   }
 
   // Cuando se pulsa el «＋» de un paquete, lo que se cargue va dentro de él
@@ -1348,7 +1403,7 @@
 
   async function anadir(files, indice) {
     const lote = Array.from(files || []);   // copia inmediata: la FileList puede vaciarse
-    const dentroDe = destinoCarga || (paqueteAbierto || null);
+    const pedido = destinoCarga;            // el «＋» de un paquete
     destinoCarga = null;
     if (!lote.length) return;
     G.cargando(true, 'Abriendo archivos…');
@@ -1357,27 +1412,40 @@
       const r = await G.cargarArchivos(lote, (t) => { $('#cargandoTexto').textContent = t; });
       if (r.paginas.length) {
         marcar();
+        // lo que entra en un tablero vacío es trabajo nuevo: el expediente que
+        // se apartó al vaciarlo ya no vuelve con un Ctrl+Z
+        if (!E.paginas.length) tableroActivo.aparcado = null;
         r.fuentes.forEach((f) => E.fuentes.set(f.id, f));
-        // Lo que entra de una vez es un paquete: si una empresa manda su
-        // cotización en varios archivos y se cargan juntos, van juntos.
-        const paq = dentroDe && E.paquetes.has(dentroDe)
-          ? E.paquetes.get(dentroDe)
-          : nuevoPaquete(r.fuentes.length > 1
-            ? r.fuentes[0].nombre
-            : (r.fuentes[0] ? r.fuentes[0].nombre : 'Paquete'));
-        r.paginas.forEach((p) => { p.paqueteId = paq.id; });
-        if (dentroDe && E.paquetes.has(dentroDe)) {
-          // se meten al final de ese paquete, no encima de todo
-          const suyas = E.paginas.filter((x) => x.paqueteId === paq.id);
-          const fin = E.paginas.indexOf(suyas[suyas.length - 1]) + 1;
-          E.paginas.splice(fin, 0, ...r.paginas);
-        } else if (indice == null) {
-          // Lo nuevo va encima de lo que ya había, como al grapar un
-          // documento sobre un expediente físico: no al final.
-          E.paginas = r.paginas.concat(E.paginas);
-        } else {
-          E.paginas.splice(Math.max(0, Math.min(indice, E.paginas.length)), 0, ...r.paginas);
+        const total = E.paginas.length;
+        const sitio = indice == null ? null : Math.max(0, Math.min(indice, total));
+        const finDe = (id) => {
+          const suyas = E.paginas.filter((x) => x.paqueteId === id);
+          return suyas.length ? E.paginas.indexOf(suyas[suyas.length - 1]) + 1 : total;
+        };
+        // Dónde va y de qué paquete es. Lo que entra de una vez es un paquete
+        // propio: si una empresa manda su cotización en varios archivos y se
+        // cargan juntos, van juntos. Pero si se suelta ENTRE dos hojas de un
+        // mismo paquete, es parte de ese documento: antes se le hacía paquete
+        // aparte y al ordenar los paquetes acababa al final, no donde se soltó.
+        let paq = null, donde = 0;
+        if (pedido && E.paquetes.has(pedido)) {
+          paq = E.paquetes.get(pedido);
+          donde = finDe(pedido);                 // al final de ese paquete, no encima de todo
+        } else if (paqueteAbierto && E.paquetes.has(paqueteAbierto)) {
+          paq = E.paquetes.get(paqueteAbierto);
+          donde = sitio == null ? finDe(paqueteAbierto) : sitio;
+        } else if (sitio != null) {
+          const antes = E.paginas[sitio - 1], despues = E.paginas[sitio];
+          if (antes && despues && antes.paqueteId === despues.paqueteId && E.paquetes.has(antes.paqueteId)) {
+            paq = E.paquetes.get(antes.paqueteId);
+          }
+          donde = sitio;
         }
+        // Lo nuevo va encima de lo que ya había, como al grapar un documento
+        // sobre un expediente físico: no al final.
+        if (!paq) paq = nuevoPaquete(r.fuentes[0] ? r.fuentes[0].nombre : 'Paquete');
+        r.paginas.forEach((p) => { p.paqueteId = paq.id; });
+        E.paginas.splice(donde, 0, ...r.paginas);
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
         if (!paqueteAbierto && paquetesEnOrden().length > 1) vista = 'paquetes';
         pintar();
@@ -1968,7 +2036,11 @@
 
   async function guardar() {
     if (!E.paginas.length) { G.aviso('No hay páginas para guardar.', 'error'); return; }
-    G.cargando(true, 'Armando el PDF…');
+    // la capa de espera se quita mientras se pregunta: se lleva la cuenta para
+    // no descontarla dos veces al salir
+    let esperando = true;
+    const espera = (si, texto) => { if (si !== esperando) { G.cargando(si, texto); esperando = si; } };
+    espera(true, 'Armando el PDF…');
     try {
       let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
       // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
@@ -1979,7 +2051,7 @@
         const informe = ultimoInforme;
         const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
         const cabe = primeroQueCabe(pesos, limite);
-        G.cargando(false);
+        espera(false);
         pintarPesos();
         const ok = cabe
           ? await G.confirmar({
@@ -1993,7 +2065,7 @@
             aceptar: 'Guardar igual', peligro: true,
           });
         if (!ok) { G.aviso('No se guardó nada.'); return; }
-        G.cargando(true, 'Guardando…');
+        espera(true, 'Guardando…');
         if (cabe) {
           if (cabe !== modo) usarPeso(cabe);
           bytes = bytesDe[cabe];
@@ -2012,7 +2084,7 @@
       console.error(e);
       G.aviso('No se pudo guardar: ' + e.message, 'error');
     } finally {
-      G.cargando(false);
+      espera(false);
     }
   }
 
@@ -2078,7 +2150,7 @@
 
   /* =========================================================
      TABLEROS
-     Hasta tres expedientes abiertos a la vez, cada uno en su pestaña, para
+     Hasta diez expedientes abiertos a la vez, cada uno en su pestaña, para
      avanzar con varios en paralelo. Cada tablero tiene lo suyo: sus hojas,
      paquetes, selección, deshacer, el expediente que se está editando, los
      campos del archivo de salida y su propio autoguardado.
@@ -2090,7 +2162,10 @@
      y se carga el del que se abre. Así todo el programa sigue leyendo E como
      siempre y no hay que enseñarle a ningún módulo qué es un tablero.
      ========================================================= */
-  const COLORES_TABLERO = ['#e0532f', '#2f6fed', '#1f9d64'];
+  // uno por pestaña, distinguibles entre sí y legibles en los dos temas
+  const COLORES_TABLERO = ['#e0532f', '#2f6fed', '#1f9d64', '#8b5cf6', '#d4930d',
+    '#0e9fa5', '#d6336c', '#64748b', '#a3652f', '#4f46e5'];
+  const colorDe = (t) => COLORES_TABLERO[(t.slot - 1) % COLORES_TABLERO.length];
   const CAMPOS_TABLERO = ['nombreSalida', 'metaTitulo', 'metaAutor', 'guardarNombre', 'divRangos'];
 
   function leerCampos() {
@@ -2132,6 +2207,10 @@
       firmaActual: '',             // cómo está ahora (se calcula al dejarlo)
       guardadoEn: null,
       desfasado: false,            // otra ventana lo guardó después de abrirlo aquí
+      aparcado: null,              // el expediente que se soltó al vaciarlo (vuelve con Ctrl+Z)
+      autoEscrito: false,          // ya dejó un autoguardado en la base
+      sinGuardarDesde: 0,          // desde cuándo tiene cambios sin guardar
+      recordado: false,            // ya se le recordó que no está guardado
     };
     tableros.push(t);
     return t;
@@ -2182,13 +2261,28 @@
     const ahora = t === tableroActivo ? firmaTrabajo(d.paginas, d.paquetes) : t.firmaActual;
     return ahora === t.firmaGuardada ? 'guardado' : 'sucio';
   }
+  /** ¿Se pierde algo si se cierra? Un tablero en blanco o ya guardado, no. */
+  const sinGuardar = (t) => { const e = estadoDe(t); return e === 'nuevo' || e === 'sucio'; };
 
   function nombreTablero(t) {
     const d = datosDe(t);
     if (d.expediente && d.expediente.nombre) return d.expediente.nombre;
-    const base = d.paginas[d.paginas.length - 1];
-    const f = base && E.fuentes.get(base.fuenteId);
-    return f ? f.nombre : 'Tablero en blanco';
+    return nombreDeLaBase(d.paginas, d.paquetes) || 'Tablero en blanco';
+  }
+
+  /**
+   * Cómo se llama el documento base: el de abajo, que lleva el folio 1. Es
+   * el nombre de su PAQUETE, no el del archivo de la última hoja: con este,
+   * añadir un anexo al final con el «＋» rebautizaba el tablero y el PDF de
+   * salida como «Anexo». Y si se renombró el paquete, manda ese nombre.
+   */
+  function nombreDeLaBase(paginas, paquetes) {
+    const base = paginas[paginas.length - 1];
+    if (!base) return '';
+    const paq = paquetes && paquetes.get(base.paqueteId);
+    if (paq && paq.nombre) return paq.nombre;
+    const f = E.fuentes.get(base.fuenteId);
+    return f ? f.nombre : '';
   }
   const numeroDe = (t) => tableros.indexOf(t) + 1;
 
@@ -2202,6 +2296,10 @@
     calculoPeso = null;
     ultimoInforme = null;
     destinoCarga = null;
+    // lo que dicen los paneles de Revisar es de las hojas del tablero que se deja
+    $('#formatosResultado').hidden = true;
+    if (!ubicacion.corriendo) $('#formatosEstado').textContent = '';
+    $('#revisarEstado').textContent = '';
   }
 
   /**
@@ -2228,18 +2326,37 @@
     return true;
   }
 
+  /**
+   * Antes de soltar lo de un tablero sin guardar: «Guardar y …», «… sin
+   * guardar» o «Cancelar». Devuelve true si se puede seguir. Antes solo se
+   * podía elegir entre perder lo hecho o volver atrás a guardarlo a mano.
+   */
+  async function ofrecerGuardar(t, que) {
+    if (!sinGuardar(t)) return true;
+    const nombre = nombreTablero(t);
+    const nunca = estadoDe(t) === 'nuevo';
+    const r = await G.confirmar({
+      titulo: nunca ? 'Este expediente no está guardado' : 'Hay cambios sin guardar',
+      mensaje: (nunca
+        ? `«${nombre}» todavía no se ha guardado nunca.`
+        : `«${nombre}» tiene cambios que no has guardado.`)
+        + ` Si ${que.verbo} sin guardar, se pierden.`,
+      aceptar: `Guardar y ${que.accion}`,
+      otro: `${que.Accion} sin guardar`,
+      otroPeligro: true,
+    });
+    if (!r) return false;
+    if (r === 'otro') return true;
+    // se guarda desde su propio tablero, que es lo que sabe guardar Pdflash
+    if (t !== tableroActivo) activarTablero(t.id, { interno: true });
+    return guardarExpedienteActual();
+  }
+
   async function cerrarTablero(id) {
     const t = tableros.find((x) => x.id === id);
     if (!t || tableros.length < 2) return;
-    if (estadoDe(t) === 'nuevo' || estadoDe(t) === 'sucio') {
-      const sigue = await G.confirmar({
-        titulo: 'Cerrar este tablero',
-        mensaje: `«${nombreTablero(t)}» tiene cambios que no has guardado. Si lo cierras se pierden.`,
-        aceptar: 'Cerrar sin guardar',
-        peligro: true,
-      });
-      if (!sigue) return;
-    }
+    if (!(await ofrecerGuardar(t, { verbo: 'lo cierras', accion: 'cerrar', Accion: 'Cerrar' }))) return;
+    if (!tableros.includes(t) || tableros.length < 2) return;
     const i = tableros.indexOf(t);
     if (t === tableroActivo) {
       const vecino = tableros[i + 1] || tableros[i - 1];
@@ -2256,14 +2373,21 @@
     } else {
       tableros.splice(i, 1);
     }
-    try { await G.bd.borrarExpediente(claveAuto(t)); } catch (e) {}
+    await borrarAutoguardado(t);
     soltarFuentesSinUso();
     pintarTableros();
     marcarGuardadosAbiertos();
   }
 
-  /** Otro tablero en blanco; si ya están los tres, vacía el que se ve. */
+  /** Otro tablero en blanco; si ya están todos en uso, vacía el que se ve. */
   async function nuevoTablero() {
+    // si ya hay uno en blanco, se va a ese: no hace falta otra pestaña vacía
+    const enBlanco = tableros.find((x) => !datosDe(x).paginas.length);
+    if (enBlanco) {
+      if (enBlanco !== tableroActivo) activarTablero(enBlanco.id);
+      else G.aviso('Este tablero ya está en blanco: arrastra aquí los PDF del otro expediente.', 'ok');
+      return;
+    }
     const t = crearTablero();
     if (t) { activarTablero(t.id, { interno: true }); return; }
     await empezarDeCero();
@@ -2296,30 +2420,39 @@
       await restaurarExpediente(r);
       return;
     }
-    const perdera = estadoDe(tableroActivo) !== 'guardado';
-    const sigue = await G.confirmar({
-      titulo: 'Abrir este expediente',
-      mensaje: `Los ${MAX_TABLEROS} tableros están en uso. Se reemplaza lo del tablero ${numeroDe(tableroActivo)} `
-        + `(«${nombreTablero(tableroActivo)}») por «${r.nombre}».` + (perdera ? ' Lo que no hayas guardado se pierde.' : ''),
-      aceptar: 'Reemplazar',
-      peligro: perdera,
-    });
-    if (!sigue) return;
+    // Con todos en uso se reemplaza el que se ve. Si tiene algo sin guardar,
+    // se ofrece guardarlo antes; si ya está guardado, se pregunta igual.
+    const actual = tableroActivo;
+    if (sinGuardar(actual)) {
+      if (!(await ofrecerGuardar(actual, { verbo: 'lo reemplazas', accion: 'reemplazar', Accion: 'Reemplazar' }))) return;
+    } else {
+      const sigue = await G.confirmar({
+        titulo: 'Abrir este expediente',
+        mensaje: `Los ${MAX_TABLEROS} tableros están en uso. Se reemplaza lo del tablero ${numeroDe(actual)} `
+          + `(«${nombreTablero(actual)}», que está guardado) por «${r.nombre}».`,
+        aceptar: 'Reemplazar',
+      });
+      if (!sigue) return;
+    }
+    if (actual !== tableroActivo) activarTablero(actual.id, { interno: true });
     await restaurarExpediente(r);
   }
 
-  /** Guarda lo del tablero que se ve: actualiza su guardado, o lo guarda con nombre si es nuevo. */
+  /**
+   * Guarda lo del tablero que se ve: actualiza su guardado, o lo guarda con
+   * nombre si es nuevo. Devuelve true si quedó guardado.
+   */
   async function guardarExpedienteActual() {
-    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
-    if (expedienteAbierto) { await actualizarGuardado(); return; }
+    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return false; }
+    if (expedienteAbierto) return actualizarGuardado();
     const nombre = await G.pedirTexto({
       titulo: 'Guardar el expediente',
       mensaje: 'Ponle un nombre para reconocerlo en la lista de guardados. Se guarda en este navegador.',
       valor: nombreDelTrabajo() || '',
     });
-    if (!nombre) return;
+    if (!nombre) return false;
     $('#guardarNombre').value = nombre;
-    await guardarComoNuevo();
+    return guardarComoNuevo();
   }
 
   /** Lo recién guardado es lo que hay ahora en el tablero que se ve. */
@@ -2328,6 +2461,9 @@
     t.firmaGuardada = firmaTrabajo(E.paginas, E.paquetes);
     t.guardadoEn = Date.now();
     t.desfasado = false;
+    t.aparcado = null;
+    t.sinGuardarDesde = 0;
+    t.recordado = false;
     pintarTableros();
   }
 
@@ -2372,9 +2508,13 @@
     t.historial.adelante = [];
 
     contadorPaquete++;
+    // A un tablero en blanco llegan como su documento base: con el nombre de
+    // lo que se manda, no «De …», que pasaría a ser el nombre del tablero y
+    // del PDF de salida.
+    const base = !t.paginas.length && E.paquetes.get(objs[objs.length - 1].paqueteId);
     const paq = {
       id: 'q' + contadorPaquete + '-' + Date.now().toString(36),
-      nombre: G.nombreSeguro('De ' + origen, 'Hojas enviadas'),
+      nombre: base ? base.nombre : G.nombreSeguro('De ' + origen, 'Hojas enviadas'),
       color: COLORES_PAQUETE[(contadorPaquete - 1) % COLORES_PAQUETE.length],
     };
     t.paquetes.set(paq.id, paq);
@@ -2419,6 +2559,7 @@
       if (t === tableroActivo) expedienteAbierto = null; else t.expedienteAbierto = null;
       t.firmaGuardada = null;
     });
+    tableros.forEach((t) => { if (t.aparcado && t.aparcado.expediente.id === id) t.aparcado = null; });
     actualizarEstadoGuardado();
     sincronizarNombreSalida();
     pintarTableros();
@@ -2438,7 +2579,7 @@
           li.querySelector('.guardado-datos').appendChild(chip);
         }
         chip.textContent = 'Tablero ' + numeroDe(t);
-        chip.style.setProperty('--color-tablero', COLORES_TABLERO[t.slot - 1]);
+        chip.style.setProperty('--color-tablero', colorDe(t));
       }
       const abrir = li.querySelector('.guardado-abrir');
       if (abrir) abrir.textContent = t ? (t === tableroActivo ? 'Abierto' : 'Ir al tablero ' + numeroDe(t)) : 'Abrir';
@@ -2474,6 +2615,7 @@
     const lista = $('#tablerosLista');
     if (!lista) return;
     lista.innerHTML = '';
+    let activa = null;
     tableros.forEach((t) => {
       const d = datosDe(t);
       const estado = estadoDe(t);
@@ -2484,10 +2626,14 @@
       el.setAttribute('role', 'tab');
       el.setAttribute('aria-selected', t === tableroActivo ? 'true' : 'false');
       el.tabIndex = 0;
-      el.style.setProperty('--color-tablero', COLORES_TABLERO[t.slot - 1]);
+      el.style.setProperty('--color-tablero', colorDe(t));
       const nombre = nombreTablero(t);
-      el.title = `Tablero ${numeroDe(t)} · ${nombre} · `
-        + (estado === 'vacio' ? 'en blanco' : estado === 'guardado' ? 'guardado' : 'sin guardar') + ` · Alt+${numeroDe(t)}`;
+      const n = numeroDe(t);
+      el.title = `Tablero ${n} · ${nombre} · `
+        + (estado === 'vacio' ? 'en blanco' : estado === 'guardado' ? 'guardado'
+          : estado === 'nuevo' ? 'nunca guardado' : 'con cambios sin guardar')
+        + (d.paginas.length ? ` · ${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'}` : '')
+        + (n <= 10 ? ` · Alt+${n % 10}` : '');
 
       const punto = document.createElement('span');
       punto.className = 'tablero-punto';
@@ -2496,8 +2642,7 @@
       nom.textContent = nombreCorto(nombre, 30);
       const meta = document.createElement('span');
       meta.className = 'tablero-meta';
-      meta.textContent = d.paginas.length ? d.paginas.length + ' h' : '';
-      meta.title = d.paginas.length + (d.paginas.length === 1 ? ' hoja' : ' hojas');
+      meta.textContent = d.paginas.length ? d.paginas.length + (d.paginas.length === 1 ? ' hoja' : ' hojas') : '';
       el.append(punto, nom, meta);
 
       const marca = document.createElement('span');
@@ -2509,23 +2654,213 @@
         const x = document.createElement('button');
         x.type = 'button';
         x.className = 'tablero-cerrar';
-        x.setAttribute('aria-label', 'Cerrar el tablero ' + numeroDe(t));
+        x.setAttribute('aria-label', 'Cerrar el tablero ' + n);
         x.title = 'Cerrar este tablero';
         x.innerHTML = icono('cerrar');
         el.appendChild(x);
       }
       lista.appendChild(el);
+      if (t === tableroActivo) activa = el;
     });
+    // Si no caben enteras, se estrechan (sin el número de hojas, que sale al
+    // apuntar); y si ni así caben, la tira se desplaza.
+    const barra = $('#tableros');
+    barra.classList.remove('muchos');
+    if (tableros.length > 1 && lista.scrollWidth - lista.clientWidth > 2) barra.classList.add('muchos');
+    // la pestaña que se ve, siempre a la vista aunque haya que desplazar la tira
+    if (activa) {
+      const a = activa.offsetLeft, b = a + activa.offsetWidth;
+      if (a < lista.scrollLeft) lista.scrollLeft = a - 8;
+      else if (b > lista.scrollLeft + lista.clientWidth) lista.scrollLeft = b - lista.clientWidth + 8;
+    }
+
+    marcarDesborde();
 
     const lleno = tableros.length >= MAX_TABLEROS;
     const nuevo = $('#btnTableroNuevo');
     nuevo.disabled = lleno;
-    $('#tablerosCupo').textContent = `${tableros.length} de ${MAX_TABLEROS} tableros`;
+    $('#tablerosCupo').textContent = `${tableros.length} de ${MAX_TABLEROS}`;
+    $('#tablerosCupo').title = `${tableros.length} de ${MAX_TABLEROS} tableros abiertos`;
     nuevo.hidden = lleno;
     $('#tablerosCupo').classList.toggle('lleno', lleno);
     actualizarBotonNuevo();
     pintarEnviar();
+    pintarSinGuardar();
     pintarCabeceraYEstado();
+  }
+
+  /** Si las pestañas no caben: degradado en el lado que esconde más y la lista de todas. */
+  function marcarDesborde() {
+    const lista = $('#tablerosLista');
+    const sobra = lista.scrollWidth - lista.clientWidth > 2;
+    lista.classList.toggle('mas-izq', sobra && lista.scrollLeft > 2);
+    lista.classList.toggle('mas-der', sobra && lista.scrollLeft < lista.scrollWidth - lista.clientWidth - 2);
+    $('#btnTodosTableros').hidden = !sobra;
+    if (!sobra) cerrarMenuTodos();
+    else if (!$('#menuTodosTableros').hidden) abrirMenuTodos();
+  }
+
+  function cerrarMenuTodos() {
+    const m = $('#menuTodosTableros');
+    if (m) m.hidden = true;
+    const b = $('#btnTodosTableros');
+    if (b) b.setAttribute('aria-expanded', 'false');
+  }
+  /** Todos los tableros en una lista, para llegar a los que no caben en la tira. */
+  function abrirMenuTodos() {
+    const m = $('#menuTodosTableros');
+    m.innerHTML = '';
+    const tit = document.createElement('p');
+    tit.className = 'menu-enviar-titulo';
+    tit.textContent = `${tableros.length} tableros abiertos`;
+    m.appendChild(tit);
+    tableros.forEach((t) => {
+      const d = datosDe(t);
+      const estado = estadoDe(t);
+      const fila = document.createElement('div');
+      fila.className = 'menu-enviar-fila' + (t === tableroActivo ? ' actual' : '');
+      fila.setAttribute('role', 'button');
+      fila.tabIndex = 0;
+      fila.style.setProperty('--color-tablero', colorDe(t));
+      const txt = document.createElement('span');
+      txt.className = 'menu-enviar-nombre';
+      const nom = document.createElement('b');
+      nom.textContent = `${numeroDe(t)} · ${nombreCorto(nombreTablero(t), 34)}`;
+      const det = document.createElement('small');
+      det.className = estado === 'nuevo' || estado === 'sucio' ? 'sucio' : '';
+      det.textContent = (estado === 'vacio' ? 'en blanco' : estado === 'guardado' ? 'guardado'
+        : estado === 'nuevo' ? 'nunca guardado' : 'cambios sin guardar')
+        + (d.paginas.length ? ` · ${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'}` : '');
+      txt.append(nom, det);
+      const kbd = document.createElement('kbd');
+      kbd.className = 'menu-tira-atajo';
+      if (numeroDe(t) <= 10) kbd.textContent = 'Alt+' + (numeroDe(t) % 10);
+      fila.append(txt, kbd);
+      const ir = () => { cerrarMenuTodos(); activarTablero(t.id); };
+      fila.addEventListener('click', ir);
+      fila.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ir(); } });
+      m.appendChild(fila);
+    });
+    m.hidden = false;
+    $('#btnTodosTableros').setAttribute('aria-expanded', 'true');
+  }
+
+  /* ---------------- lo que no está guardado ----------------
+     Que se vea siempre qué expedientes tienen trabajo sin guardar, aunque su
+     pestaña esté desplazada fuera de la vista o se esté en otro tablero, y
+     que guardarlos esté a un clic. */
+  const RECORDAR_TRAS = 10 * 60 * 1000;   // diez minutos con cambios sin guardar
+
+  function pintarSinGuardar() {
+    const ahora = Date.now();
+    const pendientes = tableros.filter((t) => {
+      const si = sinGuardar(t);
+      if (!si) { t.sinGuardarDesde = 0; t.recordado = false; }
+      else if (!t.sinGuardarDesde) t.sinGuardarDesde = ahora;
+      return si;
+    });
+    const b = $('#btnSinGuardar');
+    if (!b) return;
+    b.hidden = !pendientes.length;
+    $('#sinGuardarTexto').textContent = pendientes.length === 1 ? '1 sin guardar' : `${pendientes.length} sin guardar`;
+    b.title = pendientes.length
+      ? 'Sin guardar: ' + pendientes.map((t) => `«${nombreTablero(t)}»`).join(', ') + '. Clic para verlos y guardarlos.'
+      : '';
+    if (!pendientes.length) cerrarMenuSinGuardar();
+    else if (!$('#menuSinGuardar').hidden) abrirMenuSinGuardar();
+  }
+
+  /** Una vez por expediente, si lleva un buen rato con cambios sin guardar. */
+  function recordarSinGuardar() {
+    const ahora = Date.now();
+    tableros.forEach((t) => {
+      if (t.recordado || !t.sinGuardarDesde || ahora - t.sinGuardarDesde < RECORDAR_TRAS) return;
+      if (!sinGuardar(t)) return;
+      t.recordado = true;
+      const nunca = estadoDe(t) === 'nuevo';
+      const min = Math.round((ahora - t.sinGuardarDesde) / 60000);
+      G.aviso(`«${nombreCorto(nombreTablero(t), 40)}» ${nunca ? 'todavía no está guardado' : 'tiene cambios sin guardar'} `
+        + `(hace ${min} min). El autoguardado lo recupera si se cierra el navegador, pero no queda en tu lista de guardados.`,
+      'error', { texto: 'Guardar', fn: () => guardarTablero(t) });
+    });
+  }
+
+  /** Guarda ese tablero, yendo a él si no es el que se ve. */
+  async function guardarTablero(t) {
+    if (!tableros.includes(t)) return false;
+    if (t !== tableroActivo && !activarTablero(t.id)) {
+      G.aviso('Termina primero lo que tienes abierto y vuelve a intentarlo.', 'error');
+      return false;
+    }
+    return guardarExpedienteActual();
+  }
+
+  /** Guarda uno tras otro todos los que tienen algo sin guardar. */
+  async function guardarTodos() {
+    cerrarMenuSinGuardar();
+    const pendientes = tableros.filter(sinGuardar);
+    let hechos = 0;
+    for (const t of pendientes) {
+      if (await guardarTablero(t)) hechos++;
+    }
+    const faltan = tableros.filter(sinGuardar).length;
+    if (pendientes.length > 1) {
+      G.aviso(faltan
+        ? `Se guardaron ${hechos} de ${pendientes.length}. Quedan ${faltan} sin guardar.`
+        : `Listo: los ${hechos} expedientes quedaron guardados.`, faltan ? 'error' : 'ok');
+    }
+  }
+
+  function cerrarMenuSinGuardar() {
+    const m = $('#menuSinGuardar');
+    if (m) m.hidden = true;
+    const b = $('#btnSinGuardar');
+    if (b) b.setAttribute('aria-expanded', 'false');
+  }
+  function abrirMenuSinGuardar() {
+    const m = $('#menuSinGuardar');
+    const pendientes = tableros.filter(sinGuardar);
+    m.innerHTML = '';
+    const tit = document.createElement('p');
+    tit.className = 'menu-enviar-titulo';
+    tit.textContent = pendientes.length === 1 ? 'Este expediente no está guardado' : `Estos ${pendientes.length} expedientes no están guardados`;
+    m.appendChild(tit);
+    pendientes.forEach((t) => {
+      const fila = document.createElement('div');
+      fila.className = 'menu-enviar-fila';
+      fila.style.setProperty('--color-tablero', colorDe(t));
+      const txt = document.createElement('span');
+      txt.className = 'menu-enviar-nombre';
+      const nom = document.createElement('b');
+      nom.textContent = `${numeroDe(t)} · ${nombreCorto(nombreTablero(t), 30)}`;
+      const det = document.createElement('small');
+      det.className = 'sucio';
+      det.textContent = estadoDe(t) === 'nuevo' ? 'nunca guardado' : 'cambios sin guardar';
+      txt.append(nom, det);
+      const ir = document.createElement('button');
+      ir.type = 'button';
+      ir.className = 'btn btn-mini';
+      ir.textContent = 'Ir';
+      ir.disabled = t === tableroActivo;
+      ir.addEventListener('click', () => { cerrarMenuSinGuardar(); activarTablero(t.id); });
+      const g = document.createElement('button');
+      g.type = 'button';
+      g.className = 'btn btn-mini btn-primario';
+      g.textContent = 'Guardar';
+      g.addEventListener('click', () => { cerrarMenuSinGuardar(); guardarTablero(t); });
+      fila.append(txt, ir, g);
+      m.appendChild(fila);
+    });
+    if (pendientes.length > 1) {
+      const todos = document.createElement('button');
+      todos.type = 'button';
+      todos.className = 'btn btn-suave ancho menu-sin-guardar-todos';
+      todos.textContent = `Guardar los ${pendientes.length}`;
+      todos.addEventListener('click', guardarTodos);
+      m.appendChild(todos);
+    }
+    m.hidden = false;
+    $('#btnSinGuardar').setAttribute('aria-expanded', 'true');
   }
 
   /** «hace un momento», «hace 5 min»… para lo último que se guardó. */
@@ -2545,7 +2880,12 @@
     const nombre = nombreTablero(t);
     $('#tituloTablero').textContent = nombre;
     $('#tituloTablero').title = nombre;
-    document.title = estado === 'vacio' ? 'Pdflash · Taller de PDF' : nombre + ' · Pdflash';
+    // «●» delante, como los editores, si algo de esta ventana está sin guardar:
+    // se ve en la pestaña del navegador aunque Pdflash no esté al frente
+    const pendientes = tableros.filter(sinGuardar).length;
+    document.title = (pendientes ? '● ' : '')
+      + (estado === 'vacio' ? 'Pdflash · Taller de PDF' : nombre + ' · Pdflash')
+      + (pendientes > 1 ? ` (${pendientes} sin guardar)` : '');
 
     const chip = $('#chipEstado');
     chip.hidden = estado === 'vacio';
@@ -2571,7 +2911,7 @@
   function actualizarBotonNuevo() {
     const b = $('#btnNuevo');
     if (!b) return;
-    const lleno = tableros.length >= MAX_TABLEROS;
+    const lleno = tableros.length >= MAX_TABLEROS && tableros.every((x) => datosDe(x).paginas.length);
     b.title = lleno
       ? `Están los ${MAX_TABLEROS} tableros en uso: vacía este para armar otro expediente.`
       : 'Abre otro tablero en blanco para armar otro expediente a la vez. No toca lo que ya tienes.';
@@ -2597,7 +2937,7 @@
     tableros.filter((t) => t !== tableroActivo).forEach((t) => {
       const fila = document.createElement('div');
       fila.className = 'menu-enviar-fila';
-      fila.style.setProperty('--color-tablero', COLORES_TABLERO[t.slot - 1]);
+      fila.style.setProperty('--color-tablero', colorDe(t));
       const nom = document.createElement('span');
       nom.className = 'menu-enviar-nombre';
       nom.textContent = `Tablero ${numeroDe(t)} · ${nombreCorto(nombreTablero(t), 26)}`;
@@ -2634,12 +2974,37 @@
       const pest = ev.target.closest('.tablero');
       if (ev.button === 1 && pest) { ev.preventDefault(); cerrarTablero(pest.dataset.id); }
     });
+    // con muchas pestañas la tira se desplaza: la rueda del ratón la mueve de lado
+    const lista = $('#tablerosLista');
+    lista.addEventListener('wheel', (ev) => {
+      if (lista.scrollWidth <= lista.clientWidth || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
+      ev.preventDefault();
+      lista.scrollLeft += ev.deltaY;
+    }, { passive: false });
+    lista.addEventListener('scroll', marcarDesborde, { passive: true });
+    window.addEventListener('resize', marcarDesborde);
+    // abrir uno cierra los demás: el clic no llega al documento, que es quien los cierra
+    $('#btnTodosTableros').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      cerrarMenuSinGuardar();
+      if ($('#menuTodosTableros').hidden) abrirMenuTodos(); else cerrarMenuTodos();
+    });
     $('#btnTableroNuevo').addEventListener('click', nuevoTablero);
     $('#btnEnviar').addEventListener('click', (ev) => {
       ev.stopPropagation();
       if ($('#menuEnviar').hidden) abrirMenuEnviar(); else cerrarMenuEnviar();
     });
-    document.addEventListener('click', (ev) => { if (!ev.target.closest('#menuEnviar, #btnEnviar')) cerrarMenuEnviar(); });
+    $('#btnSinGuardar').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      cerrarMenuTodos();
+      if ($('#menuSinGuardar').hidden) abrirMenuSinGuardar(); else cerrarMenuSinGuardar();
+    });
+    document.addEventListener('click', (ev) => {
+      if (!ev.target.closest('#menuEnviar, #btnEnviar')) cerrarMenuEnviar();
+      if (!ev.target.closest('#menuSinGuardar, #btnSinGuardar')) cerrarMenuSinGuardar();
+      if (!ev.target.closest('#menuTodosTableros, #btnTodosTableros')) cerrarMenuTodos();
+    });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { cerrarMenuSinGuardar(); cerrarMenuTodos(); } });
     G.bd.alCambiar(alCambioDeOtraVentana);
   }
 
@@ -2726,8 +3091,17 @@
       // Deja anotado sobre qué guardado se está trabajando: el próximo
       // guardado lo actualiza en vez de crear uno nuevo por separado.
       const esAuto = String(registro.id).startsWith('__auto');
+      // Un autoguardado que viene de un expediente con nombre: se mira cómo
+      // está ese guardado ahora. Si se borró, el trabajo queda como nuevo; si
+      // no cambió nada desde que se guardó, queda «Guardado» y no «Sin
+      // guardar», que era lo que salía siempre al continuar donde se dejó.
+      let origen = null;
+      if (esAuto && registro.origenId) {
+        try { origen = await G.bd.leerExpediente(registro.origenId); } catch (e) { origen = null; }
+      }
+      tableroActivo.aparcado = null;
       expedienteAbierto = esAuto
-        ? (registro.origenId ? { id: registro.origenId, nombre: registro.origenNombre || 'expediente' } : null)
+        ? (origen ? { id: origen.id, nombre: origen.nombre || registro.origenNombre || 'expediente' } : null)
         : { id: registro.id, nombre: registro.nombre };
       // Abrir un expediente es entrar en él: el nombre del archivo pasa a ser
       // el suyo. Lo que quedara escrito en «Guardar como nuevo» era para otro
@@ -2750,9 +3124,20 @@
       pintar();
       // Un guardado con nombre es lo que hay en la base: queda «guardado» hasta
       // que se cambie algo. Un autoguardado no lo es, y hay que volver a guardar.
-      tableroActivo.firmaGuardada = esAuto ? null : firmaTrabajo(E.paginas, E.paquetes);
-      tableroActivo.guardadoEn = esAuto ? null : (registro.fecha || Date.now());
+      if (!esAuto) {
+        tableroActivo.firmaGuardada = firmaTrabajo(E.paginas, E.paquetes);
+        tableroActivo.guardadoEn = registro.fecha || Date.now();
+      } else if (origen) {
+        tableroActivo.firmaGuardada = firmaTrabajo(origen.paginas || [],
+          new Map((origen.paquetes || []).map((q) => [q.id, q])));
+        tableroActivo.guardadoEn = origen.fecha || null;
+      } else {
+        tableroActivo.firmaGuardada = null;
+        tableroActivo.guardadoEn = null;
+      }
       tableroActivo.desfasado = false;
+      tableroActivo.sinGuardarDesde = 0;
+      tableroActivo.recordado = false;
       soltarFuentesSinUso();
       pintarTableros();
       await pintarGuardados();
@@ -2771,8 +3156,18 @@
   let relojAuto = null;
   let autoguardar = true;
 
-  /** Cada tablero tiene su propio autoguardado: __auto1, __auto2 y __auto3. */
-  const claveAuto = (t) => '__auto' + t.slot;
+  /**
+   * Cada tablero de cada ventana tiene su propio autoguardado:
+   * «__auto:<ventana>:<n.º del tablero>». Antes era «__auto1», «__auto2»… y
+   * dos ventanas abiertas a la vez escribían en el mismo (ver expedientes.js).
+   */
+  const claveAuto = (t) => '__auto:' + G.ventana.id() + ':' + t.slot;
+  /** De qué ventana y qué tablero es un autoguardado. Los de antes no tienen ventana. */
+  function datosDeAuto(id) {
+    const m = /^__auto(?::([^:]+):(\d+)|(\d*))$/.exec(String(id));
+    if (!m) return { ventana: null, slot: 0 };
+    return { ventana: m[1] || null, slot: Number(m[2] || m[3] || 0) };
+  }
 
   function programarAutoguardado() {
     if (!autoguardar) return;
@@ -2789,16 +3184,27 @@
   async function autoguardarTablero(t) {
     try {
       if (!autoguardar || !tableros.includes(t)) return;
-      if (!datosDe(t).paginas.length) return;
+      // Un tablero que se quedó sin hojas borra su autoguardado: si no, al
+      // volver a entrar ofrecía recuperar lo que se había quitado a propósito.
+      if (!datosDe(t).paginas.length) { await borrarAutoguardado(t); return; }
       const { registro, fuentes } = serializar(claveAuto(t), 'Trabajo en curso', t);
+      await G.ventana.lista;
+      registro.id = claveAuto(t);
       await G.bd.guardarExpediente(registro, fuentes);
+      t.autoEscrito = true;
     } catch (e) {
       console.warn('autoguardado no disponible', e);
       autoguardar = false;
     }
   }
 
-  /** Antes de cambiar de tablero: lo que estaba por guardarse se guarda ya, de SU tablero. */
+  async function borrarAutoguardado(t) {
+    if (!t.autoEscrito) return;
+    t.autoEscrito = false;
+    try { await G.bd.borrarExpediente(claveAuto(t)); } catch (e) {}
+  }
+
+  /** Lo que estaba por guardarse se guarda ya, de SU tablero: al cambiar de tablero o al cerrar la ventana. */
   function adelantarAutoguardado() {
     if (!relojAuto) return;
     clearTimeout(relojAuto);
@@ -2836,17 +3242,24 @@
     return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' });
   };
 
-  const slotDeAuto = (id) => { const m = /^__auto(\d)$/.exec(String(id)); return m ? Number(m[1]) : 0; };
-
+  /**
+   * Al arrancar, ofrece seguir con lo que quedó abierto. Solo lo de las
+   * ventanas que ya se cerraron: lo de otra ventana de Pdflash que sigue
+   * abierta es de ella, y ofrecerlo aquí lo duplicaba.
+   */
   async function comprobarAutoguardado() {
     try {
-      const todos = (await G.bd.listarAutoguardados()).filter((r) => r.numPaginas);
+      const vivas = await G.ventana.vivas();
+      const todos = (await G.bd.listarAutoguardados())
+        .filter((r) => r.numPaginas && !vivas.has(datosDeAuto(r.id).ventana));
       if (!todos.length) return;
       const regs = todos.slice(0, MAX_TABLEROS);   // los más recientes, si hubiera de más
+      const nombres = regs.map((r) => `«${nombreCorto(r.resumen || r.origenNombre || 'Trabajo en curso', 26)}» (${r.numPaginas} pág.)`);
       $('#restaurarTexto').textContent = regs.length === 1
-        ? `Quedó un trabajo sin terminar: ${regs[0].numPaginas} página(s) del ${fechaCorta(regs[0].fecha)}.`
+        ? `Quedó un trabajo sin terminar: «${nombreCorto(regs[0].resumen || regs[0].origenNombre || 'Trabajo en curso', 40)}», `
+          + `${regs[0].numPaginas} página(s) del ${fechaCorta(regs[0].fecha)}.`.replace(/\.\.$/, '.')
         : `Quedaron ${regs.length} tableros sin terminar: `
-          + regs.map((r) => `«${nombreCorto(r.resumen || r.origenNombre || 'Trabajo en curso', 26)}» (${r.numPaginas} pág.)`).join(' · ') + '.';
+          + (nombres.length > 4 ? nombres.slice(0, 3).join(' · ') + ` y ${nombres.length - 3} más` : nombres.join(' · ')) + '.';
       $('#btnRestaurar').textContent = regs.length === 1 ? 'Continuar donde lo dejé' : `Continuar con los ${regs.length} tableros`;
       $('#restaurar').hidden = false;
       $('#btnRestaurar').onclick = async () => {
@@ -2862,7 +3275,8 @@
 
   /** Vuelve a poner cada tablero en su pestaña, en el orden en que estaban. */
   async function restaurarAutoguardados(regs) {
-    const orden = regs.slice().sort((a, b) => (slotDeAuto(a.id) || 9) - (slotDeAuto(b.id) || 9));
+    const orden = regs.slice().sort((a, b) => ((datosDeAuto(a.id).slot || 99) - (datosDeAuto(b.id).slot || 99))
+      || ((b.fecha || 0) - (a.fecha || 0)));
     const reciente = regs.reduce((m, r) => ((r.fecha || 0) > (m.fecha || 0) ? r : m), regs[0]);
     let dondeSeguia = null;
     for (const r of orden) {
@@ -2872,15 +3286,17 @@
         if (!t) break;
         activarTablero(t.id, { interno: true });
       }
-      // conserva su número de autoguardado, para no dejar uno huérfano en la base
-      const quiere = slotDeAuto(r.id);
+      // conserva su número (y su color) si está libre
+      const quiere = datosDeAuto(r.id).slot;
       if (quiere && !tableros.some((x) => x !== t && x.slot === quiere)) t.slot = quiere;
       await restaurarExpediente(r);
       if (r === reciente) dondeSeguia = t;
+      // queda en el autoguardado de ESTA ventana antes de soltar el de la otra:
+      // si se cerrara justo en medio, no se pierde nada
+      await autoguardarTablero(t);
+      if (r.id !== claveAuto(t)) { try { await G.bd.borrarExpediente(r.id); } catch (e) {} }
     }
     if (dondeSeguia && dondeSeguia !== tableroActivo) activarTablero(dondeSeguia.id, { interno: true });
-    // el autoguardado de la versión de un solo tablero, ya recogido
-    try { if (regs.some((r) => r.id === '__auto')) await G.bd.borrarExpediente('__auto'); } catch (e) {}
   }
 
   /* ---------------- lista de expedientes guardados ---------------- */
@@ -2997,9 +3413,7 @@
     if (expedienteAbierto && expedienteAbierto.nombre) return expedienteAbierto.nombre;
     // Lo que se adjunta va encima, así que el documento base es el de abajo:
     // el que lleva el folio 1 y da nombre al expediente.
-    const base = E.paginas[E.paginas.length - 1];
-    const fuente = base && E.fuentes.get(base.fuenteId);
-    return fuente ? fuente.nombre : '';
+    return nombreDeLaBase(E.paginas, E.paquetes);
   }
 
   function sincronizarNombreSalida() {
@@ -3025,7 +3439,7 @@
   }
 
   async function guardarComoNuevo() {
-    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
+    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return false; }
     const nombre = ($('#guardarNombre').value || '').trim()
       || G.nombreSeguro($('#nombreSalida').value, 'Expediente');
     G.cargando(true, 'Guardando el expediente…');
@@ -3040,17 +3454,19 @@
       sincronizarNombreSalida();
       await pintarGuardados();
       G.aviso(`Expediente «${nombre}» guardado.`, 'ok');
+      return true;
     } catch (e) {
       console.error(e);
       G.aviso('No se pudo guardar: ' + e.message, 'error');
+      return false;
     } finally {
       G.cargando(false);
     }
   }
 
   async function actualizarGuardado() {
-    if (!expedienteAbierto) return;
-    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return; }
+    if (!expedienteAbierto) return false;
+    if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return false; }
     if (tableroActivo.desfasado) {
       const sigue = await G.confirmar({
         titulo: 'Se guardó desde otra ventana',
@@ -3059,7 +3475,7 @@
         aceptar: 'Actualizar igual',
         peligro: true,
       });
-      if (!sigue) return;
+      if (!sigue) return false;
     }
     G.cargando(true, 'Actualizando el expediente…');
     try {
@@ -3068,9 +3484,11 @@
       marcarGuardado();
       await pintarGuardados();
       G.aviso(`«${expedienteAbierto.nombre}» actualizado: no se pierde lo que acabas de firmar o adjuntar.`, 'ok');
+      return true;
     } catch (e) {
       console.error(e);
       G.aviso('No se pudo actualizar: ' + e.message, 'error');
+      return false;
     } finally {
       G.cargando(false);
     }
@@ -3093,16 +3511,19 @@
    */
   async function empezarDeCero() {
     if (E.paginas.length) {
-      const mensaje = expedienteAbierto
-        ? `«${expedienteAbierto.nombre}» queda guardado y lo puedes volver a abrir cuando quieras.`
-        : 'Lo que tienes armado se perderá si no lo has guardado antes.';
-      const sigue = await G.confirmar({
-        titulo: 'Empezar otro expediente',
-        mensaje: 'Se vacía el taller. ' + mensaje,
-        aceptar: 'Vaciar el taller',
-        peligro: !expedienteAbierto,
-      });
-      if (!sigue) return;
+      // Antes decía «queda guardado» con solo tener un expediente abierto,
+      // aunque lo último que se hizo en él no se hubiera guardado.
+      if (sinGuardar(tableroActivo)) {
+        if (!(await ofrecerGuardar(tableroActivo, { verbo: 'lo vacías', accion: 'vaciar', Accion: 'Vaciar' }))) return;
+      } else {
+        const sigue = await G.confirmar({
+          titulo: 'Empezar otro expediente',
+          mensaje: `Se vacía el taller. «${expedienteAbierto ? expedienteAbierto.nombre : nombreTablero(tableroActivo)}» `
+            + 'queda guardado y lo puedes volver a abrir cuando quieras.',
+          aceptar: 'Vaciar el taller',
+        });
+        if (!sigue) return;
+      }
     }
     E.paginas = [];
     E.seleccion = new Set();
@@ -3119,19 +3540,19 @@
     soltarFuentesSinUso();
     expedienteAbierto = null;
     tableroActivo.firmaGuardada = null;
+    tableroActivo.aparcado = null;
     nombreManual = false;
     $('#nombreSalida').value = 'documento-unido';
     $('#metaTitulo').value = '';
     $('#metaAutor').value = '';
     $('#guardarNombre').value = '';
     $('#divRangos').value = '';
-    $('#restaurar').hidden = true;
     // la pantalla se refresca ya; el borrado del autoguardado va a disco y no
     // debe dejar la insignia "Editando…" visible mientras tanto
     pintar();
     G.aviso('Taller vacío. Ya puedes armar otro expediente.', 'ok');
     // si no se borra, al volver a entrar ofrecería recuperar lo descartado
-    try { await G.bd.borrarExpediente(claveAuto(tableroActivo)); } catch (e) {}
+    await borrarAutoguardado(tableroActivo);
   }
 
   /** Saca una sola hoja a su propio PDF, sin tocar el expediente. */
@@ -4851,6 +5272,7 @@
     if (ubicacion.corriendo) { ubicacion.corriendo.cancelada = true; return; }
     if (!E.paginas.length) { G.aviso('Primero abre el expediente.', 'error'); return; }
     const tarea = (ubicacion.corriendo = { cancelada: false });
+    const dueno = tableroActivo;     // se puede cambiar de tablero mientras lee
     const lista = E.paginas.slice();
     const continuaciones = new Set();
     const estado = $('#formatosEstado'), barra = $('#formatosBarra');
@@ -4905,7 +5327,24 @@
       $('#formatosProgreso').hidden = true;
     }
     if (tarea.cancelada) { estado.textContent = 'Detenido. No se marcó nada.'; return; }
-    estado.textContent = falladas ? `${falladas} hoja(s) no se pudieron leer.` : '';
+    const nota = falladas ? `${falladas} hoja(s) no se pudieron leer.` : '';
+    // Si mientras leía se pasó a otro tablero, lo hallado es del que lo pidió:
+    // antes se marcaba (o se decía «no encontré nada») sobre el que se estaba viendo.
+    if (dueno !== tableroActivo) {
+      estado.textContent = '';
+      if (!tableros.includes(dueno)) return;
+      G.aviso(`Ya están ubicados los Formatos 1 y 5 del tablero ${numeroDe(dueno)} («${nombreCorto(nombreTablero(dueno), 30)}»).`, 'ok', {
+        texto: 'Verlos',
+        fn: () => {
+          if (dueno !== tableroActivo && !activarTablero(dueno.id)) return;
+          $('#formatosEstado').textContent = nota;
+          mostrarFormatos(lista, hallados, continuaciones);
+          irASeccion('revisar');
+        },
+      });
+      return;
+    }
+    estado.textContent = nota;
     mostrarFormatos(lista, hallados, continuaciones);
   }
 
@@ -5073,6 +5512,9 @@
   /* ---------------- atajos de teclado ---------------- */
   document.addEventListener('keydown', (ev) => {
     const enCampo = /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
+    // donde se escribe texto (no un deslizador ni una casilla)
+    const escribiendo = ev.target.isContentEditable || ev.target.tagName === 'TEXTAREA'
+      || (ev.target.tagName === 'INPUT' && !/^(range|checkbox|radio|button|color|file)$/.test(ev.target.type));
     const ctrl = ev.ctrlKey || ev.metaKey;
 
     if (ev.key === 'Escape') {
@@ -5101,14 +5543,18 @@
       if (ev.key === '[') { accionLector((p) => { p.giro = G.norm(p.giro - 90); }); return; }
       if (ev.key === ']') { accionLector((p) => { p.giro = G.norm(p.giro + 90); }); return; }
     }
-    // Alt+1, Alt+2, Alt+3: de tablero en tablero
-    if (ev.altKey && !ctrl && /^Digit[1-3]$/.test(ev.code)) {
-      const t = tableros[Number(ev.code.slice(5)) - 1];
+    // Alt+1 … Alt+9 y Alt+0 (el décimo): de tablero en tablero
+    if (ev.altKey && !ctrl && /^Digit[0-9]$/.test(ev.code)) {
+      const n = Number(ev.code.slice(5)) || 10;
+      const t = tableros[n - 1];
       if (t) { ev.preventDefault(); activarTablero(t.id); }
       return;
     }
-    if (ctrl && ev.key.toLowerCase() === 'z') { ev.preventDefault(); deshacer(); return; }
-    if (ctrl && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
+    // En un campo, Ctrl+Z deshace lo que se escribe, no las hojas: antes,
+    // corregir el nombre del expediente con Ctrl+Z se llevaba lo último que
+    // se había cargado o, peor, dejaba el tablero vacío.
+    if (ctrl && !escribiendo && ev.key.toLowerCase() === 'z' && !ev.shiftKey) { ev.preventDefault(); deshacer(); return; }
+    if (ctrl && !escribiendo && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))) { ev.preventDefault(); rehacer(); return; }
     if (ctrl && ev.key.toLowerCase() === 's' && ev.shiftKey) { ev.preventDefault(); guardarExpedienteActual(); return; }
     if (ctrl && ev.key.toLowerCase() === 's') { ev.preventDefault(); guardar(); return; }
     // Ctrl+P imprime las hojas, no la pantalla de Pdflash
@@ -5570,7 +6016,7 @@
     $('#btnGuardarExp').addEventListener('click', guardarExpedienteActual);
     $('#chipEstado').addEventListener('click', guardarExpedienteActual);
     $('#bsFirmar').addEventListener('click', () => irASeccion('firmas'));
-    setInterval(pintarCabeceraYEstado, 30000);
+    setInterval(() => { pintarCabeceraYEstado(); recordarSinGuardar(); }, 30000);
 
     // nombre del archivo de salida
     $('#nombreSalida').addEventListener('input', () => {
@@ -5654,10 +6100,13 @@
     iniciarEditorFirma();
     G.iniciarFirmasUI();
 
-    // avisar antes de cerrar con trabajo sin guardar
+    // Avisar antes de cerrar solo si algo está sin guardar: preguntar también
+    // con todo guardado acostumbraba a decir que sí sin leer.
     window.addEventListener('beforeunload', (ev) => {
-      if (tableros.some((t) => datosDe(t).paginas.length)) { ev.preventDefault(); ev.returnValue = ''; }
+      if (tableros.some(sinGuardar)) { ev.preventDefault(); ev.returnValue = ''; }
     });
+    // lo que estaba por autoguardarse se guarda ya, aunque se cierre en esos 2,5 s
+    window.addEventListener('pagehide', adelantarAutoguardado);
   }
 
   E.firmas = G.almacen.leer();

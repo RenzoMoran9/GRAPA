@@ -50,11 +50,16 @@ Funciona en Chrome, Edge y Firefox actuales.
 - Selección múltiple con `Ctrl` y `Shift`, y **deshacer / rehacer**.
 
 ### Varios expedientes a la vez: tableros
-Pdflash abre **hasta tres expedientes a la vez**, cada uno en su pestaña, para
+Pdflash abre **hasta diez expedientes a la vez**, cada uno en su pestaña, para
 avanzar con todos en paralelo.
 
 - **Nuevo tablero** (el **＋** de las pestañas o *Archivo ▸ Nuevo tablero*) abre
-  otro en blanco. **Alt+1, Alt+2 y Alt+3** cambian de uno a otro.
+  otro en blanco; si ya tienes uno en blanco, te lleva a ese. **Alt+1 … Alt+9**
+  cambian de uno a otro, y **Alt+0** va al décimo.
+- **Con muchas pestañas** se estrechan y la tira se desplaza (también con la
+  rueda del ratón); la pestaña que ves siempre queda a la vista y un
+  degradado avisa de que hay más a un lado. La **flecha** junto a las pestañas
+  los lista todos, con su estado, para saltar a cualquiera.
 - **Cada tablero tiene lo suyo:** sus hojas, paquetes, selección, deshacer y
   rehacer, el expediente que se está editando, el nombre del archivo de salida
   y su propio autoguardado. Lo que haces en uno no toca a los otros.
@@ -62,11 +67,11 @@ avanzar con todos en paralelo.
   sellos, la carpeta de salida y las preferencias.
 - **Un expediente guardado solo puede estar abierto en un tablero.** Si lo
   abres otra vez, te lleva al tablero que ya lo tiene. Al abrir uno se usa
-  primero un tablero en blanco; si los tres están en uso, pregunta antes de
+  primero un tablero en blanco; si los diez están en uso, pregunta antes de
   reemplazar el actual.
-- **La pestaña dice cómo está:** un punto significa *sin guardar*; sin punto, ya
-  está guardado. El título, la barra de abajo y la lista de guardados lo
-  muestran igual y en qué tablero está abierto cada expediente.
+- **La pestaña dice cómo está:** un punto naranja significa *sin guardar*; sin
+  punto, ya está guardado. El título, la barra de abajo y la lista de guardados
+  lo muestran igual y en qué tablero está abierto cada expediente.
 - **Guardar o actualizar en uno se ve en todos:** la lista de guardados se
   actualiza al instante, también en otras ventanas de Pdflash abiertas a la
   vez. Si otra ventana guardó el mismo expediente que tienes abierto, Pdflash
@@ -75,9 +80,24 @@ avanzar con todos en paralelo.
   *copia* o las *mueve*. Llegan encima, en un paquete aparte, con sus firmas y
   sellos; los folios no viajan, porque se numeraban en el expediente de origen.
   Allí Ctrl+Z las quita.
-- **Cerrar un tablero** (la **×**, o clic con el botón central) pregunta si
-  tiene cambios sin guardar. Con tres tableros en uso, *Nuevo* pasa a
-  *Vaciar este tablero*.
+- **Cerrar un tablero** (la **×**, o clic con el botón central) con cambios sin
+  guardar ofrece **Guardar y cerrar**, *Cerrar sin guardar* o *Cancelar*. Con
+  los diez tableros en uso, *Nuevo* pasa a *Vaciar este tablero*.
+
+### Que no se pierda nada sin guardar
+- **«N sin guardar»**, arriba a la derecha de las pestañas, dice cuántos
+  expedientes tienen trabajo sin guardar, aunque su pestaña no esté a la vista.
+  Al pulsarlo salen todos: **Ir** a cada uno, **Guardar** uno, o **Guardar los
+  N** de una vez (a los nuevos les pide un nombre).
+- **Cerrar, vaciar o reemplazar** un tablero sin guardar ofrece **Guardar y …**
+  antes de seguir. Ya no dice «queda guardado» si lo último no se guardó.
+- **Si llevas 10 minutos** con un expediente sin guardar, te lo recuerda una
+  vez, con un botón para guardarlo.
+- La **pestaña del navegador** lleva un **●** delante del nombre mientras algo
+  esté sin guardar, y al **cerrar la ventana** el navegador pregunta solo si
+  queda algo sin guardar (con todo guardado ya no molesta).
+- Al **continuar donde lo dejaste**, un expediente que no cambió desde que lo
+  guardaste vuelve como *Guardado*, no como *Sin guardar*.
 - Lo que corrige el **editor de texto** vuelve al tablero que mandó las hojas,
   aunque mientras tanto hayas cambiado de tablero.
 
@@ -248,9 +268,12 @@ va a pesar. Te dice cuál cabe y el botón **Usar** lo deja elegido.
   compara con el máximo.
 
 ### Guardar el trabajo a medio hacer
-Pdflash **autoguarda** lo que estás armando, **un autoguardado por tablero**: si
-cierras el navegador por error, al volver te ofrece continuar con **todos** los
-tableros que tenías. Y puedes guardar expedientes con nombre para retomarlos
+Pdflash **autoguarda** lo que estás armando, **un autoguardado por tablero y por
+ventana**: si cierras el navegador por error, al volver te ofrece continuar con
+**todos** los tableros que tenías. Con **dos ventanas de Pdflash abiertas a la
+vez**, cada una guarda lo suyo (antes la última pisaba a la otra) y al
+recargar una solo se ofrece lo de las ventanas que ya se cerraron. Si se
+borran todas las hojas de un tablero, su autoguardado también se borra. Y puedes guardar expedientes con nombre para retomarlos
 otro día con **Guardar** (o **Ctrl+Mayús+S**): la primera vez pide un nombre y
 después actualiza el mismo guardado. **Exportar PDF** (**Ctrl+S**) arma el PDF
 terminado. Todo se queda en tu equipo.
@@ -421,9 +444,9 @@ salga tal como se ve.
 | `Ctrl+S` | Exportar PDF |
 | `Ctrl+P` | Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta) |
 | `Ctrl+Mayús+S` | Guardar el expediente (para retomarlo otro día) |
-| `Alt+1`, `Alt+2`, `Alt+3` | Cambiar de tablero |
+| `Alt+1` … `Alt+9`, `Alt+0` | Cambiar de tablero (`Alt+0`, el décimo) |
 | `Ctrl+F` | Buscar una palabra en todas las hojas · `Enter` pasa a la siguiente |
-| `Ctrl+Z` / `Ctrl+Y` | Deshacer / Rehacer |
+| `Ctrl+Z` / `Ctrl+Y` | Deshacer / Rehacer (escribiendo en un campo, deshacen el texto, no las hojas) |
 | `Ctrl+A` | Seleccionar todas las páginas |
 | `Ctrl+D` | Duplicar |
 | `Supr` | Eliminar |

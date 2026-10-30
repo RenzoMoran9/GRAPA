@@ -530,6 +530,9 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 }
 .aviso.ok{border-left-color:var(--verde)}
 .aviso.error{border-left-color:var(--rojo)}
+/* un aviso con botón («Guardar») sí recibe el clic */
+.aviso:has(.aviso-accion){pointer-events:auto}
+.aviso-accion{display:inline-flex;margin:8px 0 0;font-weight:600}
 @keyframes entra{from{opacity:0;transform:translateY(8px)}}
 .cargando{
   position:fixed;inset:0;background:rgba(12,16,22,.5);display:grid;place-items:center;z-index:90;
@@ -936,17 +939,26 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .buscar-escaneadas .nota{margin:0 0 8px}
 
 
-/* ---------- tableros: hasta tres expedientes a la vez ---------- */
+/* ---------- tableros: hasta diez expedientes a la vez ---------- */
 .tableros{
   height:var(--tableros-alto);box-sizing:border-box;display:flex;align-items:flex-end;gap:6px;flex:none;
   padding:0 22px;background:var(--fondo-3);border-bottom:1px solid var(--borde);
   position:relative;z-index:20;
 }
-.tableros-lista{display:flex;align-items:flex-end;gap:2px;min-width:0;flex:0 1 auto}
+/* La tira se desplaza de lado cuando no caben (la rueda del ratón también la
+   mueve). La barra de desplazamiento no se ve: la pestaña activa siempre se
+   trae a la vista y los atajos Alt+número llegan a cualquiera. */
+.tableros-lista{
+  display:flex;align-items:flex-end;gap:2px;min-width:0;flex:0 1 auto;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  /* un píxel de más abajo: la pestaña activa tapa la raya de la barra */
+  height:calc(100% + 1px);margin-bottom:-1px;
+}
+.tableros-lista::-webkit-scrollbar{display:none}
 .tablero{
   --color-tablero:var(--acento);
   position:relative;display:flex;align-items:center;gap:8px;height:34px;box-sizing:border-box;
-  min-width:150px;max-width:300px;padding:0 6px 0 12px;
+  flex:0 1 auto;min-width:150px;max-width:300px;padding:0 6px 0 12px;
   border:1px solid transparent;border-bottom:0;border-radius:9px 9px 0 0;
   color:var(--texto-2);font-size:13px;font-weight:500;cursor:pointer;user-select:none;
   transition:background .12s,color .12s;
@@ -964,7 +976,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .tablero-punto{width:8px;height:8px;border-radius:50%;background:var(--color-tablero);flex:none}
 .tablero-nombre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tablero-meta{color:var(--texto-3);font-size:12px;font-weight:400;flex:none}
-.tablero-estado{display:none;width:7px;height:7px;border-radius:50%;background:var(--texto-2);margin-left:auto;flex:none}
+.tablero-estado{display:none;width:7px;height:7px;border-radius:50%;background:var(--aviso);margin-left:auto;flex:none}
 .tablero.est-nuevo .tablero-estado,.tablero.est-sucio .tablero-estado{display:block}
 .tablero-estado + .tablero-cerrar{margin-left:0}
 .tablero-cerrar{
@@ -984,8 +996,54 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .tablero-nuevo:hover{border-style:solid;color:var(--texto);background:var(--fondo-2)}
 .tablero-nuevo .ico{width:14px;height:14px}
 .tablero-nuevo[hidden]{display:none}
-.tableros-cupo{align-self:center;margin-left:auto;font-size:12px;color:var(--texto-3)}
+.tableros-cupo{align-self:center;margin-left:auto;font-size:12px;color:var(--texto-3);white-space:nowrap;flex:none}
 .tableros-cupo.lleno{padding:3px 9px;border:1px dashed var(--borde);border-radius:7px}
+.tablero-nuevo{flex:none}
+/* con más de cuatro, pestañas estrechas: el número de hojas sale al apuntar */
+.tableros.muchos .tablero{min-width:150px;max-width:210px;gap:6px;padding-left:10px}
+.tableros.muchos .tablero:not(.activo):not(:hover):not(:focus-within) .tablero-cerrar{display:none}
+.tableros.muchos .tablero-meta{display:none}
+.tableros.muchos .tablero-nuevo{padding:0 7px}
+.tableros.muchos .tablero-nuevo-txt{display:none}
+
+/* lo que no está guardado, a la vista aunque su pestaña no se vea */
+.sin-guardar-caja{position:relative;align-self:center;flex:none;margin-left:auto}
+.sin-guardar-caja + .tableros-cupo{margin-left:4px}
+.tableros-sin-guardar{
+  display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--aviso) 45%,var(--borde));
+  background:color-mix(in srgb,var(--aviso) 10%,var(--fondo-2));color:var(--aviso);
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.tableros-sin-guardar:hover{border-color:var(--aviso)}
+.tableros-sin-guardar[hidden]{display:none}
+/* los menús de la tira bajan (el de «Enviar a…» sube) y se ciñen al borde derecho */
+.menu-enviar.menu-tira{
+  bottom:auto;top:calc(100% + 8px);left:auto;right:0;transform:none;
+  min-width:360px;max-width:min(440px,calc(100vw - 32px));max-height:min(70vh,560px);overflow-y:auto;
+}
+.menu-tira .menu-enviar-nombre{display:flex;flex-direction:column;line-height:1.25}
+.menu-tira .menu-enviar-nombre b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.menu-tira .menu-enviar-nombre small{font-size:11.5px;color:var(--texto-3)}
+.menu-tira .menu-enviar-nombre small.sucio{color:var(--aviso)}
+.menu-tira .menu-enviar-fila.actual{background:var(--fondo-3)}
+.menu-tira .menu-enviar-fila[role="button"]{cursor:pointer}
+.menu-sin-guardar-todos{margin-top:6px}
+.menu-tira-atajo{font:inherit;font-size:11px;color:var(--texto-3);flex:none;padding-right:4px}
+
+/* la lista de todos los tableros: asoma cuando no caben en la tira */
+.lista-tableros-caja{position:relative;align-self:center;flex:none}
+.tableros-todos{
+  display:inline-grid;place-items:center;width:28px;height:26px;padding:0;border:1px solid var(--borde);
+  border-radius:7px;background:var(--fondo-2);color:var(--texto-2);cursor:pointer;
+}
+.tableros-todos:hover{color:var(--texto);border-color:var(--texto-3)}
+.tableros-todos .ico{width:15px;height:15px}
+.tableros-todos[hidden]{display:none}
+/* un degradado avisa de que hay más pestañas a un lado */
+.tableros-lista.mas-izq{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px);mask-image:linear-gradient(90deg,transparent,#000 28px)}
+.tableros-lista.mas-der{-webkit-mask-image:linear-gradient(270deg,transparent,#000 28px);mask-image:linear-gradient(270deg,transparent,#000 28px)}
+.tableros-lista.mas-izq.mas-der{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
 
 /* enviar hojas a otro tablero */
 .enviar-caja{position:relative;display:inline-flex}
