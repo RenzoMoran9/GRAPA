@@ -2695,8 +2695,9 @@
     const sobra = lista.scrollWidth - lista.clientWidth > 2;
     lista.classList.toggle('mas-izq', sobra && lista.scrollLeft > 2);
     lista.classList.toggle('mas-der', sobra && lista.scrollLeft < lista.scrollWidth - lista.clientWidth - 2);
-    $('#btnTodosTableros').hidden = !sobra;
-    if (!sobra) cerrarMenuTodos();
+    const varios = tableros.length > 1;
+    $('#btnTodosTableros').hidden = !varios;
+    if (!varios) cerrarMenuTodos();
     else if (!$('#menuTodosTableros').hidden) abrirMenuTodos();
   }
 
@@ -2706,41 +2707,105 @@
     const b = $('#btnTodosTableros');
     if (b) b.setAttribute('aria-expanded', 'false');
   }
-  /** Todos los tableros en una lista, para llegar a los que no caben en la tira. */
+
+  /**
+   * Todos los tableros de un vistazo: una tarjeta por expediente con su
+   * portada, cuántas hojas y documentos trae y si está guardado, foliado y
+   * firmado. Se despliega desde la tira de pestañas, sin salir del tablero
+   * que se está viendo: con diez abiertos, los nombres de las pestañas se
+   * cortan y no dicen qué falta en cada uno.
+   */
   function abrirMenuTodos() {
     const m = $('#menuTodosTableros');
     m.innerHTML = '';
-    const tit = document.createElement('p');
-    tit.className = 'menu-enviar-titulo';
-    tit.textContent = `${tableros.length} tableros abiertos`;
-    m.appendChild(tit);
+    const el = (tag, clase, texto) => {
+      const e = document.createElement(tag);
+      if (clase) e.className = clase;
+      if (texto != null) e.textContent = texto;
+      return e;
+    };
+    const boton = (texto, clase, fn) => {
+      const b = el('button', 'btn btn-mini ' + (clase || ''), texto);
+      b.type = 'button';
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); cerrarMenuTodos(); fn(); });
+      return b;
+    };
+
+    const pendientes = tableros.filter(sinGuardar).length;
+    const cab = el('div', 'tt-cab');
+    cab.append(el('b', '', tableros.length === 1 ? '1 tablero abierto' : `${tableros.length} tableros abiertos`));
+    if (pendientes) cab.append(el('span', 'tt-pendientes', pendientes === 1 ? '1 sin guardar' : `${pendientes} sin guardar`));
+    const acciones = el('span', 'tt-cab-acciones');
+    if (pendientes > 1) acciones.append(boton(`Guardar los ${pendientes}`, 'btn-primario', guardarTodos));
+    if (tableros.length < MAX_TABLEROS) acciones.append(boton('＋ Nuevo tablero', '', nuevoTablero));
+    cab.append(acciones);
+    m.appendChild(cab);
+
+    const rejilla = el('div', 'tt-rejilla');
     tableros.forEach((t) => {
       const d = datosDe(t);
       const estado = estadoDe(t);
-      const fila = document.createElement('div');
-      fila.className = 'menu-enviar-fila' + (t === tableroActivo ? ' actual' : '');
-      fila.setAttribute('role', 'button');
-      fila.tabIndex = 0;
-      fila.style.setProperty('--color-tablero', colorDe(t));
-      const txt = document.createElement('span');
-      txt.className = 'menu-enviar-nombre';
-      const nom = document.createElement('b');
-      nom.textContent = `${numeroDe(t)} · ${nombreCorto(nombreTablero(t), 34)}`;
-      const det = document.createElement('small');
-      det.className = estado === 'nuevo' || estado === 'sucio' ? 'sucio' : '';
-      det.textContent = (estado === 'vacio' ? 'en blanco' : estado === 'guardado' ? 'guardado'
-        : estado === 'nuevo' ? 'nunca guardado' : 'cambios sin guardar')
-        + (d.paginas.length ? ` · ${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'}` : '');
-      txt.append(nom, det);
-      const kbd = document.createElement('kbd');
-      kbd.className = 'menu-tira-atajo';
-      if (numeroDe(t) <= 10) kbd.textContent = 'Alt+' + (numeroDe(t) % 10);
-      fila.append(txt, kbd);
-      const ir = () => { cerrarMenuTodos(); activarTablero(t.id); };
-      fila.addEventListener('click', ir);
-      fila.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ir(); } });
-      m.appendChild(fila);
+      const n = numeroDe(t);
+      const tarjeta = el('div', 'tt-tarjeta' + (t === tableroActivo ? ' actual' : ''));
+      tarjeta.setAttribute('role', 'button');
+      tarjeta.tabIndex = 0;
+      tarjeta.style.setProperty('--color-tablero', colorDe(t));
+      tarjeta.title = t === tableroActivo ? 'Es el tablero que estás viendo' : `Ir al tablero ${n}` + (n <= 10 ? ` (Alt+${n % 10})` : '');
+
+      const portada = el('div', 'tt-portada');
+      portada.append(el('span', 'tt-num', String(n)));
+      const primera = d.paginas[0];
+      if (primera) {
+        const img = el('img');
+        img.alt = '';
+        img.draggable = false;
+        const previa = G.miniaturaCacheada(primera, G.NIVELES_MINI[1]);
+        if (previa) img.src = previa;
+        else G.miniatura(primera, G.NIVELES_MINI[0], () => 'ya').then((url) => { img.src = url; }).catch(() => {});
+        portada.append(img);
+      } else {
+        portada.append(el('span', 'tt-blanco', 'En blanco'));
+      }
+      tarjeta.append(portada);
+
+      const cuerpo = el('div', 'tt-cuerpo');
+      const nombre = nombreTablero(t);
+      const nom = el('b', 'tt-nombre', nombre);
+      nom.title = nombre;
+      cuerpo.append(nom);
+      if (d.paginas.length) {
+        const docs = new Set(d.paginas.map((p) => p.paqueteId)).size;
+        cuerpo.append(el('span', 'tt-meta', `${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'} · `
+          + `${docs} ${docs === 1 ? 'documento' : 'documentos'}`));
+        const folios = d.paginas.filter((p) => p.sellos.some((x) => x.rol === 'folio')).length;
+        const firmas = d.paginas.reduce((k, p) => k + p.sellos.filter((x) => x.rol === 'firma').length, 0);
+        const chips = el('div', 'tt-chips');
+        chips.append(
+          estado === 'guardado' ? el('span', 'tt-chip ok', '✓ Guardado')
+            : el('span', 'tt-chip no', estado === 'nuevo' ? '● Nunca guardado' : '● Sin guardar'),
+          folios ? el('span', 'tt-chip ok', folios === d.paginas.length ? '✓ Foliado' : `✓ ${folios} de ${d.paginas.length} foliadas`)
+            : el('span', 'tt-chip', 'Sin foliar'),
+          firmas ? el('span', 'tt-chip ok', firmas === 1 ? '✓ 1 firma' : `✓ ${firmas} firmas`)
+            : el('span', 'tt-chip', 'Sin firmar'));
+        cuerpo.append(chips);
+      } else {
+        cuerpo.append(el('span', 'tt-meta', 'Arrastra aquí los PDF de otro expediente'));
+      }
+      const pie = el('div', 'tt-acciones');
+      if (sinGuardar(t)) pie.append(boton('Guardar', 'btn-primario', () => guardarTablero(t)));
+      if (tableros.length > 1) pie.append(boton('Cerrar', 'btn-peligro-suave', () => cerrarTablero(t.id)));
+      if (pie.children.length) cuerpo.append(pie);
+      tarjeta.append(cuerpo);
+
+      const ir = () => { cerrarMenuTodos(); if (t !== tableroActivo) activarTablero(t.id); };
+      tarjeta.addEventListener('click', ir);
+      tarjeta.addEventListener('keydown', (ev) => {
+        if (ev.target !== tarjeta) return;
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ir(); }
+      });
+      rejilla.appendChild(tarjeta);
     });
+    m.appendChild(rejilla);
     m.hidden = false;
     $('#btnTodosTableros').setAttribute('aria-expanded', 'true');
   }

@@ -1031,8 +1031,46 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .menu-sin-guardar-todos{margin-top:6px}
 .menu-tira-atajo{font:inherit;font-size:11px;color:var(--texto-3);flex:none;padding-right:4px}
 
-/* la lista de todos los tableros: asoma cuando no caben en la tira */
-.lista-tableros-caja{position:relative;align-self:center;flex:none}
+/* todos los tableros de un vistazo: se despliega bajo la tira, a lo ancho del taller */
+.lista-tableros-caja{align-self:center;flex:none}
+.todos-tableros{
+  position:absolute;top:calc(100% + 6px);right:22px;z-index:60;
+  width:min(980px,calc(100% - 44px));max-height:min(72vh,640px);overflow:auto;
+  padding:14px;display:flex;flex-direction:column;gap:12px;
+  background:var(--fondo-2);color:var(--texto);border:1px solid var(--borde);border-radius:var(--radio);box-shadow:var(--sombra-fuerte);
+}
+.todos-tableros[hidden]{display:none}
+.tt-cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px}
+.tt-pendientes{font-size:12px;font-weight:600;color:var(--aviso)}
+.tt-cab-acciones{margin-left:auto;display:flex;gap:6px}
+.tt-rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.tt-tarjeta{
+  --color-tablero:var(--acento);position:relative;display:flex;flex-direction:column;min-width:0;
+  border:1px solid var(--borde);border-radius:10px;overflow:hidden;background:var(--fondo);cursor:pointer;
+  transition:border-color .12s,box-shadow .12s;
+}
+.tt-tarjeta::before{content:"";height:4px;background:var(--color-tablero);flex:none}
+.tt-tarjeta:hover{border-color:var(--texto-3)}
+.tt-tarjeta:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.tt-tarjeta.actual{box-shadow:0 0 0 2px var(--color-tablero)}
+.tt-portada{position:relative;height:118px;background:var(--fondo-3);display:flex;justify-content:center;align-items:flex-start;overflow:hidden;padding-top:12px}
+.tt-portada img{width:52%;height:auto;max-width:100%;background:#fff;border-radius:2px;box-shadow:0 1px 8px rgba(0,0,0,.16)}
+.tt-num{position:absolute;left:8px;top:8px;min-width:20px;text-align:center;background:var(--color-tablero);color:#fff;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 6px;font-variant-numeric:tabular-nums}
+.tt-blanco{align-self:center;font-size:12px;color:var(--texto-3)}
+.tt-cuerpo{display:flex;flex-direction:column;gap:6px;padding:10px 11px 11px;flex:1}
+.tt-nombre{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.tt-meta{font-size:11.5px;color:var(--texto-3)}
+.tt-chips{display:flex;flex-wrap:wrap;gap:4px}
+.tt-chip{font-size:11px;border-radius:999px;padding:0 8px;border:1px solid var(--borde);color:var(--texto-2);background:var(--fondo-2);white-space:nowrap}
+.tt-chip.ok{color:var(--verde);border-color:color-mix(in srgb,var(--verde) 40%,var(--borde))}
+.tt-chip.no{color:var(--aviso);font-weight:600;border-color:color-mix(in srgb,var(--aviso) 45%,var(--borde));background:color-mix(in srgb,var(--aviso) 9%,var(--fondo-2))}
+.tt-acciones{display:flex;gap:6px;margin-top:auto;padding-top:4px}
+.tt-acciones .btn{flex:1}
+/* «Guardar» es lo principal en las tarjetas y en el menú de lo que no está guardado */
+.tt-acciones .btn-mini.btn-primario,.tt-cab .btn-mini.btn-primario,.menu-tira .btn-mini.btn-primario{
+  background:var(--acento);color:var(--sobre-acento);font-weight:600}
+.tt-acciones .btn-mini.btn-primario:hover:not(:disabled),.tt-cab .btn-mini.btn-primario:hover:not(:disabled),
+.menu-tira .btn-mini.btn-primario:hover:not(:disabled){background:var(--acento-oscuro);color:var(--sobre-acento)}
 .tableros-todos{
   display:inline-grid;place-items:center;width:28px;height:26px;padding:0;border:1px solid var(--borde);
   border-radius:7px;background:var(--fondo-2);color:var(--texto-2);cursor:pointer;

@@ -58,8 +58,12 @@ avanzar con todos en paralelo.
   cambian de uno a otro, y **Alt+0** va al décimo.
 - **Con muchas pestañas** se estrechan y la tira se desplaza (también con la
   rueda del ratón); la pestaña que ves siempre queda a la vista y un
-  degradado avisa de que hay más a un lado. La **flecha** junto a las pestañas
-  los lista todos, con su estado, para saltar a cualquiera.
+  degradado avisa de que hay más a un lado.
+- **Todos de un vistazo:** la **flecha** junto a las pestañas despliega una
+  tarjeta por tablero, con la portada, cuántas hojas y documentos trae y si
+  está **guardado, foliado y firmado**. Un clic en la tarjeta va a ese
+  tablero; desde ahí también se guarda o se cierra cada uno, y «Guardar los N»
+  guarda todo lo pendiente. No hace falta salir del tablero que estás viendo.
 - **Cada tablero tiene lo suyo:** sus hojas, paquetes, selección, deshacer y
   rehacer, el expediente que se está editando, el nombre del archivo de salida
   y su propio autoguardado. Lo que haces en uno no toca a los otros.
