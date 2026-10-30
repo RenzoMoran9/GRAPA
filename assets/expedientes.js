@@ -141,13 +141,18 @@
   async function conTienda(nombres, modo, fn) {
     const bd = await abrir();
     const tx = bd.transaction(nombres, modo);
-    const tiendas = nombres.map((n) => tx.objectStore(n));
-    const r = await fn.apply(null, tiendas);
-    await new Promise((ok, no) => {
+    // se escucha el final ANTES de empezar: si fn espera a sus propias
+    // peticiones, la transacción puede terminar antes de que se mire
+    const fin = new Promise((ok, no) => {
       tx.oncomplete = () => ok();
       tx.onerror = () => no(tx.error);
       tx.onabort = () => no(tx.error);
     });
+    const tiendas = nombres.map((n) => tx.objectStore(n));
+    let r;
+    try { r = await fn.apply(null, tiendas); }
+    catch (e) { try { tx.abort(); } catch (e2) {} fin.catch(() => {}); throw e; }
+    await fin;
     return r;
   }
 
@@ -167,13 +172,15 @@
 
     /**
      * Guarda la disposición y, si hace falta, los PDF que aún no estén dentro.
-     * La consulta va en una transacción aparte: esperar dentro de una de
-     * escritura puede cerrarla antes de tiempo.
+     * Todo en UNA transacción: antes se miraba qué PDF había en una aparte, y
+     * si entre medias otra ventana borraba un expediente y con él ese PDF, el
+     * guardado quedaba apuntando a un archivo que ya no estaba (y al abrirlo
+     * faltaban hojas). Dentro de la misma transacción nadie puede colarse.
+     * Solo se espera a peticiones de la propia base, que no la cierran.
      */
     async guardarExpediente(registro, fuentes) {
-      const yaEstan = await conTienda(['fuentes'], 'readonly',
-        async (fue) => new Set(await pedir(fue.getAllKeys())));
-      await conTienda(['expedientes', 'fuentes'], 'readwrite', (exp, fue) => {
+      await conTienda(['expedientes', 'fuentes'], 'readwrite', async (exp, fue) => {
+        const yaEstan = new Set(await pedir(fue.getAllKeys()));
         exp.put(registro);
         fuentes.forEach((f) => { if (!yaEstan.has(f.id)) fue.put(f); });
       });
@@ -210,17 +217,20 @@
       return reg;
     },
 
-    /** Borra el expediente y los PDF que ya no use ningún otro. */
+    /**
+     * Borra el expediente y los PDF que ya no use ningún otro. También en una
+     * sola transacción: hecho en cuatro pasos sueltos, un autoguardado de otra
+     * ventana que llegara en medio podía perder el PDF que acababa de guardar.
+     */
     async borrarExpediente(id) {
-      await conTienda(['expedientes'], 'readwrite', (exp) => { exp.delete(id); });
-      const quedan = await conTienda(['expedientes'], 'readonly', (exp) => pedir(exp.getAll()));
-      const enUso = new Set();
-      quedan.forEach((r) => (r.fuenteIds || []).forEach((f) => enUso.add(f)));
-      const claves = await conTienda(['fuentes'], 'readonly', (fue) => pedir(fue.getAllKeys()));
-      const sobran = claves.filter((k) => !enUso.has(k));
-      if (sobran.length) {
-        await conTienda(['fuentes'], 'readwrite', (fue) => { sobran.forEach((k) => fue.delete(k)); });
-      }
+      await conTienda(['expedientes', 'fuentes'], 'readwrite', async (exp, fue) => {
+        exp.delete(id);
+        const quedan = await pedir(exp.getAll());
+        const enUso = new Set();
+        quedan.forEach((r) => (r.fuenteIds || []).forEach((f) => enUso.add(f)));
+        const claves = await pedir(fue.getAllKeys());
+        claves.forEach((k) => { if (!enUso.has(k)) fue.delete(k); });
+      });
       avisarCambio('borrar', id);
     },
 

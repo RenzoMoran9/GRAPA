@@ -9,12 +9,43 @@
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
   /* ---------------- avisos y capa de carga ---------------- */
-  /** «accion» ({texto, fn}) pone un botón en el aviso, y entonces dura más. */
+  /**
+   * «accion» ({texto, fn}) pone un botón en el aviso, y entonces dura más.
+   * Devuelve un mando para cambiarle el texto mientras se ve (lo usa la
+   * carga de archivos para sumar en un solo aviso). El mismo aviso repetido
+   * no se apila: se cuenta «×2» en el que ya está. Y nunca hay más de cuatro
+   * a la vista: con diez archivos cargados de uno en uno, la pila tapaba media
+   * pantalla.
+   */
+  const MAX_AVISOS = 4;
   G.aviso = function (texto, tipo, accion) {
     const caja = $('#avisos');
+    const vivos = () => Array.from(caja.children).filter((x) => !x.classList.contains('saliendo'));
+    const igual = !accion && vivos().find((x) => x.dataset.texto === texto && x.dataset.tipo === (tipo || '') && !x.querySelector('.aviso-accion'));
+    if (igual) {
+      igual._veces = (igual._veces || 1) + 1;
+      igual.querySelector('.aviso-veces').textContent = '×' + igual._veces;
+      igual._programar();
+      return igual._mando;
+    }
     const el = document.createElement('div');
     el.className = 'aviso ' + (tipo || '');
-    el.textContent = texto;
+    el.dataset.texto = texto;
+    el.dataset.tipo = tipo || '';
+    const txt = document.createElement('span');
+    txt.className = 'aviso-texto';
+    txt.textContent = texto;
+    const veces = document.createElement('b');
+    veces.className = 'aviso-veces';
+    el.append(txt, veces);
+    const quitar = () => {
+      if (el.classList.contains('saliendo')) return;
+      el.classList.add('saliendo');
+      clearTimeout(el._reloj);
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 320);
+    };
     if (accion && accion.texto && accion.fn) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -23,12 +54,25 @@
       b.addEventListener('click', () => { el.remove(); accion.fn(); });
       el.appendChild(b);
     }
+    el._programar = () => {
+      clearTimeout(el._reloj);
+      el._reloj = setTimeout(quitar, accion ? 9000 : tipo === 'error' ? 5200 : 3200);
+    };
+    el._mando = {
+      vivo: () => el.isConnected && !el.classList.contains('saliendo'),
+      cambiar: (nuevo) => { txt.textContent = nuevo; el.dataset.texto = nuevo; el._programar(); },
+    };
     caja.appendChild(el);
-    setTimeout(() => {
-      el.style.transition = 'opacity .3s';
-      el.style.opacity = '0';
-      setTimeout(() => el.remove(), 320);
-    }, accion ? 9000 : tipo === 'error' ? 5200 : 3200);
+    el._programar();
+    // los de más: se va el más viejo (los que llevan botón, los últimos)
+    const lista = vivos();
+    while (lista.length > MAX_AVISOS) {
+      const viejo = lista.find((x) => !x.querySelector('.aviso-accion')) || lista[0];
+      lista.splice(lista.indexOf(viejo), 1);
+      viejo.classList.add('saliendo');
+      viejo.remove();
+    }
+    return el._mando;
   };
 
   /**
@@ -593,6 +637,11 @@
     pintar();
   }
 
+  let cargaReciente = null;   // el aviso de la última carga, para sumarle las siguientes
+
+  /** Lo que «Ubicar formatos» encontró en cada hoja (uid → 1, 5 o 'cot'). */
+  const formatosHallados = new Map();
+
   /** Carga archivos directamente dentro de un paquete que ya existe. */
   function anadirAPaquete(id) {
     const entrada = $('#entradaArchivos');
@@ -600,7 +649,93 @@
     entrada.click();
   }
 
-  function tarjeta(pagina, indice) {
+  /**
+   * La cabecera de un documento en la vista de hojas: su color, su nombre,
+   * cuántas hojas trae y en qué posiciones, lo que encontró «Ubicar
+   * formatos» en él y sus botones. Plegarlo deja solo la cabecera.
+   */
+  function cabeceraDePaquete(grupo, plegado) {
+    const { paquete, paginas } = grupo;
+    const desde = E.paginas.indexOf(paginas[0]) + 1;
+    const hasta = desde + paginas.length - 1;
+    const el = document.createElement('div');
+    el.className = 'grupo-cab' + (plegado ? ' plegado' : '');
+    el.dataset.paquete = paquete.id;
+    el.style.setProperty('--color-paquete', paquete.color);
+
+    const plegar = document.createElement('button');
+    plegar.type = 'button';
+    plegar.className = 'grupo-plegar';
+    plegar.innerHTML = icono(plegado ? 'fin' : 'abajo');
+    plegar.title = plegado ? 'Desplegar sus hojas' : 'Plegar: dejar solo la cabecera';
+    plegar.setAttribute('aria-expanded', String(!plegado));
+    plegar.setAttribute('aria-label', (plegado ? 'Desplegar ' : 'Plegar ') + paquete.nombre);
+    const alternar = () => {
+      const s = tableroActivo.plegados;
+      if (s.has(paquete.id)) s.delete(paquete.id); else s.add(paquete.id);
+      pintar();
+    };
+    plegar.addEventListener('click', alternar);
+
+    const nom = document.createElement('b');
+    nom.className = 'grupo-nombre';
+    nom.textContent = paquete.nombre;
+    nom.title = 'Doble clic para cambiarle el nombre';
+    nom.addEventListener('dblclick', () => renombrarPaquete(paquete.id));
+
+    const meta = document.createElement('span');
+    meta.className = 'grupo-meta';
+    meta.textContent = paginas.length === 1 ? `1 hoja · hoja ${desde}` : `${paginas.length} hojas · hojas ${desde}–${hasta}`;
+
+    const partes = [plegar, nom, meta];
+    // lo que «Ubicar formatos» marcó en este documento
+    const tipos = new Set(paginas.map((p) => formatosHallados.get(p.uid)).filter(Boolean));
+    [[1, 'Formato 1'], [5, 'Formato 5'], ['cot', 'Cotización']].forEach(([k, t]) => {
+      if (!tipos.has(k)) return;
+      const chip = document.createElement('span');
+      chip.className = 'grupo-chip';
+      chip.textContent = t;
+      partes.push(chip);
+    });
+    const marcadas = paginas.filter((p) => E.seleccion.has(p.uid)).length;
+    if (marcadas) {
+      const chip = document.createElement('span');
+      chip.className = 'grupo-chip marcadas';
+      chip.textContent = marcadas === paginas.length ? 'todas marcadas' : `${marcadas} marcada${marcadas === 1 ? '' : 's'}`;
+      partes.push(chip);
+    }
+
+    const acciones = document.createElement('div');
+    acciones.className = 'grupo-acciones';
+    const todas = marcadas === paginas.length;
+    [
+      [todas ? 'Desmarcar' : 'Marcar todo', todas ? 'Quitar la marca a sus hojas' : 'Marcar todas sus hojas', () => {
+        paginas.forEach((p) => { if (todas) E.seleccion.delete(p.uid); else E.seleccion.add(p.uid); });
+        pintar();
+      }],
+      [icono('editar'), 'Cambiar el nombre', () => renombrarPaquete(paquete.id)],
+      [icono('mas'), 'Añadir más archivos a este documento', () => anadirAPaquete(paquete.id)],
+      [icono('imprimir'), 'Imprimir este documento', () => imprimirHojas(paginas, `«${paquete.nombre}»`)],
+      [icono('lupa'), 'Ver sus hojas en grande', () => abrirLector(paginas[0])],
+    ].forEach(([txt, tit, fn]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-mini';
+      b.innerHTML = txt;
+      b.title = tit;
+      if (!b.textContent.trim()) b.setAttribute('aria-label', tit);
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
+      acciones.appendChild(b);
+    });
+    el.append(...partes, acciones);
+    el.addEventListener('dblclick', (ev) => {
+      if (ev.target.closest('.grupo-acciones, .grupo-nombre, .grupo-plegar')) return;
+      alternar();
+    });
+    return el;
+  }
+
+  function tarjeta(pagina, indice, enPaquete) {
     const fuente = E.fuentes.get(pagina.fuenteId);
     const vis = visDe(pagina);
     const anchoPx = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ancho-pag')) || 180;
@@ -670,6 +805,14 @@
       f.title = 'Lleva firma o sello';
       f.innerHTML = icono('firma');
       marco.appendChild(f);
+    }
+    // su lugar dentro del documento: «2/3»
+    if (enPaquete) {
+      const d = document.createElement('span');
+      d.className = 'pag-dentro';
+      d.textContent = enPaquete.k + '/' + enPaquete.n;
+      d.title = `Hoja ${enPaquete.k} de ${enPaquete.n} de este documento`;
+      marco.appendChild(d);
     }
     const folioDe = folios.get(pagina.uid);
     if (folioDe != null) {
@@ -796,6 +939,11 @@
 
   function refrescarSeleccion() {
     $$('.pag').forEach((el) => el.classList.toggle('sel', E.seleccion.has(el.dataset.uid)));
+    // las cabeceras dicen cuántas hojas suyas están marcadas
+    $$('#rejilla .grupo-cab').forEach((cab) => {
+      const g = paquetesEnOrden().find((x) => x.paquete.id === cab.dataset.paquete);
+      if (g) cab.replaceWith(cabeceraDePaquete(g, cab.classList.contains('plegado')));
+    });
     pintarAlcance(vista === 'paquetes' && !paqueteAbierto);
   }
 
@@ -814,7 +962,21 @@
     } else {
       // el número que lleva la hoja es su sitio en el expediente entero, no
       // dentro del paquete: si no, dentro de una cotización todo empieza en 1
-      hojasVisibles().forEach((p) => rejilla.appendChild(tarjeta(p, E.paginas.indexOf(p))));
+      const grupos = paqueteAbierto ? [] : paquetesEnOrden();
+      if (grupos.length > 1) {
+        // Con varios documentos, cada uno empieza con su cabecera: se ve dónde
+        // empieza y acaba cada cotización sin tener que pasar a «Paquetes».
+        const plegados = tableroActivo.plegados || (tableroActivo.plegados = new Set());
+        grupos.forEach((g) => {
+          const plegado = plegados.has(g.paquete.id);
+          rejilla.appendChild(cabeceraDePaquete(g, plegado));
+          if (!plegado) {
+            g.paginas.forEach((p, k) => rejilla.appendChild(tarjeta(p, E.paginas.indexOf(p), { k: k + 1, n: g.paginas.length })));
+          }
+        });
+      } else {
+        hojasVisibles().forEach((p) => rejilla.appendChild(tarjeta(p, E.paginas.indexOf(p))));
+      }
     }
     $('#vacio').hidden = E.paginas.length > 0;
     pintarBarraPaquete();
@@ -1301,6 +1463,7 @@
     arrastrandoPaquete = null;
     mostrarTacho(false);
     $$('.pag').forEach((t) => t.classList.remove('arrastrando', 'destino-izq', 'destino-der'));
+    $$('.grupo-cab').forEach((c) => c.classList.remove('destino'));
   });
 
   $('#rejilla').addEventListener('dragover', (ev) => {
@@ -1319,6 +1482,8 @@
     ev.dataTransfer.dropEffect = 'move';
     const tarjeta = ev.target.closest('.pag');
     $$('.pag').forEach((t) => t.classList.remove('destino-izq', 'destino-der'));
+    const cab = ev.target.closest('.grupo-cab');
+    $$('.grupo-cab').forEach((c) => c.classList.toggle('destino', c === cab));
     if (!tarjeta) return;
     const r = tarjeta.getBoundingClientRect();
     tarjeta.classList.add(ev.clientX < r.left + r.width / 2 ? 'destino-izq' : 'destino-der');
@@ -1353,10 +1518,26 @@
     ev.preventDefault();
     const tarjeta = ev.target.closest('.pag');
     $$('.pag').forEach((t) => t.classList.remove('destino-izq', 'destino-der'));
-    marcar();
+    $$('.grupo-cab').forEach((c) => c.classList.remove('destino'));
     const mover = new Set(arrastrando);
     const movidas = E.paginas.filter((p) => mover.has(p.uid));
     const resto = E.paginas.filter((p) => !mover.has(p.uid));
+    // Soltadas sobre la cabecera de un documento: pasan a ser sus primeras
+    // hojas. Sin esto, soltar ahí las mandaba al final del expediente.
+    const cab = !tarjeta && ev.target.closest('.grupo-cab');
+    if (cab) {
+      const suyas = resto.filter((p) => p.paqueteId === cab.dataset.paquete);
+      arrastrando = null;
+      mostrarTacho(false);
+      if (!suyas.length) return;
+      marcar();
+      resto.splice(resto.indexOf(suyas[0]), 0, ...movidas);
+      movidas.forEach((p) => { p.paqueteId = cab.dataset.paquete; });
+      E.paginas = resto;
+      pintar();
+      return;
+    }
+    marcar();
     let destino = resto.length;
     if (tarjeta) {
       const uidRef = tarjeta.dataset.uid;
@@ -1372,7 +1553,12 @@
     }
     resto.splice(destino, 0, ...movidas);
     E.paginas = resto;
-    adoptarPaquete(movidas);
+    // Con las cabeceras a la vista, la hoja sobre la que se suelta dice a qué
+    // documento va: soltarla junto a la primera hoja de uno la mete en ese, y
+    // no en el de arriba, que es lo que se ve.
+    const ref = tarjeta && $('#rejilla .grupo-cab') && E.paginas.find((p) => p.uid === tarjeta.dataset.uid && !mover.has(p.uid));
+    if (ref) movidas.forEach((p) => { p.paqueteId = ref.paqueteId; });
+    else adoptarPaquete(movidas);
     arrastrando = null;
     mostrarTacho(false);
     pintar();
@@ -1417,6 +1603,7 @@
         if (!E.paginas.length) tableroActivo.aparcado = null;
         r.fuentes.forEach((f) => E.fuentes.set(f.id, f));
         const total = E.paginas.length;
+        const documentosAntes = paquetesEnOrden().length;
         const sitio = indice == null ? null : Math.max(0, Math.min(indice, total));
         const finDe = (id) => {
           const suyas = E.paginas.filter((x) => x.paqueteId === id);
@@ -1447,9 +1634,21 @@
         r.paginas.forEach((p) => { p.paqueteId = paq.id; });
         E.paginas.splice(donde, 0, ...r.paginas);
         E.seleccion = new Set(r.paginas.map((p) => p.uid));
-        if (!paqueteAbierto && paquetesEnOrden().length > 1) vista = 'paquetes';
+        // La vista de paquetes se enciende sola al llegar el SEGUNDO documento.
+        // Después se respeta la que se eligió: antes, cada archivo nuevo sacaba
+        // de la vista de hojas aunque se estuviera trabajando en ella.
+        if (!paqueteAbierto && documentosAntes <= 1 && paquetesEnOrden().length > 1) vista = 'paquetes';
         pintar();
-        G.aviso(`Se añadieron ${r.paginas.length} página(s) de ${r.fuentes.length} archivo(s).`, 'ok');
+        // varias cargas seguidas suman en el mismo aviso
+        if (cargaReciente && cargaReciente.mando.vivo()) {
+          cargaReciente.paginas += r.paginas.length;
+          cargaReciente.archivos += r.fuentes.length;
+        } else {
+          cargaReciente = { paginas: r.paginas.length, archivos: r.fuentes.length, mando: null };
+        }
+        const t = `Se añadieron ${cargaReciente.paginas} página(s) de ${cargaReciente.archivos} archivo(s).`;
+        if (cargaReciente.mando && cargaReciente.mando.vivo()) cargaReciente.mando.cambiar(t);
+        else cargaReciente.mando = G.aviso(t, 'ok');
         if (lote.some((f) => G.esOffice && G.esOffice(f))) {
           // La composición la rehace el navegador, no Word: conviene mirarla
           G.aviso('Word/Excel convertido a PDF. Revisa cómo quedó: el reparto de '
@@ -1479,7 +1678,11 @@
     zona.addEventListener('drop', (ev) => {
       if (esArrastreDeHoja(ev)) return;
       const archivos = ev.dataTransfer && ev.dataTransfer.files;
-      if (archivos && archivos.length) anadir(archivos, conPosicion ? indiceDesdeEvento(ev) : null);
+      if (!archivos || !archivos.length) return;
+      // sobre la cabecera de un documento: se añaden a ese documento, al final
+      const cab = conPosicion && ev.target.closest && ev.target.closest('.grupo-cab');
+      if (cab && E.paquetes.has(cab.dataset.paquete)) { destinoCarga = cab.dataset.paquete; anadir(archivos, null); return; }
+      anadir(archivos, conPosicion ? indiceDesdeEvento(ev) : null);
     });
   }
 
@@ -2034,8 +2237,55 @@
     }
   }
 
+  /**
+   * Lo que suele faltar en un expediente antes de exportarlo. Cada falta dice
+   * a qué sección del panel ir a corregirla. Lo usa también la ruta del
+   * expediente, para que las dos digan lo mismo.
+   */
+  function faltasParaExportar() {
+    const faltas = [];
+    const total = E.paginas.length;
+    if (!total) return faltas;
+    if (!totalFolios) faltas.push({ texto: 'no está foliado', seccion: 'foliar', paso: 'folios' });
+    else {
+      const sin = E.paginas.filter((p) => !p.sellos.some((x) => x.rol === 'folio'));
+      // «No numerar la primera página» deja la primera sin folio a propósito
+      const aProposito = sin.length === 1 && sin[0] === E.paginas[0];
+      if (sin.length && !aProposito) {
+        faltas.push({ texto: sin.length === 1 ? '1 hoja no tiene folio' : `${sin.length} hojas no tienen folio`, seccion: 'foliar', paso: 'folios' });
+      }
+    }
+    if (!E.paginas.some((p) => p.sellos.some((x) => x.rol === 'firma'))) {
+      faltas.push({ texto: 'no lleva ninguna firma ni sello', seccion: 'firmas', paso: 'firmas' });
+    }
+    const { blancas, giradas } = avisosRevision();
+    const nb = activosEn(blancas, 'b').length;
+    const ng = activosEn(giradas, 'g').filter((x) => !x.r.deLadoSinSentido).length;
+    if (nb) faltas.push({ texto: nb === 1 ? 'tiene 1 hoja en blanco sin quitar' : `tiene ${nb} hojas en blanco sin quitar`, seccion: 'revisar', paso: 'revisar' });
+    if (ng) faltas.push({ texto: ng === 1 ? '1 hoja está de lado o torcida' : `${ng} hojas están de lado o torcidas`, seccion: 'revisar', paso: 'revisar' });
+    return faltas;
+  }
+
+  const CLAVE_AVISAR_EXPORTAR = 'grapa.avisar-exportar';
+  const avisarAlExportar = () => { try { return localStorage.getItem(CLAVE_AVISAR_EXPORTAR) !== '0'; } catch (e) { return true; } };
+
   async function guardar() {
     if (!E.paginas.length) { G.aviso('No hay páginas para guardar.', 'error'); return; }
+    // Antes de armar nada, lo que suele olvidarse: exportar sin foliar o sin
+    // firmar obliga a repetirlo todo después. Se puede apagar en «Salida».
+    const faltas = avisarAlExportar() ? faltasParaExportar() : [];
+    if (faltas.length) {
+      const r = await G.confirmar({
+        titulo: 'Antes de exportar',
+        mensaje: `«${nombreTablero(tableroActivo)}»:\n` + faltas.map((f) => '• ' + f.texto).join('\n')
+          + '\n\n¿Lo exportas igual?',
+        aceptar: 'Exportar igual',
+        otro: 'Corregir primero',
+      });
+      if (!r) return;
+      if (r === 'otro') { irASeccion(faltas[0].seccion); return; }
+    }
+    const t = tableroActivo;
     // la capa de espera se quita mientras se pregunta: se lleva la cuenta para
     // no descontarla dos veces al salir
     let esperando = true;
@@ -2080,6 +2330,18 @@
           + (r.estado === 'cancelado' ? '' : frasePeso()),
         r.estado === 'cancelado' ? '' : 'ok'
       );
+      if (r.estado !== 'cancelado') {
+        t.exportado = firmaPeso();       // para la ruta del expediente
+        pintarRuta();
+        // Mucha gente exporta y cierra: si el expediente no quedó guardado en
+        // Pdflash, se dice ahora y se ofrece guardarlo de un clic.
+        if (sinGuardar(t)) {
+          G.aviso(estadoDe(t) === 'nuevo'
+            ? 'El PDF ya está exportado, pero el expediente no está guardado en Pdflash: para retomarlo otro día, guárdalo.'
+            : 'El PDF ya está exportado, pero los últimos cambios del expediente no están guardados en Pdflash.',
+          'error', { texto: 'Guardar expediente', fn: () => guardarTablero(t) });
+        }
+      }
     } catch (e) {
       console.error(e);
       G.aviso('No se pudo guardar: ' + e.message, 'error');
@@ -2686,7 +2948,54 @@
     actualizarBotonNuevo();
     pintarEnviar();
     pintarSinGuardar();
+    vigilarMemoria();
     pintarCabeceraYEstado();
+  }
+
+  /* ---------------- memoria ----------------
+     Los PDF de todos los tableros están a la vez en la memoria del
+     navegador. Con diez expedientes escaneados de 30 a 50 MB cada uno, más
+     lo que pdf.js necesita para dibujarlos, el navegador puede quedarse sin
+     memoria y cerrar la pestaña. Se vigila el peso de lo abierto y, antes de
+     llegar ahí, se avisa y se propone cerrar lo que ya está guardado. */
+  const MB = 1048576;
+  G.limitesMemoria = { aviso: 350 * MB, fuerte: 700 * MB };   // las pruebas los bajan
+  let nivelMemoria = 0;
+
+  const pesoDeFuentes = (ids) => {
+    let n = 0;
+    ids.forEach((id) => { const f = E.fuentes.get(id); if (f && f.bytes) n += f.bytes.length; });
+    return n;
+  };
+  /** Lo que pesan todos los PDF abiertos, en todos los tableros (cada uno una vez). */
+  const pesoAbierto = () => pesoDeFuentes(new Set(E.fuentes.keys()));
+  /** Lo que pesan los PDF que usa ese tablero. */
+  const pesoDeTablero = (t) => pesoDeFuentes(new Set(datosDe(t).paginas.map((p) => p.fuenteId)));
+
+  function vigilarMemoria() {
+    const peso = pesoAbierto();
+    const L = G.limitesMemoria;
+    const nivel = peso >= L.fuerte ? 2 : peso >= L.aviso ? 1 : 0;
+    const chip = $('#estadoMemoria');
+    if (chip) {
+      chip.hidden = !nivel;
+      chip.classList.toggle('fuerte', nivel === 2);
+      $('#estadoMemoriaTexto').textContent = enMb(peso) + ' abiertos';
+      chip.title = `Los PDF de los ${tableros.length} tableros ocupan ${enMb(peso)} en la memoria del navegador. `
+        + 'Clic para ver los tableros y cerrar los que ya estén guardados.';
+    }
+    // se avisa al subir de nivel, una vez; si baja, se vuelve a avisar la próxima
+    if (nivel > nivelMemoria) {
+      const guardados = tableros.filter((t) => t !== tableroActivo && estadoDe(t) === 'guardado').length;
+      const consejo = guardados
+        ? ` Cierra los que ya estén guardados (hay ${guardados}): se vuelven a abrir desde «Exped.» cuando haga falta.`
+        : ' Guarda y cierra los que no estés usando ahora.';
+      G.aviso(nivel === 2
+        ? `Hay ${enMb(peso)} de PDF abiertos: el navegador puede quedarse sin memoria y cerrar la pestaña.` + consejo
+        : `Llevas ${enMb(peso)} de PDF abiertos en ${tableros.length} tableros. Con mucho más, el navegador puede ir lento o cerrar la pestaña.` + consejo,
+      nivel === 2 ? 'error' : '', { texto: 'Ver tableros', fn: () => abrirMenuTodos() });
+    }
+    nivelMemoria = nivel;
   }
 
   /** Si las pestañas no caben: degradado en el lado que esconde más y la lista de todas. */
@@ -2695,10 +3004,8 @@
     const sobra = lista.scrollWidth - lista.clientWidth > 2;
     lista.classList.toggle('mas-izq', sobra && lista.scrollLeft > 2);
     lista.classList.toggle('mas-der', sobra && lista.scrollLeft < lista.scrollWidth - lista.clientWidth - 2);
-    const varios = tableros.length > 1;
-    $('#btnTodosTableros').hidden = !varios;
-    if (!varios) cerrarMenuTodos();
-    else if (!$('#menuTodosTableros').hidden) abrirMenuTodos();
+    $('#btnTodosTableros').hidden = tableros.length < 2;
+    if (!$('#menuTodosTableros').hidden) abrirMenuTodos();
   }
 
   function cerrarMenuTodos() {
@@ -2734,6 +3041,10 @@
     const pendientes = tableros.filter(sinGuardar).length;
     const cab = el('div', 'tt-cab');
     cab.append(el('b', '', tableros.length === 1 ? '1 tablero abierto' : `${tableros.length} tableros abiertos`));
+    const peso = pesoAbierto();
+    const memoria = el('span', 'tt-memoria' + (nivelMemoria ? ' alto' : ''), enMb(peso) + ' de PDF en memoria');
+    memoria.title = 'Lo que ocupan los PDF de todos los tableros. Cerrar un tablero guardado lo libera.';
+    if (peso) cab.append(memoria);
     if (pendientes) cab.append(el('span', 'tt-pendientes', pendientes === 1 ? '1 sin guardar' : `${pendientes} sin guardar`));
     const acciones = el('span', 'tt-cab-acciones');
     if (pendientes > 1) acciones.append(boton(`Guardar los ${pendientes}`, 'btn-primario', guardarTodos));
@@ -2776,7 +3087,7 @@
       if (d.paginas.length) {
         const docs = new Set(d.paginas.map((p) => p.paqueteId)).size;
         cuerpo.append(el('span', 'tt-meta', `${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'} · `
-          + `${docs} ${docs === 1 ? 'documento' : 'documentos'}`));
+          + `${docs} ${docs === 1 ? 'documento' : 'documentos'} · ${enMb(pesoDeTablero(t))}`));
         const folios = d.paginas.filter((p) => p.sellos.some((x) => x.rol === 'folio')).length;
         const firmas = d.paginas.reduce((k, p) => k + p.sellos.filter((x) => x.rol === 'firma').length, 0);
         const chips = el('div', 'tt-chips');
@@ -2971,6 +3282,107 @@
         : '<i class="punto-sucio"></i> Sin guardar';
     const n = tableros.length;
     $('#estadoSyncTexto').textContent = n === 1 ? 'Sincronizado' : `Sincronizado en ${n} tableros`;
+    pintarRuta();
+  }
+
+  /* ---------------- la ruta del expediente ----------------
+     Bajo el título, los pasos de siempre: documentos, revisado, foliado,
+     firmado, guardado y exportado. Marca lo hecho, avisa de lo que pide
+     atención y deja a un clic el paso siguiente. Cada paso se calcula con lo
+     que Pdflash ya sabe; pulsarlo lleva a su herramienta. Revisar es
+     opcional: no se propone como siguiente salvo que haya algo que corregir. */
+  const CLAVE_RUTA = 'grapa.ruta';
+  const rutaOculta = () => { try { return localStorage.getItem(CLAVE_RUTA) === 'oculta'; } catch (e) { return false; } };
+
+  function pasosDeRuta() {
+    const t = tableroActivo;
+    const total = E.paginas.length;
+    const faltas = faltasParaExportar();
+    const falta = (paso) => faltas.filter((f) => f.paso === paso);
+    const docs = paquetesEnOrden().length;
+    const revisadas = E.paginas.filter((p) => revision.hechas.has(p.uid)).length;
+    const firmas = E.paginas.reduce((k, p) => k + p.sellos.filter((x) => x.rol === 'firma').length, 0);
+    const estado = estadoDe(t);
+    const alDia = !!t.exportado && t.exportado === firmaPeso();
+    const fRev = falta('revisar'), fFol = falta('folios');
+    return [
+      { nombre: 'Documentos', estado: 'hecho', ir: () => irASeccion('docs'),
+        detalle: `${docs} ${docs === 1 ? 'documento' : 'documentos'} · ${total} ${total === 1 ? 'hoja' : 'hojas'}` },
+      { nombre: 'Revisado', opcional: true, accion: 'Revisar', ir: () => irASeccion('revisar'),
+        estado: fRev.length ? 'alerta' : revisadas === total ? 'hecho' : 'opcional',
+        detalle: fRev.length ? fRev[0].texto.replace(/^tiene /, '')
+          : revisadas === total ? 'sin blancas ni torcidas' : revisadas ? `faltan ${total - revisadas} hojas` : 'opcional' },
+      { nombre: 'Foliado', accion: 'Foliar', ir: () => irASeccion('foliar'),
+        estado: fFol.length ? (totalFolios ? 'alerta' : 'pendiente') : 'hecho',
+        detalle: fFol.length ? (totalFolios ? fFol[0].texto : 'pendiente') : `${totalFolios} folios` },
+      { nombre: 'Firmado', accion: 'Firmar', ir: () => irASeccion('firmas'),
+        estado: firmas ? 'hecho' : 'pendiente',
+        detalle: firmas ? (firmas === 1 ? '1 firma o sello' : `${firmas} firmas o sellos`) : 'sin firmas' },
+      { nombre: 'Guardado', accion: 'Guardar', ir: () => guardarExpedienteActual(),
+        estado: estado === 'guardado' ? 'hecho' : 'alerta',
+        detalle: estado === 'guardado' ? 'en tu lista' : estado === 'nuevo' ? 'nunca guardado' : 'cambios sin guardar' },
+      { nombre: 'Exportado', accion: 'Exportar PDF', ir: () => guardar(),
+        estado: alDia ? 'hecho' : 'pendiente',
+        detalle: alDia ? 'el PDF está al día' : t.exportado ? 'cambió desde que se exportó' : 'pendiente' },
+    ];
+  }
+
+  function pintarRuta() {
+    const nav = $('#ruta');
+    if (!nav || !tableroActivo) return;
+    nav.hidden = !E.paginas.length || rutaOculta();
+    const txt = $('#txtRuta');
+    if (txt) txt.textContent = rutaOculta() ? 'Mostrar la ruta del expediente' : 'Ocultar la ruta del expediente';
+    if (nav.hidden) return;
+    const pasos = pasosDeRuta();
+    const ol = $('#rutaPasos');
+    ol.innerHTML = '';
+    pasos.forEach((p, i) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'paso est-' + p.estado;
+      b.title = `${p.nombre}: ${p.detalle}`;
+      const circulo = document.createElement('span');
+      circulo.className = 'paso-circulo';
+      if (p.estado === 'hecho') circulo.innerHTML = icono('check');
+      else circulo.textContent = p.estado === 'alerta' ? '!' : String(i + 1);
+      const texto = document.createElement('span');
+      texto.className = 'paso-txt';
+      const nom = document.createElement('b');
+      nom.textContent = p.nombre;
+      const det = document.createElement('small');
+      det.textContent = p.detalle;
+      texto.append(nom, det);
+      b.append(circulo, texto);
+      b.addEventListener('click', p.ir);
+      li.appendChild(b);
+      ol.appendChild(li);
+    });
+    // lo siguiente: lo primero que falte, sin contar «revisar» si no hay nada que corregir
+    const siguiente = pasos.find((p) => p.estado === 'alerta' || (p.estado === 'pendiente' && !p.opcional));
+    const btn = $('#rutaSiguiente');
+    $$('.paso', ol).forEach((b, i) => b.classList.toggle('siguiente', pasos[i] === siguiente));
+    if (siguiente) {
+      btn.className = 'btn btn-mini ruta-siguiente';
+      btn.textContent = siguiente.accion + ' →';
+      btn.title = `Lo siguiente: ${siguiente.nombre.toLowerCase()} (${siguiente.detalle})`;
+      btn.onclick = siguiente.ir;
+      btn.disabled = false;
+    } else {
+      btn.className = 'btn btn-mini ruta-siguiente listo';
+      btn.innerHTML = icono('check') + ' Todo listo';
+      btn.title = 'Foliado, firmado, guardado y con el PDF exportado al día';
+      btn.onclick = null;
+      btn.disabled = true;
+    }
+  }
+
+  function alternarRuta() {
+    const oculta = !rutaOculta();
+    try { localStorage.setItem(CLAVE_RUTA, oculta ? 'oculta' : 'visible'); } catch (e) {}
+    pintarRuta();
+    if (oculta) G.aviso('Ruta oculta. Vuelve desde Ver ▸ Mostrar la ruta del expediente.', 'ok');
   }
 
   function actualizarBotonNuevo() {
@@ -3059,6 +3471,11 @@
       ev.stopPropagation();
       if ($('#menuEnviar').hidden) abrirMenuEnviar(); else cerrarMenuEnviar();
     });
+    $('#estadoMemoria').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      cerrarMenuSinGuardar();
+      if ($('#menuTodosTableros').hidden) abrirMenuTodos(); else cerrarMenuTodos();
+    });
     $('#btnSinGuardar').addEventListener('click', (ev) => {
       ev.stopPropagation();
       cerrarMenuTodos();
@@ -3067,7 +3484,7 @@
     document.addEventListener('click', (ev) => {
       if (!ev.target.closest('#menuEnviar, #btnEnviar')) cerrarMenuEnviar();
       if (!ev.target.closest('#menuSinGuardar, #btnSinGuardar')) cerrarMenuSinGuardar();
-      if (!ev.target.closest('#menuTodosTableros, #btnTodosTableros')) cerrarMenuTodos();
+      if (!ev.target.closest('#menuTodosTableros, #btnTodosTableros, #estadoMemoria')) cerrarMenuTodos();
     });
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { cerrarMenuSinGuardar(); cerrarMenuTodos(); } });
     G.bd.alCambiar(alCambioDeOtraVentana);
@@ -3307,6 +3724,8 @@
     return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' });
   };
 
+  const CADUCAN_AUTOGUARDADOS = 30 * 86400000;   // un mes
+
   /**
    * Al arrancar, ofrece seguir con lo que quedó abierto. Solo lo de las
    * ventanas que ya se cerraron: lo de otra ventana de Pdflash que sigue
@@ -3315,8 +3734,13 @@
   async function comprobarAutoguardado() {
     try {
       const vivas = await G.ventana.vivas();
-      const todos = (await G.bd.listarAutoguardados())
-        .filter((r) => r.numPaginas && !vivas.has(datosDeAuto(r.id).ventana));
+      const muertos = (await G.bd.listarAutoguardados()).filter((r) => !vivas.has(datosDeAuto(r.id).ventana));
+      // Lo que nadie recuperó en un mes, o no tiene hojas, se borra solo: si
+      // nunca se pulsaba «Continuar» ni «Descartar», los autoguardados de
+      // cada sesión se iban sumando y ocupaban espacio con PDF que ya nadie usa.
+      const caducado = (r) => !r.numPaginas || Date.now() - (r.fecha || 0) > CADUCAN_AUTOGUARDADOS;
+      for (const r of muertos.filter(caducado)) { try { await G.bd.borrarExpediente(r.id); } catch (e) {} }
+      const todos = muertos.filter((r) => !caducado(r));
       if (!todos.length) return;
       const regs = todos.slice(0, MAX_TABLEROS);   // los más recientes, si hubiera de más
       const nombres = regs.map((r) => `«${nombreCorto(r.resumen || r.origenNombre || 'Trabajo en curso', 26)}» (${r.numPaginas} pág.)`);
@@ -5417,6 +5841,9 @@
   function mostrarFormatos(lista, hallados, continuaciones) {
     const caja = $('#formatosResultado');
     const vivas = lista.filter((p) => E.paginas.includes(p) && hallados.has(p.uid));
+    // las cabeceras de cada documento dicen qué se encontró en él
+    lista.forEach((p) => formatosHallados.delete(p.uid));
+    vivas.forEach((p) => formatosHallados.set(p.uid, hallados.get(p.uid)));
     caja.hidden = false;
     if (!vivas.length) {
       caja.replaceChildren(Object.assign(document.createElement('p'), {
@@ -5963,6 +6390,10 @@
       pintarPesos();
     });
     $('#btnVerPeso').addEventListener('click', calcularPeso);
+    $('#avisarExportar').checked = avisarAlExportar();
+    $('#avisarExportar').addEventListener('change', (ev) => {
+      try { localStorage.setItem(CLAVE_AVISAR_EXPORTAR, ev.target.checked ? '1' : '0'); } catch (e) {}
+    });
     $('#btnComparar').addEventListener('click', compararMarcadas);
     $('#lectorColumnas').addEventListener('change', (ev) => {
       lector.columnas = Number(ev.target.value) || 1;
@@ -6074,6 +6505,8 @@
 
     // empezar otro expediente
     $('#btnNuevo').addEventListener('click', nuevoTablero);
+    $('#rutaOcultar').addEventListener('click', alternarRuta);
+    $('#menuRuta').addEventListener('click', alternarRuta);
     conectarTableros();
     conectarMenus();
     $$('#segVista [data-vista]').forEach((b) => b.addEventListener('click', () => irAVista(b.dataset.vista)));

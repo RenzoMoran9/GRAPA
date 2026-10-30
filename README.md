@@ -105,6 +105,45 @@ avanzar con todos en paralelo.
 - Lo que corrige el **editor de texto** vuelve al tablero que mandó las hojas,
   aunque mientras tanto hayas cambiado de tablero.
 
+### Muchos expedientes abiertos: la memoria
+Los PDF de todos los tableros están a la vez en la memoria del navegador. Con
+varios expedientes escaneados grandes, el navegador puede ir lento o incluso
+cerrar la pestaña. Por eso Pdflash vigila cuánto ocupa lo abierto:
+
+- A partir de unos **350 MB** de PDF abiertos avisa una vez, y abajo, en la
+  barra de estado, aparece cuánto ocupan; desde **700 MB** el aviso es más
+  fuerte. El aviso dice cuántos tableros ya están guardados y te propone
+  cerrarlos: se vuelven a abrir desde **Exped.** cuando hagan falta.
+- En la lista de tableros (la flecha) cada tarjeta dice lo que pesan sus PDF.
+- Cerrar un tablero suelta de la memoria los PDF que ya no usa ningún otro.
+
+### La ruta del expediente
+Bajo el título, una tira con los pasos de siempre: **Documentos · Revisado ·
+Foliado · Firmado · Guardado · Exportado**. Lo hecho sale en verde, lo que pide
+atención en ámbar (por ejemplo, «2 hojas no tienen folio» o «cambios sin
+guardar») y el paso siguiente, en naranja.
+
+- El botón de la derecha hace el paso siguiente: **Foliar →**, **Firmar →**,
+  **Guardar →**, **Exportar PDF →**. Cuando no falta nada dice *Todo listo*.
+- Pulsar un paso abre su herramienta en el panel.
+- *Revisado* es opcional: solo se propone si encontró hojas en blanco o
+  torcidas sin corregir.
+- *Exportado* sabe si el PDF que sacaste sigue al día o si cambiaste algo
+  después.
+- La **×** la oculta; vuelve desde *Ver ▸ Mostrar la ruta del expediente*.
+
+### Antes de exportar
+**Exportar PDF** mira primero lo que suele olvidarse: si no está foliado (o
+hay hojas sin folio), si no lleva ninguna firma, o si quedan hojas en blanco
+o torcidas sin corregir. Si falta algo, lo dice y deja elegir entre
+**Exportar igual** y **Corregir primero**, que te lleva a esa herramienta.
+«No numerar la primera página» no cuenta como falta. Se apaga en *Archivo de
+salida*.
+
+Al terminar, si el expediente no está guardado en Pdflash, lo recuerda con un
+botón **Guardar expediente**: el PDF exportado no sirve para retomar el trabajo
+otro día.
+
 ### Firmar y sellar
 1. Escanea tu firma y sello sobre una hoja y abre ese PDF en Pdflash.
 2. **Firmas y sellos → Desde escaneo**: encierra la firma en un recuadro y
@@ -320,8 +359,18 @@ hojas sueltas.
 - **＋** carga más archivos dentro de un paquete que ya existe.
 - **Arrastrar** una tarjeta mueve la cotización entera con todas sus hojas.
 - Con un solo documento no cambia nada: se ven las hojas como siempre. La vista
-  de paquetes se enciende sola al llegar el segundo, y **☰ Ver todas las hojas**
-  las muestra todas juntas cuando hace falta.
+  de paquetes se enciende sola al llegar el segundo; después se respeta la que
+  elijas, aunque cargues más archivos.
+- En la vista de **Hojas**, cada documento empieza con su **cabecera**: el
+  color de su paquete, su nombre, cuántas hojas trae y en qué posiciones
+  («hojas 4–6»), lo que encontró *Ubicar formatos* en él (Formato 1, Formato
+  5, cotización) y cuántas tiene marcadas. Cada hoja lleva su lugar dentro del
+  documento («2/3»).
+  - **⌄** pliega el documento y deja solo la cabecera (doble clic también).
+  - **Marcar todo**, **✎** renombrar, **＋** añadir archivos, imprimir y verlo
+    en grande, desde la cabecera.
+  - **Soltar hojas** sobre una cabecera las pone al principio de ese
+    documento; **soltar un PDF** sobre ella lo añade al final de ese documento.
 
 - **El tacho**: al arrastrar una hoja o un paquete asoma abajo a la derecha. Lo
   que le sueltes se quita, y el aviso recuerda que **Ctrl+Z** lo devuelve —con
@@ -494,6 +543,7 @@ lib/ocr/              el lector de escaneos: PaddleOCR (ONNX Runtime y sus model
                       y, de respaldo, tesseract-wasm con el idioma español
 construir.mjs         arma Grapa.html, el archivo único
 servidor.mjs          servidor estático opcional, sin dependencias
+pruebas/correr.mjs    pruebas en un navegador de verdad (Chromium, con Playwright)
 ```
 
 Sin build, sin `npm install`, sin framework: archivos estáticos. Para regenerar
@@ -501,6 +551,33 @@ el archivo único después de tocar el código:
 
 ```bash
 node construir.mjs
+```
+
+### Pruebas
+
+`pruebas/correr.mjs` abre Pdflash en Chromium y repite lo que haría una
+persona: cargar, soltar un PDF entre dos hojas, deshacer, abrir diez
+tableros, cerrar sin guardar, recuperar el autoguardado con dos ventanas,
+exportar y leer los folios del PDF que sale, la ruta, las cabeceras, los
+avisos, la memoria y la base de datos. Cada prueba empieza con el navegador
+limpio. Necesita Playwright, que no forma parte de Pdflash; se instala una vez:
+
+```bash
+npm install --no-save playwright
+```
+
+```bash
+npx playwright install chromium
+```
+
+Y se corren todas, o solo las que contengan una palabra:
+
+```bash
+node pruebas/correr.mjs
+```
+
+```bash
+node pruebas/correr.mjs tableros
 ```
 
 ### Nota técnica sobre `file://`
