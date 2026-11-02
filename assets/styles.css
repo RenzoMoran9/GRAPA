@@ -189,9 +189,10 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 .riel-ico{display:flex;align-items:center;justify-content:center;line-height:0}
 
 /* Aviso de alcance: sin marcar nada, girar o borrar va a TODAS las hojas. */
+/* Se ve, pero no como un error: es lo normal mientras no se marque nada. */
 #infoSeleccion.alcance-todo{
-  color:var(--acento);font-weight:700;
-  background:var(--acento-tenue);border-radius:20px;padding:1px 9px;
+  color:var(--texto-2);font-weight:600;
+  background:var(--fondo-3);border:1px solid var(--borde);border-radius:20px;padding:0 9px;
 }
 
 /* ---------- riel de herramientas ---------- */
@@ -466,7 +467,7 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 .modal-ancha{width:min(1080px,100%)}
 #modalFirmar .modal-caja{width:min(1560px,97vw);max-height:96vh}
 .modal-angosta{width:min(430px,100%)}
-.confirmar-mensaje{margin:0;font-size:13.5px;line-height:1.5;color:var(--texto-2)}
+.confirmar-mensaje{margin:0;font-size:13.5px;line-height:1.5;color:var(--texto-2);white-space:pre-line}
 #modalConfirmar .fila-botones{justify-content:flex-end}
 .btn-riesgo{background:var(--rojo);box-shadow:none}
 .btn-riesgo:hover:not(:disabled){filter:brightness(.92);background:var(--rojo)}
@@ -532,7 +533,11 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 .aviso.error{border-left-color:var(--rojo)}
 /* un aviso con botón («Guardar») sí recibe el clic */
 .aviso:has(.aviso-accion){pointer-events:auto}
-.aviso-accion{display:inline-flex;margin:8px 0 0;font-weight:600}
+.aviso-accion{display:flex;margin:8px 0 0;font-weight:600}
+.aviso .aviso-accion{border:1px solid var(--borde);background:var(--fondo-3);color:var(--texto)}
+.aviso .aviso-accion:hover:not(:disabled){border-color:var(--texto-3);background:var(--fondo-2)}
+.aviso-veces{margin-left:6px;font-size:11.5px;color:var(--texto-3)}
+.aviso-veces:empty{display:none}
 @keyframes entra{from{opacity:0;transform:translateY(8px)}}
 .cargando{
   position:fixed;inset:0;background:rgba(12,16,22,.5);display:grid;place-items:center;z-index:90;
@@ -1042,6 +1047,8 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .todos-tableros[hidden]{display:none}
 .tt-cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px}
 .tt-pendientes{font-size:12px;font-weight:600;color:var(--aviso)}
+.tt-memoria{font-size:12px;color:var(--texto-3)}
+.tt-memoria.alto{color:var(--aviso);font-weight:600}
 .tt-cab-acciones{margin-left:auto;display:flex;gap:6px}
 .tt-rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
 .tt-tarjeta{
@@ -1240,6 +1247,15 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .estado-guardado,.estado-sync{display:inline-flex;align-items:center;gap:5px}
 .estado-guardado.est-guardado{color:var(--verde)}
 .estado-espacio{flex:1}
+/* lo que ocupan los PDF abiertos: solo asoma cuando empieza a ser mucho */
+.estado-memoria{
+  display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--aviso) 45%,var(--borde));background:color-mix(in srgb,var(--aviso) 9%,var(--fondo-2));
+  color:var(--aviso);font:inherit;font-size:11.5px;font-weight:600;
+}
+.estado-memoria[hidden]{display:none}
+.estado-memoria.fuerte{color:var(--rojo);border-color:color-mix(in srgb,var(--rojo) 50%,var(--borde));background:color-mix(in srgb,var(--rojo) 9%,var(--fondo-2))}
+.estado-memoria.fuerte .punto-sucio{background:var(--rojo)}
 .barra-estado strong{font-weight:500;color:var(--texto)}
 .barra-estado .zoom{font-size:12px;font-weight:500;flex:none}
 /* El zoom nunca se esconde: lo que sobra se recorta o se oculta por el otro lado. */
@@ -1291,3 +1307,86 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
   opacity: 0;
   pointer-events: none;
 }
+
+/* ---------- la ruta del expediente ----------
+   Una tira bajo el título con los pasos de siempre. Verde lo hecho, naranja
+   lo siguiente, ámbar lo que pide atención; lo pendiente, en gris. */
+.ruta{
+  display:flex;align-items:center;gap:8px;margin:0 22px 10px;padding:6px 6px 6px 8px;
+  background:var(--fondo-2);border:1px solid var(--borde);border-radius:12px;min-width:0;
+}
+.ruta[hidden]{display:none}
+.ruta-pasos{display:flex;align-items:center;gap:0;margin:0;padding:0;list-style:none;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.ruta-pasos::-webkit-scrollbar{display:none}
+.ruta-pasos li{display:flex;align-items:center;flex:1 1 0;min-width:0}
+/* la raya que une un paso con el siguiente */
+.ruta-pasos li:not(:last-child)::after{content:"";flex:0 0 14px;height:2px;margin:0 2px;background:var(--borde);border-radius:2px}
+.paso{
+  display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:4px 8px;border:0;border-radius:8px;
+  background:transparent;color:var(--texto);font:inherit;text-align:left;cursor:pointer;
+}
+.paso:hover{background:var(--fondo-3)}
+.paso:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
+.paso-circulo{
+  width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;
+  font-size:11.5px;font-weight:700;border:2px solid var(--borde);color:var(--texto-3);background:var(--fondo);
+}
+.paso-circulo .ico{width:13px;height:13px;stroke-width:3}
+.paso-txt{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.paso-txt b{font-size:12.5px;font-weight:600;white-space:nowrap}
+.paso-txt small{font-size:11px;color:var(--texto-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.paso.est-hecho .paso-circulo{background:var(--verde);border-color:var(--verde);color:#fff}
+.paso.est-alerta .paso-circulo{border-color:var(--aviso);color:var(--aviso);background:color-mix(in srgb,var(--aviso) 10%,var(--fondo-2))}
+.paso.est-alerta small{color:var(--aviso)}
+.paso.est-opcional .paso-txt b{color:var(--texto-2)}
+.paso.siguiente .paso-circulo{border-color:var(--acento);color:var(--acento);background:var(--acento-tenue)}
+.paso.siguiente .paso-txt b{color:var(--acento)}
+.ruta-siguiente{flex:none;background:var(--acento);color:var(--sobre-acento);font-weight:600;white-space:nowrap}
+.ruta-siguiente:hover:not(:disabled){background:var(--acento-oscuro);color:var(--sobre-acento)}
+.ruta-siguiente.listo{background:color-mix(in srgb,var(--verde) 12%,var(--fondo-2));color:var(--verde);opacity:1;cursor:default}
+.ruta-siguiente .ico{width:13px;height:13px}
+.ruta-ocultar{flex:none;padding:4px 6px;min-height:26px;color:var(--texto-3)}
+.ruta-ocultar .ico{width:14px;height:14px}
+/* con poco ancho se queda el nombre del paso; el detalle sale al apuntarlo */
+@media (max-width:1280px){ .paso-txt small{display:none} }
+@media (max-width:1000px){ .paso-txt b{font-size:12px} .ruta-pasos li:not(:last-child)::after{flex-basis:8px} }
+
+/* ---------- cabeceras de documento en la vista de hojas ----------
+   Con varios documentos, cada uno empieza con la suya, a todo el ancho de
+   la rejilla y con el color de su paquete. */
+.grupo-cab{
+  --color-paquete:var(--acento);
+  grid-column:1/-1;position:relative;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:7px 8px 7px 12px;border-radius:10px;overflow:hidden;
+  background:color-mix(in srgb,var(--color-paquete) 7%,var(--fondo-2));
+  border:1px solid color-mix(in srgb,var(--color-paquete) 24%,var(--borde));
+}
+.grupo-cab::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--color-paquete)}
+.grupo-cab:not(:first-child){margin-top:6px}
+.grupo-cab.destino{box-shadow:0 0 0 2px var(--color-paquete)}
+.grupo-plegar{
+  width:24px;height:24px;flex:none;display:grid;place-items:center;padding:0;border:0;border-radius:6px;
+  background:transparent;color:var(--texto-2);cursor:pointer;
+}
+.grupo-plegar:hover{background:var(--fondo-3);color:var(--texto)}
+.grupo-plegar .ico{width:15px;height:15px}
+.grupo-nombre{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(440px,45%);cursor:text}
+.grupo-meta{font-size:12px;color:var(--texto-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.grupo-chip{
+  font-size:11.5px;font-weight:600;border-radius:999px;padding:0 9px;white-space:nowrap;
+  background:var(--fondo-2);color:var(--texto-2);border:1px solid color-mix(in srgb,var(--color-paquete) 35%,var(--borde));
+}
+.grupo-chip.marcadas{color:var(--acento);border-color:color-mix(in srgb,var(--acento) 45%,var(--borde))}
+.grupo-acciones{margin-left:auto;display:flex;align-items:center;gap:2px}
+.grupo-cab.plegado{opacity:.92}
+/* su lugar dentro del documento, arriba a la derecha (las acciones la tapan al apuntar) */
+.pag-dentro{
+  position:absolute;right:7px;top:8px;z-index:1;pointer-events:none;
+  background:rgba(18,22,30,.72);color:#fff;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;
+  font-variant-numeric:tabular-nums;
+}
+
+/* «Ver», la acción principal de cada paquete: con su propio estilo, que antes
+   lo pisaba el de los botones chicos y salía gris como los demás */
+.paquete-acciones .btn-mini.btn-primario{background:var(--acento-tenue);color:var(--acento);font-weight:600}
+.paquete-acciones .btn-mini.btn-primario:hover:not(:disabled){background:var(--acento);color:var(--sobre-acento)}
