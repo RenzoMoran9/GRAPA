@@ -2288,7 +2288,7 @@
     const t = tableroActivo;
     // la capa de espera se quita mientras se pregunta: se lleva la cuenta para
     // no descontarla dos veces al salir
-    let esperando = true;
+    let esperando = false;
     const espera = (si, texto) => { if (si !== esperando) { G.cargando(si, texto); esperando = si; } };
     espera(true, 'Armando el PDF…');
     try {

@@ -1065,11 +1065,32 @@
    * Construye un PDF con las páginas indicadas (array del estado).
    * total/inicio permiten foliar bien aunque se exporte un trozo.
    */
+  /**
+   * Deja que el navegador pinte antes de seguir. Armar un PDF ocupa el hilo
+   * de la pantalla: sin este respiro, la capa de «Armando el PDF…» y su
+   * avance no llegaban a verse, y parecía que Pdflash se había colgado hasta
+   * que salía la descarga. Con la pestaña en segundo plano no hay cuadros que
+   * pintar, así que no se espera más de 60 ms.
+   */
+  G.respiro = () => new Promise((listo) => {
+    let hecho = false;
+    const fin = () => { if (!hecho) { hecho = true; listo(); } };
+    requestAnimationFrame(() => setTimeout(fin, 0));
+    setTimeout(fin, 60);
+  });
+
   G.construirPdf = async function (paginas, opciones) {
     opciones = opciones || {};
     const salida = await PDFDocument.create();
     const comp = opciones.comprimir || null;
-    const avisar = opciones.alProgresar || function () {};
+    const aviso = opciones.alProgresar || function () {};
+    // cada mensaje de avance se pinta de verdad, y sin frenar: un respiro cada 150 ms como mucho
+    let ultimoRespiro = 0;
+    const avisar = async (texto) => {
+      aviso(texto);
+      if (performance.now() - ultimoRespiro > 150) { await G.respiro(); ultimoRespiro = performance.now(); }
+    };
+    await avisar(paginas.length === 1 ? 'Armando la hoja…' : `Armando el PDF: ${paginas.length} hojas…`);
 
     // 1a. decidir qué hoja se copia tal cual y cuál se vuelve a dibujar más
     //     liviana. Las que llevan texto de verdad se copian siempre en el
@@ -1094,10 +1115,18 @@
       porFuente.get(p.fuenteId).push({ indice: p.indice, destino: i });
     });
     const copiadas = new Array(paginas.length);
+    let copiadasYa = 0;
+    const porCopiar = paginas.length - aligerar.size;
     for (const [fuenteId, items] of porFuente) {
+      const f = G.estado.fuentes.get(fuenteId);
+      if (porCopiar > 1) {
+        await avisar(`Copiando las hojas: ${copiadasYa} de ${porCopiar}`
+          + (f ? ` · «${f.nombre}»` : '') + '…');
+      }
       const src = await docPdfLib(fuenteId);
       const paginasCopiadas = await salida.copyPages(src, items.map((it) => it.indice));
       items.forEach((it, k) => { copiadas[it.destino] = paginasCopiadas[k]; });
+      copiadasYa += items.length;
     }
 
     // 1c. armar el documento EN ORDEN: cada hoja, copiada o redibujada. El
@@ -1111,7 +1140,7 @@
     let imagenesAchicadas = 0;
     const sinSaber = { n: 0, peso: 0 };   // imágenes que no se saben leer
     for (let i = 0; i < paginas.length; i++) {
-      if (comp && paginas.length > 3) avisar(`Comprimiendo hoja ${i + 1} de ${paginas.length}…`);
+      if (comp && paginas.length > 3) await avisar(`Comprimiendo hoja ${i + 1} de ${paginas.length}…`);
       if (!aligerar.has(i)) {
         salida.addPage(copiadas[i]);
         if (comp) {
@@ -1175,6 +1204,7 @@
 
     // 3. giro y sellos
     for (let i = 0; i < paginas.length; i++) {
+      if (paginas.length > 10 && i % 10 === 0) await avisar(`Poniendo folios y firmas: hoja ${i + 1} de ${paginas.length}…`);
       const est = paginas[i];
       const pag = salida.getPage(i);
       const R = G.norm(est.giro);
@@ -1269,6 +1299,7 @@
     if (opciones.autor) salida.setAuthor(opciones.autor);
     salida.setProducer('Pdflash · taller de PDF');
     salida.setCreator('Pdflash');
+    await avisar('Escribiendo el PDF…');
     const bytes = await salida.save({ useObjectStreams: true });
 
     // Lo que pesaban esas hojas en los archivos que abriste, para poder decir

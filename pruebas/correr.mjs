@@ -227,6 +227,21 @@ const PRUEBAS = {
     afirmar(/no está guardado en Pdflash/.test(avisos), 'ofrece guardar el expediente', avisos);
   },
 
+  async 'exportar: se ve la capa de espera mientras se arma el PDF'({ page }) {
+    await abrir(page, ['Largo', 30]);
+    await page.evaluate(() => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      window.__capa = [];
+      const capa = document.querySelector('#cargando'), txt = document.querySelector('#cargandoTexto');
+      const mirar = () => { if (!capa.hidden && !window.__capa.includes(txt.textContent)) window.__capa.push(txt.textContent); requestAnimationFrame(mirar); };
+      requestAnimationFrame(mirar);
+    });
+    await Promise.all([page.waitForEvent('download'), page.click('#btnGuardar')]);
+    const vistos = await page.evaluate(() => window.__capa);
+    afirmar(vistos.length > 0, 'la capa llegó a verse', vistos);
+    afirmar(await page.isHidden('#cargando'), 'y se quita al terminar');
+  },
+
   async 'ruta del expediente: propone el paso siguiente'({ page }) {
     await abrir(page, ['Base', 2]);
     afirmar(await page.isVisible('#ruta'), 'se ve la ruta');
