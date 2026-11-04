@@ -15,7 +15,8 @@ const leer = (r) => readFileSync(RAIZ + r, 'utf8');
 const CREDITOS = `<!--
   Pdflash · Taller de PDF
   Une, ordena, divide, folia y firma PDF. Todo ocurre dentro de este
-  navegador: no hay servidor y no necesita conexión a internet.
+  navegador: no hay servidor y no necesita conexión a internet (salvo
+  para iniciar sesión, si se activaron las cuentas en assets/config.js).
 
   Este archivo es autosuficiente: lleva dentro las librerías que usa.
     · pdf-lib 1.17.1 — MIT — https://github.com/Hopding/pdf-lib
@@ -36,6 +37,7 @@ const CREDITOS = `<!--
 const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
+  'assets/config.js', 'assets/cuentas.js',
   'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
   'assets/app.js',
 ];

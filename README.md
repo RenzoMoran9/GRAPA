@@ -511,9 +511,79 @@ salga tal como se ve.
 
 ---
 
+## Cuentas de usuario y panel de control (opcional)
+
+Si configuras Supabase, cada persona entra con **su propia cuenta** y tú,
+como administrador, decides **qué herramientas tiene cada una** desde un
+**Panel de control** dentro de Pdflash. Sin configurarlo, Pdflash sigue
+funcionando como siempre, sin cuentas.
+
+Lo que hace:
+
+- **Pantalla de inicio de sesión** con correo y contraseña. Desde ahí se
+  puede **solicitar acceso** (crear cuenta) y **recuperar la contraseña**.
+- **Las cuentas nuevas quedan «pendientes»** hasta que el administrador las
+  aprueba. Mientras tanto ven «Tu cuenta espera aprobación» y nada más.
+- **La primera cuenta que se registra queda como administradora.** Por eso
+  conviene que crees la tuya apenas termines de configurar.
+- **Panel de control** (avatar, arriba a la derecha ▸ *Panel de control*):
+  la lista de cuentas con buscador y filtros (pendientes, activas,
+  bloqueadas), cuándo entró cada una por última vez, **Aprobar**,
+  **Rechazar**, **Bloquear** o **Reactivar**, y un **interruptor por
+  función**: expedientes guardados, buscar, revisar, firmas y sellos, sello
+  de texto, foliación, dividir, exportar PDF, imprimir, editar texto y
+  subir a otra web. Los cambios se guardan al momento.
+- **Al usuario le llegan los cambios solos**, en unos minutos o al volver a
+  la ventana. Lo apagado desaparece del panel lateral, y los botones de la
+  barra quedan con un candado y explican que lo pida al administrador. Los
+  atajos (Ctrl+S, Ctrl+P…) también respetan los permisos.
+- **Cada cuenta tiene su cajón en el navegador:** si dos personas comparten
+  computadora, una no ve las firmas ni los expedientes de la otra. La
+  primera cuenta que entra en un navegador se queda con lo que ya había
+  guardado ahí, así no se pierde nada al activar las cuentas.
+- **Sin internet** se sigue trabajando con los últimos permisos durante 7
+  días (se cambia en `assets/config.js`). Pasado ese plazo, pide conectarse.
+
+**Los PDF, las firmas y los expedientes no se suben a Supabase.** Solo viajan
+el correo, la contraseña (al servicio de cuentas de Supabase) y los permisos.
+
+### Configurarlo (unos 10 minutos)
+
+1. Crea una cuenta gratis en [supabase.com](https://supabase.com) y un
+   proyecto nuevo (*New project*). Guarda la contraseña de la base de datos
+   que te pide, aunque Pdflash no la usa.
+2. En el proyecto, abre **SQL Editor ▸ New query**, pega todo el contenido de
+   [`supabase/esquema.sql`](supabase/esquema.sql) y pulsa **Run**. Crea la
+   tabla de perfiles y las reglas de seguridad.
+3. En **Authentication ▸ URL Configuration**, pon en *Site URL* la dirección
+   de Pdflash (`https://renzomoran9.github.io/GRAPA/`). Ahí llevan los enlaces
+   de confirmar la cuenta y de recuperar la contraseña.
+4. *(Opcional)* En **Authentication ▸ Sign In / Providers ▸ Email** puedes
+   apagar *Confirm email* si no quieres que cada persona confirme su correo
+   antes de entrar. Igual tiene que aprobarla el administrador.
+5. En **Project Settings ▸ API** (o el botón **Connect**) copia la *Project
+   URL* y la clave *anon / publishable* en
+   [`assets/config.js`](assets/config.js). **Nunca** pongas ahí la clave
+   *service_role* ni la *secret*.
+6. Regenera el archivo único con `node construir.mjs` y sube los cambios.
+7. Abre Pdflash, pulsa **Solicitar acceso** y crea **tu** cuenta: al ser la
+   primera, quedas como administrador.
+
+Para **borrar** una cuenta del todo: Supabase ▸ **Authentication ▸ Users**.
+Desde el panel se puede bloquear, que basta para cortar el acceso.
+
+**Qué tan seguro es.** Las reglas viven en la base de datos: nadie puede
+darse permisos a sí mismo ni ver las cuentas de otros, aunque sepa
+programar, y la base no deja quitar ni bloquear al último administrador.
+Pero el trabajo con los PDF ocurre en el navegador de cada persona, así que
+alguien con conocimientos técnicos podría modificar su copia de Pdflash para
+saltarse un botón apagado. Para un equipo de oficina es suficiente; no es
+una protección contra alguien decidido a burlarla.
+
 ## Privacidad
 
-Pdflash **no tiene servidor**. Los PDF se leen y se rearman dentro del navegador,
+Pdflash **no tiene servidor** para tus documentos (las cuentas opcionales solo
+guardan correo y permisos). Los PDF se leen y se rearman dentro del navegador,
 con `pdf.js` para dibujar las páginas y `pdf-lib` para escribir el archivo
 final. Nada se sube, nada se guarda fuera de tu equipo y funciona sin conexión.
 
@@ -538,12 +608,16 @@ assets/
   expedientes.js      guardado del trabajo (IndexedDB) y carpeta de salida
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
+  config.js           datos de Supabase para las cuentas (vacíos = sin cuentas)
+  cuentas.js          inicio de sesión, permisos por función y panel de control
+supabase/esquema.sql  tabla de perfiles y reglas de seguridad para Supabase
 lib/                  pdf-lib, pdf.js y JSZip incluidos (ver lib/LICENCIAS.md)
 lib/ocr/              el lector de escaneos: PaddleOCR (ONNX Runtime y sus modelos)
                       y, de respaldo, tesseract-wasm con el idioma español
 construir.mjs         arma Grapa.html, el archivo único
 servidor.mjs          servidor estático opcional, sin dependencias
 pruebas/correr.mjs    pruebas en un navegador de verdad (Chromium, con Playwright)
+pruebas/cuentas.mjs   pruebas de las cuentas contra un Supabase simulado
 ```
 
 Sin build, sin `npm install`, sin framework: archivos estáticos. Para regenerar
@@ -578,6 +652,13 @@ node pruebas/correr.mjs
 
 ```bash
 node pruebas/correr.mjs tableros
+```
+
+Las de las cuentas (entrar, permisos, panel de control, cajón por cuenta,
+sin internet) van aparte y no necesitan un Supabase de verdad: lo simulan.
+
+```bash
+node pruebas/cuentas.mjs
 ```
 
 ### Nota técnica sobre `file://`

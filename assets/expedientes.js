@@ -7,7 +7,8 @@
   'use strict';
   const G = window.Grapa;
 
-  const NOMBRE_BD = 'grapa';
+  // con cuentas, una base por cuenta (cuentas.js pone el sufijo)
+  const NOMBRE_BD = 'grapa' + (G.sufijoDatos || '');
   const VERSION = 1;
   let promesaBd = null;
 
