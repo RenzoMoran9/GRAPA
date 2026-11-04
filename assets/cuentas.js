@@ -133,7 +133,8 @@
   async function pedir(ruta, o) {
     o = o || {};
     const cab = { apikey: LLAVE, 'Content-Type': 'application/json' };
-    cab.Authorization = 'Bearer ' + (o.token || LLAVE);
+    // solo con sesión: las claves nuevas «sb_publishable_…» no son JWT y no van aquí
+    if (o.token) cab.Authorization = 'Bearer ' + o.token;
     if (o.prefer) cab.Prefer = o.prefer;
     let r;
     try {
