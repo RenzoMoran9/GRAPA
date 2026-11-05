@@ -1457,7 +1457,8 @@
   };
 
   /* ---------- almacenamiento de firmas ---------- */
-  const CLAVE = 'grapa.firmas.v1';
+  // con cuentas, cada una tiene su cajón (cuentas.js pone el sufijo)
+  const CLAVE = 'grapa.firmas.v1' + (G.sufijoDatos || '');
   G.almacen = {
     leer() {
       try {

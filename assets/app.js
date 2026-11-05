@@ -7,6 +7,8 @@
   const E = G.estado;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  /** ¿La cuenta tiene esa función? Si no, lo explica. Sin cuentas, siempre sí. */
+  const permitido = (f) => !G.cuentas || G.cuentas.permitido(f);
 
   /* ---------------- avisos y capa de carga ---------------- */
   /**
@@ -92,8 +94,11 @@
       $('#textoTitulo').textContent = o.titulo || 'Escribe un nombre';
       $('#textoMensaje').textContent = o.mensaje || '';
       campo.value = o.valor || '';
+      campo.type = o.tipo || 'text';
+      si.textContent = o.aceptar || 'Guardar';
       const cerrar = (valor) => {
         modal.hidden = true;
+        campo.type = 'text';
         si.removeEventListener('click', alSi);
         no.removeEventListener('click', alNo);
         modal.removeEventListener('click', alFondo);
@@ -1733,6 +1738,7 @@
   }
 
   async function abrirFirmar(pagina) {
+    if (!permitido('firmas')) return;
     if (!E.firmas.length) {
       G.aviso('Primero crea una firma: usa «Desde escaneo» en el panel de la izquierda.', 'error');
       return;
@@ -2270,6 +2276,7 @@
   const avisarAlExportar = () => { try { return localStorage.getItem(CLAVE_AVISAR_EXPORTAR) !== '0'; } catch (e) { return true; } };
 
   async function guardar() {
+    if (!permitido('exportar')) return;
     if (!E.paginas.length) { G.aviso('No hay páginas para guardar.', 'error'); return; }
     // Antes de armar nada, lo que suele olvidarse: exportar sin foliar o sin
     // firmar obliga a repetirlo todo después. Se puede apagar en «Salida».
@@ -2705,6 +2712,7 @@
    * nombre si es nuevo. Devuelve true si quedó guardado.
    */
   async function guardarExpedienteActual() {
+    if (!permitido('expedientes')) return false;
     if (!E.paginas.length) { G.aviso('No hay nada que guardar todavía.', 'error'); return false; }
     if (expedienteAbierto) return actualizarGuardado();
     const nombre = await G.pedirTexto({
@@ -4122,6 +4130,7 @@
   let marcoImpresion = null;
 
   async function imprimirHojas(objs, que) {
+    if (!permitido('imprimir')) return;
     if (!objs || !objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
     G.cargando(true, objs.length === 1 ? 'Preparando la hoja para imprimir…'
       : `Preparando ${objs.length} hojas para imprimir…`);
@@ -4226,6 +4235,7 @@
    * una ventana emergente no pedida y la bloquearía.
    */
   async function editarFuera() {
+    if (!permitido('subirWeb')) return;
     const objs = E.seleccion.size ? seleccionadas() : hojasVisibles();
     if (!objs.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
     const destino = urlEditor();
@@ -4634,6 +4644,7 @@
   }
 
   async function editarTexto(cuales, opciones) {
+    if (!permitido('editarTexto')) return;
     const tarea = (opciones && opciones.tarea) || null;
     const objs = (cuales && cuales.length) ? cuales
       : (E.seleccion.size ? seleccionadas() : hojasVisibles());
@@ -6106,6 +6117,12 @@
    */
   function irASeccion(cual, opciones) {
     const o = opciones || {};
+    // una sección apagada por el administrador: al arrancar se cae a
+    // Documentos sin más; a pedido, se explica
+    if (G.cuentas && !G.cuentas.seccionPermitida(cual)) {
+      if (o.desplegar === false) cual = 'docs';
+      else { G.cuentas.permitido(G.cuentas.funcionDeSeccion(cual)); return; }
+    }
     const seccion = $$('.bloque').find((b) => b.dataset.bloque === cual);
     if (!seccion) return;
     // Al elegir en el riel se queda esa y las demás se pliegan: el panel no
