@@ -145,8 +145,11 @@ as $$
   where id = auth.uid();
 $$;
 
-revoke execute on function public.registrar_acceso() from anon;
-revoke execute on function public.cambiar_mi_nombre(text) from anon;
+-- Postgres da permiso de ejecutar a «public» (todos); solo las cuentas con sesión
+revoke execute on function public.registrar_acceso() from public, anon;
+revoke execute on function public.cambiar_mi_nombre(text) from public, anon;
+revoke execute on function public.es_admin() from public, anon;
+grant execute on function public.es_admin() to authenticated;
 grant execute on function public.registrar_acceso() to authenticated;
 grant execute on function public.cambiar_mi_nombre(text) to authenticated;
 grant select, update on public.perfiles to authenticated;

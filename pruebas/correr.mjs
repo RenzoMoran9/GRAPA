@@ -306,6 +306,8 @@ try {
     if (filtro && !nombre.toLowerCase().includes(filtro.toLowerCase())) continue;
     // cada prueba en su propio perfil: sin guardados ni autoguardados de otra
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+    // estas pruebas son del taller, sin cuentas (las de cuentas están en pruebas/cuentas.mjs)
+    await ctx.route('**/assets/config.js*', (route) => route.fulfill({ contentType: 'text/javascript', body: 'window.GRAPA_CONFIG = {};' }));
     const errores = [];
     const nueva = async () => {
       const p = await ctx.newPage();

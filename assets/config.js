@@ -15,7 +15,7 @@
    aquí la «service_role» / secret key.
    =========================================================== */
 window.GRAPA_CONFIG = {
-  supabaseUrl: '',
+  supabaseUrl: 'https://quflydquskpfnsauemsi.supabase.co',
   supabaseKey: 'sb_publishable_2ciRVwG702SWZeTZMy2mzg__ma8IBld',
   // Días que se puede seguir trabajando sin internet con los últimos
   // permisos comprobados. Pasado ese plazo, pide conectarse.
