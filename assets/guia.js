@@ -119,7 +119,7 @@
     { el: '#btnAbrir', titulo: 'Empieza abriendo tus archivos',
       texto: 'PDF, Word, Excel o fotos. También puedes arrastrarlos a la pantalla o pegarlos con Ctrl+V.' },
     { el: '#riel', titulo: 'Tus herramientas, en orden', lado: 'derecha',
-      texto: 'Documentos, buscar, revisar, firmar, foliar, dividir… Toca una y se abre a su lado con lo que necesitas.' },
+      texto: 'Documentos, buscar, revisar, firmar, foliar, separar… Toca una y se abre a su lado con lo que necesitas.' },
     { el: '#lienzo', titulo: 'Aquí están tus hojas',
       texto: 'Arrástralas para cambiar el orden. Un clic marca una hoja; con Ctrl o Mayús marcas varias. La tecla V las abre en grande.' },
     { el: '#ruta', titulo: 'Lo que te falta',

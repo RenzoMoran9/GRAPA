@@ -24,6 +24,7 @@ const CREDITOS = `<!--
     · JSZip 3.10.1 — MIT / GPLv3 — https://github.com/Stuk/jszip
     · docx-preview 0.4.0 — Apache-2.0 — https://github.com/VolodymyrBaydalka/docxjs
     · SheetJS 0.18.5 — Apache-2.0 — https://github.com/SheetJS/sheetjs
+    · ExcelJS 4.4.0 — MIT — https://github.com/exceljs/exceljs
     · html2canvas 1.4.1 — MIT — https://github.com/niklasvh/html2canvas
     · Inter 4 — SIL OFL 1.1 — https://github.com/rsms/inter
     · tesseract-wasm 0.11 (Tesseract OCR y Leptonica) — BSD-2-Clause / Apache-2.0 — https://github.com/robertknight/tesseract-wasm
@@ -36,7 +37,7 @@ const CREDITOS = `<!--
 
 const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
-  'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
+  'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/exceljs.min.js', 'lib/html2canvas.min.js',
   'assets/config.js', 'assets/cuentas.js',
   'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
   'assets/app.js', 'assets/guia.js',

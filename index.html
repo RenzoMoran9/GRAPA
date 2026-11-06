@@ -177,8 +177,8 @@
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folios"/></svg></span><span class="riel-txt">Folios</span>
       </button>
       <span class="riel-etapa">Salida</span>
-      <button class="riel-btn" data-va="dividir" type="button" title="Dividir y extraer">
-        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span><span class="riel-txt">Dividir</span>
+      <button class="riel-btn" data-va="dividir" type="button" title="Separar hojas en otro PDF">
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span><span class="riel-txt">Separar</span>
       </button>
       <button class="riel-btn" data-va="salida" type="button" title="Archivo de salida · nombre, peso y carpeta">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg></span><span class="riel-txt">Salida</span>
@@ -358,18 +358,28 @@
     </section>
 
     <section class="bloque" data-bloque="dividir">
-      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg> Dividir y extraer</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg> Separar en otro PDF</button>
       <div class="bloque-cuerpo">
-        <p class="bloque-ayuda">Parte el expediente o saca hojas a un PDF aparte.</p>
-        <p class="nota">Usa las tijeras <span class="tijera-demo"><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span> entre páginas para marcar dónde cortar.</p>
-        <button class="btn btn-suave ancho" id="btnDividirMarcas">Dividir por las marcas de corte</button>
-        <button class="btn btn-suave ancho" id="btnExtraerSel">Extraer selección a un PDF nuevo</button>
-        <button class="btn btn-suave ancho" id="btnDividirUna">Un archivo por cada página</button>
-        <label class="campo">Rangos (ej. 1-3, 5, 8-10)
-          <input type="text" id="divRangos" placeholder="1-3, 5, 8-10">
-        </label>
-        <button class="btn btn-suave ancho" id="btnDividirRangos">Dividir por rangos</button>
-        <p class="nota">Si sale más de un archivo, se descarga un ZIP.</p>
+        <p class="bloque-ayuda">Saca hojas de este expediente a un PDF aparte. El expediente no cambia.</p>
+        <p class="etiqueta">¿Qué quieres sacar?</p>
+        <div class="div-opciones" role="radiogroup" aria-label="Qué separar">
+          <label class="div-opcion"><input type="radio" name="divModo" value="marcadas" checked>
+            <span><strong>Solo las hojas que marque</strong><small>Marca cada hoja con su casilla y salen juntas en un PDF.</small></span></label>
+          <label class="div-opcion"><input type="radio" name="divModo" value="cortes">
+            <span><strong>Partir en varios PDF</strong><small>Pulsa las tijeras <svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg> que aparecen entre las hojas, donde quieras cortar.</small></span></label>
+          <label class="div-opcion"><input type="radio" name="divModo" value="rangos">
+            <span><strong>Por números de hoja</strong><small>Escribe qué hojas van en cada PDF.</small></span></label>
+          <label class="campo div-rangos" id="campoRangos" hidden>Hojas de cada PDF
+            <input type="text" id="divRangos" placeholder="Ej.: 1-3, 5, 8-10" autocomplete="off">
+            <small class="nota">Cada grupo separado por coma es un PDF: «1-3, 5» saca dos PDF.</small>
+          </label>
+          <label class="div-opcion"><input type="radio" name="divModo" value="una">
+            <span><strong>Cada hoja en su PDF</strong><small>Un archivo por cada hoja.</small></span></label>
+        </div>
+        <div class="div-resultado" id="divResultado" aria-live="polite"></div>
+        <button class="btn btn-mini" id="btnQuitarCortes" type="button" hidden>Quitar todos los cortes</button>
+        <button class="btn btn-primario ancho" id="btnDividirHacer" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> <span id="txtDividirHacer">Descargar el PDF</span></button>
+        <p class="nota">Si sale más de un PDF, se descargan juntos en un ZIP.</p>
       </div>
     </section>
 
@@ -837,6 +847,7 @@
 <script src="lib/jszip.min.js"></script>
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
+<script src="lib/exceljs.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
 <script src="assets/config.js?v=20261106"></script>
 <script src="assets/cuentas.js?v=20261106"></script>

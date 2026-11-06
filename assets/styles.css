@@ -1660,3 +1660,27 @@ html.con-guia{overflow:hidden}
 .guia-puntos i{width:6px;height:6px;border-radius:50%;background:var(--borde)}
 .guia-puntos i.activo{background:var(--acento);width:14px;border-radius:4px}
 @media (prefers-reduced-motion:reduce){ .guia-foco,.guia-tarjeta{transition:none} }
+
+/* ---------- separar en otro PDF ---------- */
+.div-opciones{display:flex;flex-direction:column;gap:6px}
+.div-opcion{
+  display:flex;gap:10px;align-items:flex-start;padding:10px 11px;border:1px solid var(--borde);border-radius:10px;
+  background:var(--fondo-2);cursor:pointer;transition:border-color .12s,background .12s;
+}
+.div-opcion:hover{border-color:var(--texto-3)}
+.div-opcion:has(input:checked){border-color:var(--acento);background:var(--acento-tenue)}
+.div-opcion input{accent-color:var(--acento);margin-top:2px;flex:none}
+.div-opcion span{display:flex;flex-direction:column;gap:2px}
+.div-opcion strong{font-size:13px}
+.div-opcion small{font-size:12px;color:var(--texto-2);line-height:1.4}
+.div-rangos{margin:0 0 2px 30px}
+.div-resultado{
+  font-size:12.5px;line-height:1.45;padding:9px 11px;border-radius:9px;
+  background:rgba(22,155,98,.1);color:var(--verde);font-weight:500;
+}
+.div-resultado.falta{background:var(--fondo-3);color:var(--texto-2);font-weight:400}
+/* eligiendo «Partir en varios PDF», las tijeras se ven siempre y más grandes */
+body.modo-cortes .corte{opacity:1}
+body.modo-cortes .corte button{width:26px;height:26px;border-color:var(--acento);color:var(--acento);box-shadow:var(--sombra)}
+body.modo-cortes .corte.activo button{color:#fff}
+body.modo-cortes .corte{right:-14px;width:26px}
