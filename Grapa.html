@@ -9375,9 +9375,10 @@ window.GRAPA_CONFIG = {
     return typeof v === 'number' || v instanceof Date;
   };
 
-  function estiloFuente(f, tema) {
+  /** `k`: la escala de la hoja; las letras se dibujan ya a su tamaño final. */
+  function estiloFuente(f, tema, k) {
     f = f || {};
-    const css = [`font-family:${conRespaldo(f.name || 'Calibri')}`, `font-size:${f.size || 11}pt`];
+    const css = [`font-family:${conRespaldo(f.name || 'Calibri')}`, `font-size:${((f.size || 11) * (k || 1)).toFixed(3)}pt`];
     if (f.bold) css.push('font-weight:bold');
     if (f.italic) css.push('font-style:italic');
     const deco = [f.underline ? 'underline' : '', f.strike ? 'line-through' : ''].filter(Boolean).join(' ');
@@ -9524,10 +9525,12 @@ window.GRAPA_CONFIG = {
         for (let p = 0; p < paginas.length; p++) {
           if (avisar) avisar(`${file.name} · ${hoja.name}: hoja ${p + 1} de ${paginas.length}…`);
           const enPagina = (p > 0 && titulos.length ? titulos.filter((t) => !paginas[p].includes(t)) : []).concat(paginas[p]);
-          let html = `<table style="border-collapse:collapse;table-layout:fixed;width:${anchoTabla}px"><colgroup>`
-            + cols.map((c) => `<col style="width:${c.px}px">`).join('') + '</colgroup>';
+          // Todo se dibuja ya a su tamaño final (medidas × k), sin achicar la hoja después:
+          // así el subrayado y las líneas finas no se pierden al reducir.
+          let html = `<table style="border-collapse:collapse;table-layout:fixed;width:${anchoTabla * k}px"><colgroup>`
+            + cols.map((c) => `<col style="width:${c.px * k}px">`).join('') + '</colgroup>';
           for (const f of enPagina) {
-            html += `<tr style="height:${f.px}px">`;
+            html += `<tr style="height:${f.px * k}px">`;
             for (let i = 0; i < cols.length; i++) {
               const c = cols[i].c;
               const g = cubre.get(f.r + ':' + c);
@@ -9543,14 +9546,21 @@ window.GRAPA_CONFIG = {
               }
               const fuente = g ? hoja.getCell(g.r1, g.c1) : hoja.getCell(f.r, c);
               const st = fuente.style || {};
-              const css = [estiloFuente(st.font, tema), 'padding:0 3px', `height:${h}px`];
+              h *= k;
+              const fuenteCss = estiloFuente(st.font, tema, k);
+              // renglones como los de Excel con Calibri (1,22 veces la letra)
+              const css = [fuenteCss, `padding:0 ${3 * k}px`, `height:${h}px`, 'line-height:1.22'];
               const relleno = st.fill && st.fill.type === 'pattern' && st.fill.pattern !== 'none' ? colorCss(st.fill.fgColor, tema)
                 : st.fill && st.fill.type === 'gradient' && st.fill.stops ? colorCss(st.fill.stops[0].color, tema) : null;
               if (relleno) css.push('background:' + relleno);
               // en una combinada, cada borde exterior lo lleva la celda de ese lado
               const borde = (lado, celdaB) => {
                 const b = celdaB && celdaB.style && celdaB.style.border && celdaB.style.border[lado];
-                if (b && b.style && BORDES[b.style]) css.push(`border-${lado}:${BORDES[b.style]} ${colorCss(b.color, tema) || '#000'}`);
+                if (!b || !b.style || !BORDES[b.style]) return;
+                // el grosor se achica con la hoja, sin bajar de una línea fina (como imprime Excel)
+                const [ancho, tipo] = BORDES[b.style].split(' ');
+                const px = Math.max(0.75, parseFloat(ancho) * Math.min(1, k * 2));
+                css.push(`border-${lado}:${px.toFixed(2)}px ${tipo === 'double' && px < 2.5 ? 'solid' : tipo} ${colorCss(b.color, tema) || '#000'}`);
               };
               borde('top', fuente);
               borde('left', fuente);
@@ -9563,13 +9573,21 @@ window.GRAPA_CONFIG = {
                 : al.horizontal || (esNumero(fuente) ? 'right' : typeof fuente.value === 'boolean' ? 'center' : 'left');
               css.push('text-align:' + hor);
               css.push('vertical-align:' + (al.vertical === 'middle' || al.vertical === 'center' ? 'middle' : al.vertical === 'top' ? 'top' : 'bottom'));
-              if (al.indent) css.push(`padding-left:${3 + al.indent * 9}px`);
+              if (al.indent) css.push(`padding-left:${(3 + al.indent * 9) * k}px`);
+              // la fuente va pegada al texto (no solo en la celda): la «foto» de la hoja no
+              // pinta un subrayado que viene de más arriba, y el título salía sin subrayar
               let dentro = fuente.value && fuente.value.richText
-                ? fuente.value.richText.map((t) => `<span style="${estiloFuente(Object.assign({}, st.font, t.font), tema)}">${esc(t.text)}</span>`).join('')
-                : esc(txt);
+                ? fuente.value.richText.map((t) => `<span style="${estiloFuente(Object.assign({}, st.font, t.font), tema, k)}">${esc(t.text)}</span>`).join('')
+                // Excel cuenta un salto de línea al final como un renglón más (y centra el bloque
+                // con él); el navegador lo ignora si no lleva algo detrás
+                : `<span style="${fuenteCss}">${esc(al.wrapText && /\n$/.test(txt) ? txt + '\u200b' : txt)}</span>`;
               if (al.wrapText) {
+                // Un texto más alto que su fila se recorta como en Excel: centrado (o arriba,
+                // o abajo) según la celda. Antes se cortaba siempre por abajo, y un encabezado
+                // que empieza con líneas en blanco perdía justo las frases que se ven.
+                const vert = al.vertical === 'middle' || al.vertical === 'center' ? 'center' : al.vertical === 'top' ? 'flex-start' : 'flex-end';
                 css.push('overflow:hidden', 'white-space:pre-wrap', 'word-wrap:break-word');
-                dentro = `<div style="max-height:${h}px;overflow:hidden">${dentro}</div>`;
+                dentro = `<div style="height:${h}px;display:flex;flex-direction:column;justify-content:${vert};overflow:hidden"><div>${dentro}</div></div>`;
               } else if (!g && txt && hor === 'left' && i < cols.length - 1 && textoCelda(hoja.getCell(f.r, cols[i + 1].c)) === '') {
                 // el texto sin ajustar se sale hacia la celda vacía de al lado, como en Excel
                 css.push('overflow:visible', 'white-space:nowrap');
@@ -9587,8 +9605,7 @@ window.GRAPA_CONFIG = {
           papel.style.cssText = `position:relative;width:${papelW}px;height:${papelH}px;background:#fff;overflow:hidden`;
           const contenido = document.createElement('div');
           const dx = ps.horizontalCentered ? Math.max(0, (utilW - anchoTabla * k) / 2) : 0;
-          contenido.style.cssText = `position:absolute;left:${mg.left * 96 + dx}px;top:${mg.top * 96}px;width:${anchoTabla}px;`
-            + `transform:scale(${k});transform-origin:0 0;color:#000`;
+          contenido.style.cssText = `position:absolute;left:${mg.left * 96 + dx}px;top:${mg.top * 96}px;width:${anchoTabla * k}px;color:#000`;
           contenido.innerHTML = html;
           // las imágenes (logos) van en su sitio, si su fila cayó en esta hoja
           const tituloExtra = p > 0 && titulos.length ? altoTitulos : 0;
@@ -9609,7 +9626,7 @@ window.GRAPA_CONFIG = {
             if (!enEsta) return;
             const img = document.createElement('img');
             img.src = im.url;
-            img.style.cssText = `position:absolute;left:${ax - x0Area}px;top:${ay - yIni + tituloExtra}px;width:${w}px;height:${h}px;z-index:2`;
+            img.style.cssText = `position:absolute;left:${(ax - x0Area) * k}px;top:${(ay - yIni + tituloExtra) * k}px;width:${w * k}px;height:${h * k}px;z-index:2`;
             contenido.appendChild(img);
           });
           papel.appendChild(contenido);
