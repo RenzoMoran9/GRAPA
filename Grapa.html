@@ -1611,6 +1611,8 @@ html.con-acceso,html.con-acceso body{overflow:hidden}
   .control-lista{border-right:0;border-bottom:1px solid var(--borde-suave)}
   .control-detalle{padding:16px}
 }
+.acceso-pista.bien{color:var(--verde)}
+.acceso-pista.mal{color:var(--aviso)}
 
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
@@ -2879,17 +2881,21 @@ window.GRAPA_CONFIG = {
     const m = MODOS[modo];
     if (m) {
       const correo = $('#accesoCorreo', form) ? $('#accesoCorreo', form).value : (sesion && sesion.user && sesion.user.email) || '';
+      const nombrePrevio = $('#accesoNombre', form) ? $('#accesoNombre', form).value : '';
       form.innerHTML = `
         <div class="acceso-logo acceso-logo-mini">${LOGO}</div>
         <h2 id="accesoTitulo">${m.titulo}</h2>
         <p class="acceso-sub">${m.sub}</p>
         ${mensajeArriba ? `<p class="acceso-msg ${mensajeArriba.tipo}" role="alert">${esc(mensajeArriba.texto)}</p>` : ''}
-        ${modo === 'registro' ? `<label class="campo">Nombre y apellido<input type="text" id="accesoNombre" autocomplete="name" required maxlength="80"></label>` : ''}
+        ${modo === 'registro' ? `<label class="campo">Nombre y apellido<input type="text" id="accesoNombre" autocomplete="name" required maxlength="80" value="${esc(nombrePrevio)}"></label>` : ''}
         ${modo !== 'nueva' ? `<label class="campo">Correo<input type="email" id="accesoCorreo" autocomplete="email" required value="${esc(correo)}"></label>` : ''}
         ${modo !== 'recuperar' ? `<label class="campo">${modo === 'entrar' ? 'Contraseña' : 'Contraseña nueva'}
           <span class="acceso-clave"><input type="password" id="accesoClave" autocomplete="${modo === 'entrar' ? 'current-password' : 'new-password'}" required minlength="${modo === 'entrar' ? 1 : 8}">
           <button type="button" class="btn btn-mini" id="accesoVer" aria-label="Mostrar la contraseña">Ver</button></span>
           ${modo !== 'entrar' ? '<small class="acceso-pista">Mínimo 8 caracteres.</small>' : ''}</label>` : ''}
+        ${modo === 'registro' || modo === 'nueva' ? `<label class="campo">Repite la contraseña
+          <input type="password" id="accesoClave2" autocomplete="new-password" required>
+          <small class="acceso-pista" id="accesoCoincide" aria-live="polite"></small></label>` : ''}
         ${modo === 'entrar' ? `<button type="button" class="acceso-link acceso-olvido" data-ir="recuperar">¿Olvidaste la contraseña?</button>` : ''}
         <button class="btn btn-primario acceso-enviar" type="submit">${m.boton}</button>
         <div class="acceso-pie">
@@ -2940,12 +2946,24 @@ window.GRAPA_CONFIG = {
     if (ev.target.closest('#accesoVer')) {
       const c = $('#accesoClave', form);
       const ver = c.type === 'password';
-      c.type = ver ? 'text' : 'password';
+      // «Ver» enseña las dos: así se nota si se escribieron distinto
+      [c, $('#accesoClave2', form)].forEach((x) => { if (x) x.type = ver ? 'text' : 'password'; });
       ev.target.closest('#accesoVer').textContent = ver ? 'Ocultar' : 'Ver';
       return;
     }
     if (ev.target.closest('#accesoComprobar')) { comprobar({ forzar: true }); return; }
     if (ev.target.closest('#accesoSalir')) { salir(); }
+  });
+
+  // mientras se escribe la repetida, dice si ya coincide
+  form.addEventListener('input', (ev) => {
+    if (!ev.target.matches('#accesoClave, #accesoClave2')) return;
+    const a = $('#accesoClave', form), b = $('#accesoClave2', form), aviso = $('#accesoCoincide', form);
+    if (!a || !b || !aviso) return;
+    const ok = b.value && a.value === b.value;
+    aviso.textContent = !b.value ? '' : ok ? '✓ Las contraseñas coinciden.' : 'Todavía no coinciden.';
+    aviso.classList.toggle('bien', !!ok);
+    aviso.classList.toggle('mal', !!b.value && !ok);
   });
 
   form.addEventListener('submit', async (ev) => {
@@ -2958,6 +2976,7 @@ window.GRAPA_CONFIG = {
     if (modo !== 'nueva' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(correo || '').trim())) return falta('Escribe un correo válido.');
     if (modo === 'registro' && nombre.length < 2) return falta('Escribe tu nombre.');
     if ((modo === 'registro' || modo === 'nueva') && String(clave || '').length < 8) return falta('La contraseña debe tener al menos 8 caracteres.');
+    if ((modo === 'registro' || modo === 'nueva') && clave !== ($('#accesoClave2', form) || {}).value) return falta('Las dos contraseñas no coinciden. Escríbelas otra vez.');
     if (modo === 'entrar' && !clave) return falta('Escribe tu contraseña.');
     boton.disabled = true;
     boton.textContent = 'Un momento…';
@@ -3180,9 +3199,12 @@ window.GRAPA_CONFIG = {
 
   async function cambiarMiClave() {
     if (!G.pedirTexto) return;
-    const c = await G.pedirTexto({ titulo: 'Cambiar mi contraseña', mensaje: 'Escribe la contraseña nueva (mínimo 8 caracteres).', aceptar: 'Cambiar', tipo: 'password' });
+    const c = await G.pedirTexto({ titulo: 'Cambiar mi contraseña', mensaje: 'Escribe la contraseña nueva (mínimo 8 caracteres).', aceptar: 'Siguiente', tipo: 'password' });
     if (c == null) return;
     if (String(c).length < 8) { avisar('La contraseña debe tener al menos 8 caracteres.', 'error'); return; }
+    const otra = await G.pedirTexto({ titulo: 'Repite la contraseña', mensaje: 'Escríbela otra vez para comprobar que está bien.', aceptar: 'Cambiar', tipo: 'password' });
+    if (otra == null) return;
+    if (otra !== c) { avisar('Las dos contraseñas no coinciden. No se cambió nada.', 'error'); return; }
     try { await API.cambiarClave(String(c)); avisar('Contraseña cambiada.', 'ok'); } catch (e) { avisar(e.message, 'error'); }
   }
 

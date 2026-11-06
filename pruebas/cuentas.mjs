@@ -66,6 +66,11 @@ function servidorFalso() {
       if (!pf || s.claves[cuerpo.email] !== cuerpo.password) return json(route, { error: 'invalid_grant', error_description: 'Invalid login credentials' }, 400);
       return json(route, { access_token: tokenDe(pf.id), refresh_token: 'r-' + pf.id, expires_in: 3600, user: { id: pf.id, email: pf.email } });
     }
+    if (u.pathname === '/auth/v1/user' && req.method() === 'PUT') {
+      if (!p) return json(route, { message: 'invalid JWT' }, 401);
+      s.claves[p.email] = cuerpo.password;
+      return json(route, { id: p.id, email: p.email });
+    }
     if (u.pathname === '/auth/v1/user' && req.method() === 'GET') {
       return p ? json(route, { id: p.id, email: p.email }) : json(route, { message: 'invalid JWT' }, 401);
     }
@@ -232,6 +237,19 @@ const PRUEBAS = {
     await page.evaluate(() => { location.hash = 'access_token=tok-u-ana&refresh_token=r-u-ana&expires_in=3600&type=recovery'; });
     await page.reload();
     await page.waitForSelector('text=Nueva contraseña');
+    // hay que escribirla dos veces, y tienen que coincidir
+    await page.fill('#accesoClave', 'nuevaclave1');
+    await page.fill('#accesoClave2', 'nuevaclave2');
+    afirmar((await page.textContent('#accesoCoincide')).includes('no coinciden'), 'avisa mientras escribe');
+    await page.click('.acceso-enviar');
+    await page.waitForSelector('.acceso-msg.error:has-text("no coinciden")');
+    afirmar(sb.claves['ana@x.com'] === 'secreta123', 'no cambió la contraseña');
+    await page.fill('#accesoClave', 'nuevaclave1');
+    await page.fill('#accesoClave2', 'nuevaclave1');
+    afirmar((await page.textContent('#accesoCoincide')).includes('coinciden'), 'dice que coinciden');
+    await Promise.all([page.waitForEvent('load'), page.click('.acceso-enviar')]);
+    afirmar(sb.claves['ana@x.com'] === 'nuevaclave1', 'contraseña cambiada en el servidor');
+    await page.waitForFunction(() => window.Grapa && window.Grapa.cuentas.perfil() && document.querySelector('#acceso').hidden);
   },
 
   async 'cerrar sesión vuelve a la pantalla de acceso'({ page }) {

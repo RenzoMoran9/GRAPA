@@ -1588,3 +1588,5 @@ html.con-acceso,html.con-acceso body{overflow:hidden}
   .control-lista{border-right:0;border-bottom:1px solid var(--borde-suave)}
   .control-detalle{padding:16px}
 }
+.acceso-pista.bien{color:var(--verde)}
+.acceso-pista.mal{color:var(--aviso)}
