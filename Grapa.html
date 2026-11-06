@@ -2793,13 +2793,24 @@ window.GRAPA_CONFIG = {
     }
   }
 
+  /**
+   * A dónde vuelve el enlace del correo (recuperar contraseña, confirmar
+   * cuenta): a esta misma página. Así no depende de que la «Site URL» de
+   * Supabase esté bien escrita; si esta dirección no figura en sus
+   * «Redirect URLs», Supabase usa la Site URL. Abierta como archivo
+   * (file://) no hay a dónde volver, y se deja a la Site URL.
+   */
+  const volverA = () => /^https?:$/.test(location.protocol)
+    ? '?redirect_to=' + encodeURIComponent(location.origin + location.pathname)
+    : '';
+
   const API = {
     entrar: (correo, clave) => pedir('/auth/v1/token?grant_type=password', { metodo: 'POST', cuerpo: { email: correo, password: clave } }),
-    registrar: (correo, clave, nombre) => pedir('/auth/v1/signup', {
+    registrar: (correo, clave, nombre) => pedir('/auth/v1/signup' + volverA(), {
       metodo: 'POST',
       cuerpo: { email: correo, password: clave, data: { nombre } },
     }),
-    recuperar: (correo) => pedir('/auth/v1/recover', { metodo: 'POST', cuerpo: { email: correo } }),
+    recuperar: (correo) => pedir('/auth/v1/recover' + volverA(), { metodo: 'POST', cuerpo: { email: correo } }),
     cambiarClave: (clave) => conSesion('/auth/v1/user', { metodo: 'PUT', cuerpo: { password: clave } }),
     usuario: (tok) => pedir('/auth/v1/user', { token: tok }),
     salir: () => sesion ? pedir('/auth/v1/logout', { metodo: 'POST', token: sesion.access_token }).catch(() => {}) : Promise.resolve(),
