@@ -39,7 +39,7 @@ const GUIONES = [
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/html2canvas.min.js',
   'assets/config.js', 'assets/cuentas.js',
   'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
-  'assets/app.js',
+  'assets/app.js', 'assets/guia.js',
 ];
 
 const html = leer('index.html');

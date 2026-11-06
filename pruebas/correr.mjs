@@ -294,6 +294,31 @@ const PRUEBAS = {
     });
     afirmar(r[0] === 1 && r[1] === 0, 'sigue mientras lo use otro y se va con el último', r);
   },
+
+  async 'primeros pasos: recorrido guiado, ejemplo y una herramienta a la vez'({ page }) {
+    // la pantalla vacía dice qué hacer
+    afirmar(await page.isVisible('#vacio .vacio-pasos'), 'tres pasos en la pantalla vacía');
+    // el recorrido: se salta lo que no se ve (sin hojas no hay ruta), y no deja tocar lo de atrás
+    await page.evaluate(() => window.Grapa.guia.empezar());
+    await page.waitForSelector('#guia:not([hidden])');
+    const total = await page.$$eval('.guia-puntos i', (x) => x.length);
+    afirmar(total >= 5, 'varios pasos', total);
+    await page.keyboard.press('v');
+    afirmar(await page.isVisible('#guia'), 'una tecla suelta no cierra el recorrido');
+    await page.keyboard.press('ArrowRight');
+    afirmar((await page.textContent('#guiaPaso')).startsWith('Paso 2'), 'la flecha avanza');
+    for (let i = 2; i < total; i++) await page.click('#guiaSiguiente');
+    afirmar((await page.textContent('#guiaSiguiente')) === 'Probar con un ejemplo', 'al final ofrece el ejemplo');
+    await page.click('#guiaSiguiente');
+    await page.waitForFunction(() => window.Grapa.estado.paginas.length === 6, null, { timeout: 20000 });
+    afirmar(await page.isHidden('#guia'), 'el recorrido se cerró');
+    // el panel enseña solo la herramienta elegida en el riel
+    await page.click('.riel-btn[data-va="foliar"]');
+    const abiertas = await page.$$eval('.panel-vistas .bloque', (bs) => bs.filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.bloque));
+    afirmar(abiertas.length === 1 && abiertas[0] === 'foliar', 'una sola sección a la vista', abiertas);
+    // y el cupo de tableros no se ve mientras sobren
+    afirmar(await page.isHidden('#tablerosCupo'), 'sin «1 de 10» con un solo tablero');
+  },
 };
 
 /* ---------------- el corredor ---------------- */
@@ -308,6 +333,8 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
     // estas pruebas son del taller, sin cuentas (las de cuentas están en pruebas/cuentas.mjs)
     await ctx.route('**/assets/config.js*', (route) => route.fulfill({ contentType: 'text/javascript', body: 'window.GRAPA_CONFIG = {};' }));
+    // el recorrido de la primera vez taparía la pantalla: se da por visto (tiene su propia prueba)
+    await ctx.addInitScript(() => { try { localStorage.setItem('grapa.guia.vista', '1'); } catch (e) {} });
     const errores = [];
     const nueva = async () => {
       const p = await ctx.newPage();

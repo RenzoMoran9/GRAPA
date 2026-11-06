@@ -273,6 +273,8 @@ try {
     if (filtro && !nombre.toLowerCase().includes(filtro.toLowerCase())) continue;
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const sb = servidorFalso();
+    // el recorrido de la primera vez taparía la pantalla: se da por visto (tiene su propia prueba)
+    await ctx.addInitScript(() => { try { localStorage.setItem('grapa.guia.vista', '1'); } catch (e) {} });
     await ctx.route(SB + '/**', sb.atender);
     await ctx.route('**/assets/config.js*', (route) => route.fulfill({
       contentType: 'text/javascript',
