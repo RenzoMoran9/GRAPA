@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261104">
+<link rel="stylesheet" href="assets/styles.css?v=20261106">
 </head>
 <body>
 
@@ -124,6 +124,8 @@
     <div class="menu">
       <button class="menu-boton" type="button" aria-haspopup="true" aria-expanded="false">Ayuda</button>
       <div class="menu-lista" role="menu" hidden>
+        <button class="menu-item" role="menuitem" id="menuGuia"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-diana"/></svg> Recorrido guiado (1 min)</button>
+        <button class="menu-item" role="menuitem" id="menuEjemplo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-docs"/></svg> Abrir un expediente de ejemplo</button>
         <button class="menu-item" role="menuitem" data-clic="#btnAyuda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg> Cómo se usa y atajos</button>
       </div>
     </div>
@@ -132,11 +134,11 @@
   <div class="barra-acciones">
     <button class="btn btn-fantasma" id="btnDeshacer" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-deshacer"/></svg></button>
     <button class="btn btn-fantasma" id="btnRehacer" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rehacer"/></svg></button>
-    <button class="btn btn-fantasma" id="btnTema" title="Cambiar tema" aria-label="Cambiar tema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg></button>
+    <button class="btn btn-fantasma solo-en-menu" id="btnTema" title="Cambiar tema" aria-label="Cambiar tema"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tema"/></svg></button>
     <button class="btn btn-fantasma" id="btnAyuda" title="Ayuda y atajos" aria-label="Ayuda y atajos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ayuda"/></svg></button>
     <span class="separador-vertical"></span>
     <button class="btn btn-secundario" id="btnAbrir" title="Abrir archivos (Ctrl+O)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir</button>
-    <button class="btn btn-secundario" id="btnEditarTexto" title="Abre el editor de texto y le pasa las hojas marcadas (o todas, si no hay ninguna marcada)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
+    <button class="btn btn-secundario solo-en-menu" id="btnEditarTexto" title="Abre el editor de texto y le pasa las hojas marcadas (o todas, si no hay ninguna marcada)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
     <button class="btn btn-secundario" id="btnImprimir" title="Imprime las hojas marcadas, o todas las que estás viendo si no hay ninguna marcada (Ctrl+P)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg> Imprimir</button>
     <button class="btn btn-secundario" id="btnGuardarExp" title="Guarda este expediente para retomarlo otro día (Ctrl+Mayús+S). Se queda en este navegador."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Guardar</button>
     <button class="btn btn-primario" id="btnGuardar" title="Arma el PDF terminado y lo baja (Ctrl+S)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF</button>
@@ -187,6 +189,7 @@
     <section class="bloque abierto" data-bloque="docs">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-docs"/></svg> Documentos <em id="contDocs">0</em></button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Los archivos que forman este expediente. Suéltalos aquí o usa <strong>Abrir</strong>.</p>
         <div class="zona-soltar" id="zonaSoltar" title="Word y Excel se convierten a PDF aquí mismo, sin subirlos a ningún lado. Revisa cómo quedan: el reparto de líneas y hojas puede moverse un poco respecto a Office. También puedes pegar archivos con Ctrl+V.">
           <strong>Arrastra tus PDF aquí</strong>
           <span>o haz clic para buscarlos</span>
@@ -203,6 +206,7 @@
     <section class="bloque" data-bloque="guardados">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-exped"/></svg> Expedientes guardados <em id="contGuardados">0</em></button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Los expedientes que guardaste para seguir otro día.</p>
         <p class="nota">Guarda el expediente a medio armar y retómalo otro día. Se queda en este navegador, no se sube a ningún lado.</p>
         <div class="expediente-actual" id="expedienteActual" hidden>
           <span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-editando"/></svg> Editando <strong id="expedienteActualNombre"></strong></span>
@@ -221,6 +225,7 @@
     <section class="bloque" data-bloque="buscar">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg> Buscar en el expediente</button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Encuentra una palabra, un RUC o un monto en todas las hojas.</p>
         <div class="buscar-fila">
           <input type="search" class="buscar-texto" id="buscarTexto" placeholder="Palabra, RUC, nombre, monto…"
                  autocomplete="off" spellcheck="false" aria-label="Buscar en el texto de las hojas">
@@ -240,6 +245,7 @@
     <section class="bloque" data-bloque="revisar">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg> Revisar y ubicar formatos</button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Hojas en blanco o torcidas, y dónde está cada formato.</p>
         <p class="revisar-titulo">Ubicar los Formatos 1 y 5</p>
         <p class="nota">Lee el título de cada hoja (también en escaneos), encuentra el <b>Formato 1</b>, el <b>Formato 5</b> y la <b>hoja de cotización</b> de cada postor (la suya, que suele traer la marca, el modelo y la procedencia) y los deja marcados, listos para evaluar las ofertas.</p>
         <button class="btn btn-primario ancho" id="btnUbicarFormatos" type="button">Ubicar y marcar los Formatos 1 y 5</button>
@@ -270,9 +276,10 @@
       </div>
     </section>
 
-    <section class="bloque abierto" data-bloque="firmas">
+    <section class="bloque" data-bloque="firmas">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg> Firmas y sellos <em id="contFirmas">0</em></button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Crea tu firma o sello una sola vez y colócalo en las hojas.</p>
         <p class="nota">Crea tu firma una sola vez. Para colocarla, usa el botón <svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg> de la página.</p>
         <ul class="lista-firmas" id="listaFirmas"></ul>
         <div class="rejilla-botones">
@@ -287,6 +294,7 @@
     <section class="bloque" data-bloque="foliar">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folios"/></svg> Foliación y numeración</button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Numera las hojas del expediente.</p>
         <label class="campo">Formato
           <select id="folioFormato">
             <option value="{n}">1, 2, 3…</option>
@@ -329,6 +337,7 @@
     <section class="bloque" data-bloque="marca">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg> Sello de texto / marca de agua</button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Pon un texto o una marca de agua sobre las hojas.</p>
         <label class="campo">Texto <input type="text" id="marcaTexto" value="COPIA FIEL DEL ORIGINAL"></label>
         <div class="rejilla-2">
           <label class="campo">Tamaño <input type="number" id="marcaTam" value="34" min="6" max="140"></label>
@@ -351,6 +360,7 @@
     <section class="bloque" data-bloque="dividir">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg> Dividir y extraer</button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Parte el expediente o saca hojas a un PDF aparte.</p>
         <p class="nota">Usa las tijeras <span class="tijera-demo"><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span> entre páginas para marcar dónde cortar.</p>
         <button class="btn btn-suave ancho" id="btnDividirMarcas">Dividir por las marcas de corte</button>
         <button class="btn btn-suave ancho" id="btnExtraerSel">Extraer selección a un PDF nuevo</button>
@@ -366,6 +376,7 @@
     <section class="bloque" data-bloque="salida">
       <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg> Archivo de salida</button>
       <div class="bloque-cuerpo">
+        <p class="bloque-ayuda">Nombre, peso y carpeta del PDF que vas a exportar.</p>
         <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido" autocomplete="off"></label>
         <p class="nota nombre-nota">
           <span id="nombreNotaTexto">Toma el nombre del documento que estás trabajando.</span>
@@ -469,10 +480,18 @@
             <path d="M52 46v-9a6 6 0 0 1 12 0v14a4 4 0 0 0 8 0v-9"/>
           </svg>
         </div>
-        <h2>Aún no hay páginas</h2>
-        <p>Arrastra aquí tus PDF escaneados y sus anexos, o usa <strong>Abrir archivos</strong>.<br>
-           Todo se procesa dentro de tu computadora: ningún documento sale de aquí.</p>
-        <button class="btn btn-primario" id="btnAbrir2">Abrir archivos</button>
+        <h2>Arma tu expediente en tres pasos</h2>
+        <ol class="vacio-pasos">
+          <li><b>1</b><span><strong>Abre tus archivos</strong>PDF, Word, Excel o fotos. También puedes arrastrarlos aquí.</span></li>
+          <li><b>2</b><span><strong>Ordena, folia y firma</strong>Arrastra las hojas y usa las herramientas de la izquierda.</span></li>
+          <li><b>3</b><span><strong>Exporta el PDF</strong>Listo para subir, imprimir o enviar.</span></li>
+        </ol>
+        <div class="vacio-botones">
+          <button class="btn btn-primario btn-grande" id="btnAbrir2"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir archivos</button>
+          <button class="btn btn-secundario btn-grande" id="btnEjemplo" type="button">Probar con un ejemplo</button>
+        </div>
+        <button class="vacio-guia" id="btnGuiaVacio" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-diana"/></svg> ¿Primera vez? Mira el recorrido guiado (1 min)</button>
+        <p class="vacio-nota">Todo se procesa dentro de tu computadora: ningún documento sale de aquí.</p>
       </div>
       <div class="rejilla-paginas" id="rejilla"></div>
     </div>
@@ -567,7 +586,7 @@
 
 <footer class="barra-estado" id="barraEstado">
   <span class="estado-guardado" id="estadoGuardado"></span>
-  <span class="estado-sync" id="estadoSync" title="La lista de guardados, las firmas y los avisos se comparten entre todos los tableros y las ventanas abiertas de Pdflash."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recoger"/></svg> <span id="estadoSyncTexto">Sincronizado</span></span>
+  <span class="estado-sync" id="estadoSync" title="Tus expedientes guardados y tus firmas están en esta computadora y en este navegador, y se comparten entre todos los tableros y ventanas abiertas."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-recoger"/></svg> <span id="estadoSyncTexto">Guardado en este equipo</span></span>
   <button class="estado-memoria" id="estadoMemoria" type="button" hidden><i class="punto-sucio"></i> <span id="estadoMemoriaTexto"></span></button>
   <span class="estado-espacio"></span>
   <strong id="infoPaginas">0 páginas</strong>
@@ -819,16 +838,17 @@
 <script src="lib/docx-preview.min.js"></script>
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/config.js?v=20261104"></script>
-<script src="assets/cuentas.js?v=20261104"></script>
-<script src="assets/core.js?v=20261104"></script>
-<script src="assets/buscar.js?v=20261104"></script>
-<script src="assets/revisar.js?v=20261104"></script>
-<script src="assets/ocr.js?v=20261104"></script>
-<script src="assets/ofertas.js?v=20261104"></script>
-<script src="assets/office.js?v=20261104"></script>
-<script src="assets/expedientes.js?v=20261104"></script>
-<script src="assets/firmas.js?v=20261104"></script>
-<script src="assets/app.js?v=20261104"></script>
+<script src="assets/config.js?v=20261106"></script>
+<script src="assets/cuentas.js?v=20261106"></script>
+<script src="assets/core.js?v=20261106"></script>
+<script src="assets/buscar.js?v=20261106"></script>
+<script src="assets/revisar.js?v=20261106"></script>
+<script src="assets/ocr.js?v=20261106"></script>
+<script src="assets/ofertas.js?v=20261106"></script>
+<script src="assets/office.js?v=20261106"></script>
+<script src="assets/expedientes.js?v=20261106"></script>
+<script src="assets/firmas.js?v=20261106"></script>
+<script src="assets/app.js?v=20261106"></script>
+<script src="assets/guia.js?v=20261106"></script>
 </body>
 </html>

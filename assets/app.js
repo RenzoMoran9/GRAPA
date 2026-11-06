@@ -1029,6 +1029,9 @@
     seguirLectorTrasPintar();
   }
   G.pintar = pintar;
+  /** Para la guía: abre archivos como si se hubieran soltado. */
+  G.anadirArchivos = (files) => anadir(files);
+  G.irASeccion = (s) => irASeccion(s);
 
   /** «A4» si todas las hojas son A4; si no, el tamaño o «Tamaños mixtos». */
   function pintarTamano() {
@@ -2949,8 +2952,10 @@
     const lleno = tableros.length >= MAX_TABLEROS;
     const nuevo = $('#btnTableroNuevo');
     nuevo.disabled = lleno;
-    $('#tablerosCupo').textContent = `${tableros.length} de ${MAX_TABLEROS}`;
-    $('#tablerosCupo').title = `${tableros.length} de ${MAX_TABLEROS} tableros abiertos`;
+    // «1 de 10» no se entendía: se dice qué es, y solo cuando quedan pocos
+    $('#tablerosCupo').textContent = `${tableros.length} de ${MAX_TABLEROS} tableros`;
+    $('#tablerosCupo').title = `Puedes tener hasta ${MAX_TABLEROS} expedientes abiertos a la vez`;
+    $('#tablerosCupo').hidden = tableros.length < MAX_TABLEROS - 2;
     nuevo.hidden = lleno;
     $('#tablerosCupo').classList.toggle('lleno', lleno);
     actualizarBotonNuevo();
@@ -3289,7 +3294,7 @@
         ? icono('check') + ' Guardado ' + haceCuanto(t.guardadoEn || Date.now())
         : '<i class="punto-sucio"></i> Sin guardar';
     const n = tableros.length;
-    $('#estadoSyncTexto').textContent = n === 1 ? 'Sincronizado' : `Sincronizado en ${n} tableros`;
+    $('#estadoSyncTexto').textContent = n === 1 ? 'Guardado en este equipo' : `Guardado en este equipo · ${n} tableros`;
     pintarRuta();
   }
 
@@ -6260,16 +6265,10 @@
     $$('.riel-btn').forEach((b) => {
       b.addEventListener('click', () => irASeccion(b.dataset.va));
     });
-    // acordeón: la cabecera sigue plegando su sección
-    $$('.bloque-cabecera').forEach((cab) => {
-      cab.addEventListener('click', () => {
-        const sec = cab.parentElement;
-        const abierta = sec.classList.toggle('abierto');
-        if (!abierta && seccionActual === sec.dataset.bloque) seccionActual = null;
-        if (abierta) seccionActual = sec.dataset.bloque;
-        marcarRiel();
-      });
-    });
+    // El panel enseña una sola herramienta, la que se eligió en el riel: antes
+    // salían todas apiladas como acordeón, repitiendo lo que ya dice el riel.
+    // La cabecera queda como título; no pliega nada.
+    $$('.bloque-cabecera').forEach((cab) => { cab.tabIndex = -1; });
     // arranca en la sección donde se quedó, y solo en esa
     let inicial = 'docs';
     try { inicial = localStorage.getItem(CLAVE_RIEL) || 'docs'; } catch (e) {}

@@ -33,6 +33,21 @@ Funciona en Chrome, Edge y Firefox actuales.
 
 ## Lo que hace
 
+### Primeros pasos
+- **La pantalla de inicio dice qué hacer** en tres pasos (abrir, ordenar,
+  foliar y firmar, exportar), con **Abrir archivos** y **Probar con un
+  ejemplo**.
+- **Recorrido guiado:** la primera vez, un recorrido de un minuto señala
+  dónde está cada cosa. Vuelve desde *Ayuda ▸ Recorrido guiado*.
+- **Expediente de ejemplo:** seis hojas de práctica (requerimiento,
+  especificaciones, dos cotizaciones, Formatos 1 y 5) para probar sin
+  arriesgar tus documentos. También desde *Ayuda ▸ Abrir un expediente de
+  ejemplo*.
+- **Una herramienta a la vez:** el riel de la izquierda elige la herramienta
+  y el panel enseña solo esa, con una línea que dice para qué sirve.
+- La barra de arriba lleva lo de siempre (Abrir, Imprimir, Guardar, Exportar
+  PDF); *Editar texto* está en *Archivo* y el tema claro/oscuro en *Ver*.
+
 ### Armar el expediente
 - Abre varios PDF a la vez, arrastrándolos o con **Abrir archivos**.
 - También acepta **fotos y escaneos JPG / PNG**: los convierte en páginas A4.
@@ -608,6 +623,7 @@ assets/
   expedientes.js      guardado del trabajo (IndexedDB) y carpeta de salida
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
+  guia.js             primeros pasos: recorrido guiado y expediente de ejemplo
   config.js           datos de Supabase para las cuentas (vacíos = sin cuentas)
   cuentas.js          inicio de sesión, permisos por función y panel de control
 supabase/esquema.sql  tabla de perfiles y reglas de seguridad para Supabase

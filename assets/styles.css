@@ -1590,3 +1590,73 @@ html.con-acceso,html.con-acceso body{overflow:hidden}
 }
 .acceso-pista.bien{color:var(--verde)}
 .acceso-pista.mal{color:var(--aviso)}
+
+/* ===========================================================
+   Más fácil de usar
+   =========================================================== */
+
+/* lo que vive solo en los menús (Ver ▸ tema, Archivo ▸ editar texto) */
+.solo-en-menu{display:none !important}
+
+/* ---------- el panel enseña una sola herramienta: la elegida en el riel ---------- */
+.panel-vistas .bloque:not(.abierto){display:none}
+.panel-vistas .bloque{border-bottom:0}
+.panel-vistas .bloque-cabecera{
+  cursor:default;font-size:15px;font-weight:700;letter-spacing:-.1px;padding:16px 16px 4px;pointer-events:none;
+}
+.panel-vistas .bloque-cabecera:hover{background:none}
+.panel-vistas .bloque-cabecera::after{display:none}
+.panel-vistas .bloque-cabecera .ico{color:var(--acento)}
+.panel-vistas .bloque-cabecera em{pointer-events:none}
+.bloque-ayuda{margin:0 0 4px;font-size:12.5px;line-height:1.45;color:var(--texto-2)}
+.bloque-ayuda strong{color:var(--texto)}
+
+/* ---------- pantalla vacía: tres pasos ---------- */
+.vacio{gap:14px}
+.vacio h2{font-size:21px;letter-spacing:-.3px}
+.vacio-pasos{
+  list-style:none;margin:6px 0 4px;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,190px));gap:12px;
+}
+.vacio-pasos li{
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 12px;border-radius:12px;
+  background:var(--fondo-2);border:1px solid var(--borde-suave);text-align:center;
+}
+.vacio-pasos b{
+  width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;
+  background:var(--acento-tenue);color:var(--acento);
+}
+.vacio-pasos span{display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.4;color:var(--texto-2)}
+.vacio-pasos strong{font-size:13px;color:var(--texto)}
+.vacio-botones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.btn-grande{min-height:40px;padding:8px 18px;font-size:14px;border-radius:9px}
+.vacio-guia{
+  background:none;border:0;padding:4px;font:inherit;font-size:13px;font-weight:600;color:var(--acento);
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+}
+.vacio-guia:hover{text-decoration:underline}
+.vacio-nota{font-size:12px !important;color:var(--texto-3)}
+@media (max-width:720px){ .vacio-pasos{grid-template-columns:1fr;max-width:300px} }
+
+/* ---------- recorrido guiado ---------- */
+html.con-guia{overflow:hidden}
+.guia{position:fixed;inset:0;z-index:92}
+.guia[hidden]{display:none}
+.guia-foco{
+  position:fixed;border-radius:12px;pointer-events:none;
+  box-shadow:0 0 0 3px var(--acento),0 0 0 9999px rgba(12,16,22,.6);
+  transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease;
+}
+.guia-tarjeta{
+  position:fixed;width:min(340px,calc(100vw - 32px));padding:16px 18px 14px;border-radius:14px;
+  background:var(--fondo-2);color:var(--texto);border:1px solid var(--borde);box-shadow:var(--sombra-fuerte);
+  transition:left .25s ease,top .25s ease;
+}
+.guia-paso{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--acento)}
+.guia-tarjeta h3{margin:6px 0 6px;font-size:16px;letter-spacing:-.2px}
+.guia-tarjeta p{margin:0 0 14px;font-size:13.2px;line-height:1.5;color:var(--texto-2)}
+.guia-botones{display:flex;align-items:center;gap:6px}
+.guia-botones [hidden]{display:none}
+.guia-puntos{display:flex;gap:4px;margin:0 auto 0 4px}
+.guia-puntos i{width:6px;height:6px;border-radius:50%;background:var(--borde)}
+.guia-puntos i.activo{background:var(--acento);width:14px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){ .guia-foco,.guia-tarjeta{transition:none} }
