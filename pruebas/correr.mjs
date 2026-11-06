@@ -103,6 +103,33 @@ function afirmar(cond, mensaje, detalle) {
   if (!cond) throw new Error(mensaje + (detalle !== undefined ? ' · obtenido: ' + JSON.stringify(detalle) : ''));
 }
 
+/** Un expediente escaneado: cada hoja es una imagen, sin texto de verdad. */
+async function pdfEscaneado(page) {
+    const b64 = await page.evaluate(async () => {
+      const { PDFDocument } = window.PDFLib;
+      const doc = await PDFDocument.create();
+      const titulos = ['FORMATO N° 1', 'COTIZACIÓN', 'FORMATO N° 5', 'INFORME TÉCNICO'];
+      for (const t of titulos) {
+        const c = document.createElement('canvas');
+        c.width = 1240; c.height = 1754;
+        const g = c.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        g.fillStyle = '#000'; g.font = 'bold 64px Arial'; g.textAlign = 'center';
+        g.fillText(t, 620, 220);
+        g.font = '34px Arial'; g.textAlign = 'left';
+        for (let k = 0; k < 18; k++) g.fillText('Texto de la hoja escaneada para la prueba ' + (k + 1), 120, 380 + k * 60);
+        const png = await new Promise((r) => c.toBlob(r, 'image/png'));
+        const img = await doc.embedPng(new Uint8Array(await png.arrayBuffer()));
+        doc.addPage([595.28, 841.89]).drawImage(img, { x: 0, y: 0, width: 595.28, height: 841.89 });
+      }
+      const bytes = await doc.save();
+      let s = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(s);
+    });
+    return { name: 'escaneado.pdf', mimeType: 'application/pdf', buffer: Buffer.from(b64, 'base64') };
+  }
+
 /* ---------------- las pruebas ---------------- */
 const PRUEBAS = {
   async 'cargar: el segundo documento enciende la vista de paquetes, el tercero respeta la elegida'({ page }) {
@@ -366,6 +393,38 @@ const PRUEBAS = {
     });
     afirmar(r.length >= 3, 'varias hojas', r.length);
     afirmar(r.every(([w, h]) => w === 595 && h === 842), 'todas A4', r);
+  },
+
+  async 'ubicar formatos en escaneos: lee los títulos de las hojas escaneadas'({ page }) {
+    await page.setInputFiles('#entradaArchivos', [await pdfEscaneado(page)]);
+    await esperarCarga(page);
+    await page.click('.riel-btn[data-va="revisar"]');
+    await page.click('#btnUbicarFormatos');
+    await page.waitForFunction(() => document.querySelector('#btnUbicarFormatos').textContent.startsWith('Ubicar'), null, { timeout: 240000 });
+    const hallados = await page.evaluate(() => window.Grapa.estado.seleccion.size);
+    afirmar(hallados >= 2, 'ubicó los formatos escaneados', { hallados, estado: await page.textContent('#formatosEstado') });
+  },
+
+  async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
+    // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
+    await page.evaluate(() => {
+      window.Grapa.ocrTiempos.hoja = 1500;
+      const original = Worker.prototype.postMessage;
+      Worker.prototype.postMessage = function (m, t) {
+        if (m && m.tipo === 'leer') return;            // se «cuelga»: no contesta nunca
+        return original.call(this, m, t);
+      };
+    });
+    await page.setInputFiles('#entradaArchivos', [await pdfEscaneado(page)]);
+    await esperarCarga(page);
+    await page.click('.riel-btn[data-va="revisar"]');
+    await page.click('#btnUbicarFormatos');
+    await page.waitForFunction(() => document.querySelector('#btnUbicarFormatos').textContent.startsWith('Ubicar'), null, { timeout: 240000 });
+    const fin = await page.textContent('#formatosEstado');
+    afirmar(!/Leyendo los títulos/.test(fin), 'la lectura terminó', fin);
+    // con PaddleOCR caído, lo leyó el lector de respaldo: los formatos igual salen
+    const hallados = await page.evaluate(() => window.Grapa.estado.seleccion.size);
+    afirmar(hallados >= 2, 'ubicó formatos con el lector de respaldo', { hallados, fin });
   },
 
   async 'excel: respeta el formato y «ajustar a una página»'({ page }) {

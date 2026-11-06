@@ -99,7 +99,18 @@
      Cada lector es un Worker con su propia copia de los modelos. Con varios, mientras
      uno lee una hoja otro lee la siguiente: la computadora usa más de un núcleo. */
 
-  const paddle = { arranque: null, libres: [], todos: [], cola: [], fallo: null };
+  const paddle = { arranque: null, libres: [], todos: [], cola: [], fallo: null, uno: null, reponiendo: 0, caidas: 0 };
+  /**
+   * Topes de tiempo. Sin ellos, un lector que no terminaba de arrancar (poca
+   * memoria, muchos expedientes abiertos) o que se caía a media hoja dejaba
+   * «Leyendo los títulos: 6 de 47» quieto para siempre.
+   */
+  const TIEMPOS = (G.ocrTiempos = Object.assign({ arranque: 90000, hoja: 45000, dibujo: 30000 }, G.ocrTiempos || {}));
+  const conTope = (promesa, ms, que) => new Promise((ok, mal) => {
+    const reloj = setTimeout(() => mal(new Error(que + ' tardó demasiado')), ms);
+    promesa.then((v) => { clearTimeout(reloj); ok(v); }, (e) => { clearTimeout(reloj); mal(e); });
+  });
+  G.conTopeOcr = conTope;
   const LECTORES = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
 
   function urlDe(bytes, tipo) { return URL.createObjectURL(new Blob([bytes], { type: tipo })); }
@@ -133,14 +144,17 @@
       const dic = new TextDecoder().decode(b.pdic);
       const uno = () => new Promise((ok, mal) => {
         const w = new Worker(urlWorker);
+        const reloj = setTimeout(() => { w.terminate(); mal(new Error('el lector tardó demasiado en arrancar')); }, TIEMPOS.arranque);
         w.onmessage = (e) => {
+          clearTimeout(reloj);
           if (e.data.tipo === 'listo') { w.onmessage = null; ok(w); }
           else { w.terminate(); mal(new Error(e.data.mensaje || 'el lector no arrancó')); }
         };
-        w.onerror = (e) => { w.terminate(); mal(new Error(e.message || 'el lector no arrancó')); };
+        w.onerror = (e) => { clearTimeout(reloj); w.terminate(); mal(new Error(e.message || 'el lector no arrancó')); };
         // cada lector se lleva su copia: los bytes se clonan, no se transfieren
         w.postMessage({ tipo: 'iniciar', wasm: b.ortwasm.buffer, det: b.pdet.buffer, rec: b.prec.buffer, dic });
       });
+      paddle.uno = uno;
       // el primero tiene que arrancar; los demás se suman cuando estén
       const primero = await uno();
       sumarLector(primero);
@@ -158,7 +172,10 @@
 
   function sumarLector(w) {
     w.trabajo = null;
+    // un lector que se cae ya arrancado no avisaba: su hoja esperaba para siempre
+    w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); perderLector(w, new Error('el lector de texto se cayó')); };
     w.onmessage = (e) => {
+      clearTimeout(w.reloj);
       const t = w.trabajo;
       w.trabajo = null;
       if (t) {
@@ -173,11 +190,42 @@
     repartir();
   }
 
+  /**
+   * Un lector que se cayó o se trabó: se tira, su hoja falla (y se reintenta
+   * más arriba) y se arma otro en su lugar. Si se caen una y otra vez, se deja
+   * PaddleOCR y lo que falta lo lee Tesseract.
+   */
+  function perderLector(w, err) {
+    clearTimeout(w.reloj);
+    const t = w.trabajo;
+    w.trabajo = null;
+    try { w.terminate(); } catch (e) { /* ya no estaba */ }
+    paddle.todos = paddle.todos.filter((x) => x !== w);
+    paddle.libres = paddle.libres.filter((x) => x !== w);
+    console.warn('PaddleOCR:', err.message);
+    if (t) t.mal(err);
+    paddle.caidas++;
+    if (paddle.uno && paddle.caidas <= 4) {
+      paddle.reponiendo++;
+      paddle.uno().then(sumarLector, (e) => console.warn('No se pudo reponer el lector', e))
+        .finally(() => { paddle.reponiendo--; sinLectores(); });
+    }
+    sinLectores();
+  }
+
+  function sinLectores() {
+    if (paddle.todos.length || paddle.reponiendo) return;
+    paddle.fallo = new Error('el lector PaddleOCR dejó de funcionar');
+    paddle.arranque = Promise.resolve(false);
+    paddle.cola.splice(0).forEach((t) => t.mal(paddle.fallo));
+  }
+
   function repartir() {
     while (paddle.libres.length && paddle.cola.length) {
       const w = paddle.libres.shift();
       const t = paddle.cola.shift();
       w.trabajo = t;
+      w.reloj = setTimeout(() => perderLector(w, new Error('una hoja tardó demasiado en leerse')), TIEMPOS.hoja);
       w.postMessage(Object.assign({ tipo: 'leer', imagen: t.imagen }, t.opciones), [t.imagen]);
     }
   }
@@ -273,13 +321,13 @@
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
     if (fuente && fuente.bytes) {
       try {
-        const docs = await copiasDe(pagina.fuenteId);
-        return await G.renderGrande(pagina, ancho, docs[turnoCopia++ % docs.length]);
+        const docs = await conTope(copiasDe(pagina.fuenteId), TIEMPOS.dibujo, 'abrir la copia del PDF');
+        return await conTope(G.renderGrande(pagina, ancho, docs[turnoCopia++ % docs.length]), TIEMPOS.dibujo, 'dibujar la hoja');
       } catch (e) {
         console.warn('No se pudo dibujar aparte; se dibuja en la pantalla', e);
       }
     }
-    return G.renderGrande(pagina, ancho);
+    return conTope(G.renderGrande(pagina, ancho), TIEMPOS.dibujo * 2, 'dibujar la hoja');
   }
 
   /* ---------- de palabras sueltas a renglones ---------- */

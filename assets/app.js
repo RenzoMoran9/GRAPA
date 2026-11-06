@@ -5880,7 +5880,8 @@
         if (i >= lista.length) return;
         const p = lista[i];
         try {
-          const cab = await G.leerCabecera(p);
+          // una hoja que no sale en dos minutos se da por no leída y se sigue con las demás
+          const cab = await (G.conTopeOcr ? G.conTopeOcr(G.leerCabecera(p), 120000, 'la hoja') : G.leerCabecera(p));
           cabeceras.set(p.uid, cab.lineas);
           const f = G.ofertas.formatoDe(cab.lineas);
           if (f === 1 || f === 5 || f === 'cot') hallados.set(p.uid, f);
@@ -5894,6 +5895,10 @@
         barra.style.width = Math.round((hechas / lista.length) * 100) + '%';
       }
     };
+    // mientras arranca el lector de escaneos (unos segundos la primera vez), se dice
+    const bajaEstado = G.alEstadoOcr ? G.alEstadoOcr((t) => {
+      estado.textContent = t || `Leyendo los títulos: ${hechas} de ${lista.length} hojas…`;
+    }) : null;
     try {
       estado.textContent = `Leyendo los títulos: 0 de ${lista.length} hojas…`;
       await Promise.all(Array.from({ length: aLaVez }, lector));
@@ -5910,6 +5915,7 @@
         }
       });
     } finally {
+      if (bajaEstado) bajaEstado();
       ubicacion.corriendo = null;
       boton.textContent = 'Ubicar y marcar los Formatos 1 y 5';
       $('#formatosProgreso').hidden = true;
