@@ -40,6 +40,7 @@ function servidorFalso() {
       { id: 'u-luis', email: 'luis@x.com', nombre: 'Luis Gómez', rol: 'usuario', estado: 'pendiente', funciones: {}, creado: '2026-03-01T00:00:00Z', ultimo_acceso: null },
     ],
     cambios: [],
+    recuperados: [],
   };
   const tokenDe = (id) => 'tok-' + id;
   const quien = (req) => {
@@ -65,7 +66,11 @@ function servidorFalso() {
       if (!pf || s.claves[cuerpo.email] !== cuerpo.password) return json(route, { error: 'invalid_grant', error_description: 'Invalid login credentials' }, 400);
       return json(route, { access_token: tokenDe(pf.id), refresh_token: 'r-' + pf.id, expires_in: 3600, user: { id: pf.id, email: pf.email } });
     }
+    if (u.pathname === '/auth/v1/user' && req.method() === 'GET') {
+      return p ? json(route, { id: p.id, email: p.email }) : json(route, { message: 'invalid JWT' }, 401);
+    }
     if (u.pathname === '/auth/v1/logout') return json(route, null, 204);
+    if (u.pathname === '/auth/v1/recover') { s.recuperados.push({ email: cuerpo.email, redirect_to: u.searchParams.get('redirect_to') }); return json(route, {}); }
     if (u.pathname === '/rest/v1/rpc/registrar_acceso') return json(route, null, 204);
     if (u.pathname === '/rest/v1/perfiles') {
       if (!p) return json(route, { message: 'JWT expired' }, 401);
@@ -212,6 +217,21 @@ const PRUEBAS = {
     await page.waitForTimeout(400);
     afirmar(await page.isHidden('#acceso'), 'entra sin conexión');
     afirmar(await page.isHidden('.riel-btn[data-va="firmas"]'), 'con los permisos guardados');
+  },
+
+  async 'recuperar la contraseña: el enlace vuelve a esta misma página'({ page, sb }) {
+    await page.waitForSelector('#acceso:not([hidden])');
+    await page.click('[data-ir="recuperar"]');
+    await page.fill('#accesoCorreo', 'ana@x.com');
+    await page.click('.acceso-enviar');
+    await page.waitForSelector('.acceso-msg.ok');
+    afirmar(sb.recuperados.length === 1, 'pidió el correo');
+    afirmar(sb.recuperados[0].redirect_to === new URL(page.url()).origin + '/', 'vuelve a la página de la app', sb.recuperados[0]);
+    // y al volver con el enlace, pide la contraseña nueva
+    // (cambiar solo el # no recarga la página: se recarga a mano, como al abrir el enlace)
+    await page.evaluate(() => { location.hash = 'access_token=tok-u-ana&refresh_token=r-u-ana&expires_in=3600&type=recovery'; });
+    await page.reload();
+    await page.waitForSelector('text=Nueva contraseña');
   },
 
   async 'cerrar sesión vuelve a la pantalla de acceso'({ page }) {
