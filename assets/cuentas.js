@@ -33,7 +33,7 @@
     { id: 'firmas', grupo: 'Trabajo', nombre: 'Firmas y sellos', desc: 'Crear firmas desde un escaneo y colocarlas en las hojas.', secciones: ['firmas'], botones: ['#bsFirmar'] },
     { id: 'sello', grupo: 'Trabajo', nombre: 'Sello de texto / marca de agua', desc: 'Poner un texto o marca de agua sobre las hojas.', secciones: ['marca'] },
     { id: 'foliar', grupo: 'Trabajo', nombre: 'Foliación', desc: 'Numerar las hojas del expediente.', secciones: ['foliar'] },
-    { id: 'dividir', grupo: 'Salida', nombre: 'Dividir y extraer', desc: 'Partir el expediente o sacar hojas a un PDF aparte.', secciones: ['dividir'], botones: ['#btnExtraerSel'] },
+    { id: 'dividir', grupo: 'Salida', nombre: 'Separar en otro PDF', desc: 'Sacar hojas o partir el expediente en varios PDF.', secciones: ['dividir'], botones: ['#btnDividirHacer'] },
     { id: 'exportar', grupo: 'Salida', nombre: 'Exportar PDF', desc: 'Armar y descargar el PDF terminado (Ctrl+S).', botones: ['#btnGuardar', '#btnDescargarSel'] },
     { id: 'imprimir', grupo: 'Salida', nombre: 'Imprimir', desc: 'Imprimir hojas, paquetes o la selección (Ctrl+P).', botones: ['#btnImprimir', '#btnImprimirSel'] },
     { id: 'editarTexto', grupo: 'Salida', nombre: 'Editar texto', desc: 'Pasar las hojas al editor de texto.', botones: ['#btnEditarTexto'] },

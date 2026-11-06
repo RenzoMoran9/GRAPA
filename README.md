@@ -56,6 +56,15 @@ Funciona en Chrome, Edge y Firefox actuales.
   o pegarlos con **Ctrl+V**. La composición la rehace el navegador con las fuentes
   que tengas instaladas, así que se parece mucho pero puede no ser idéntica a lo que
   imprime Office: si algo debe salir exacto, guárdalo como PDF desde Word o Excel.
+  - **Word:** el documento se reparte en hojas del tamaño de su papel (antes uno
+    de tres hojas salía como una sola hoja larga), con su encabezado y pie en
+    cada una; las tablas y listas largas se parten entre hojas, los cuadros de
+    texto del membrete (el pie con dirección y web) se ven, y si falta una fuente
+    se usa la más parecida en vez de una con serifa. Las notas al pie van al final.
+  - **Excel (`.xlsx`):** sale como lo imprime Excel: área de impresión,
+    orientación, márgenes, «ajustar a una página», anchos y altos, celdas
+    combinadas, rellenos, bordes, fuentes, formatos de número, logos y filas de
+    título repetidas. Los `.xls` antiguos y los `.csv` se leen sin formato.
   Los `.xls` antiguos sí se leen; los `.doc` de Word 97 y los PowerPoint no, así que
   esos hay que abrirlos en Office y guardarlos como PDF.
 - Cada archivo recibe un **color**, así sabes de un vistazo de dónde viene cada página.
@@ -352,9 +361,19 @@ por Descargas, y al dividir se escriben todos los archivos de una. Si ya existe
 un archivo con ese nombre, Pdflash añade `(2)` en vez de pisarlo.
 Requiere Chrome o Edge.
 
-### Dividir
-Con las **tijeras ✂** entre páginas, por selección, por rangos (`1-3, 5, 8-10`)
-o un archivo por página.
+### Separar en otro PDF
+La herramienta **Separar** saca hojas a un PDF aparte; el expediente no cambia.
+Se elige qué sacar y, antes de descargar, dice en palabras qué va a salir
+(«Saldrán 3 PDF: hojas 1–2 · hojas 3–4 · hojas 5–6»):
+
+- **Solo las hojas que marque:** las marcadas con su casilla, juntas en un PDF.
+- **Partir en varios PDF:** con las **tijeras ✂** entre hojas. Al elegir esta
+  opción se ven siempre y más grandes; *Quitar todos los cortes* las limpia.
+- **Por números de hoja:** `1-3, 5, 8-10` (cada grupo es un PDF). Si no se
+  entiende lo escrito, lo dice.
+- **Cada hoja en su PDF.**
+
+Si sale más de un PDF, se descargan juntos en un ZIP.
 
 ---
 

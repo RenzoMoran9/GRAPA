@@ -1027,6 +1027,7 @@
     pintarRevision();
     pintarPesos();
     seguirLectorTrasPintar();
+    pintarDividir();
   }
   G.pintar = pintar;
   /** Para la guía: abre archivos como si se hubieran soltado. */
@@ -2392,6 +2393,88 @@
     } finally {
       G.cargando(false);
     }
+  }
+
+  /* ---------- separar en otro PDF ----------
+     Antes eran cuatro botones sueltos y había que adivinar qué hacía cada
+     uno. Ahora se elige qué sacar y, antes de descargar, se lee en palabras
+     qué va a salir: «Saldrán 3 PDF: hojas 1–2 · 3–5 · 6». */
+
+  const modoDividir = () => (($$('input[name="divModo"]').find((r) => r.checked)) || {}).value || 'marcadas';
+
+  /** «1, 2, 3, 5, 7, 8» → «1–3, 5, 7–8». */
+  function rangosDeHojas(nums) {
+    const out = [];
+    for (let i = 0; i < nums.length; i++) {
+      let j = i;
+      while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+      out.push(j > i ? `${nums[i]}–${nums[j]}` : String(nums[i]));
+      i = j;
+    }
+    return out.join(', ');
+  }
+
+  /** Qué va a salir con lo elegido: los grupos de hojas y cómo decirlo. */
+  function planDividir() {
+    const modo = modoDividir();
+    const pos = (p) => E.paginas.indexOf(p) + 1;
+    const hojas = (n) => (n === 1 ? '1 hoja' : `${n} hojas`);
+    if (!E.paginas.length) return { error: 'Primero abre un PDF.' };
+    if (modo === 'marcadas') {
+      const objs = seleccionadas();
+      if (!objs.length) return { error: 'Marca las hojas que quieres sacar con la casilla de cada una (Ctrl+A las marca todas).' };
+      return { grupos: [objs], prefijo: 'extraido', texto: `Saldrá 1 PDF con ${hojas(objs.length)}: ${rangosDeHojas(objs.map(pos))}.` };
+    }
+    if (modo === 'cortes') {
+      const grupos = gruposPorMarcas().filter((g) => g.length);
+      if (grupos.length < 2) return { error: 'Pulsa las tijeras entre dos hojas para marcar dónde cortar. Aparecen al pasar el ratón por el borde derecho de cada hoja.' };
+      return { grupos, prefijo: 'parte', texto: `Saldrán ${grupos.length} PDF: ` + grupos.map((g) => (g.length === 1 ? 'hoja ' : 'hojas ') + rangosDeHojas(g.map(pos))).join(' · ') + '.' };
+    }
+    if (modo === 'rangos') {
+      const txt = $('#divRangos').value.trim();
+      if (!txt) return { error: 'Escribe las hojas de cada PDF, por ejemplo: 1-3, 5, 8-10' };
+      const grupos = parsearRangos(txt, E.paginas.length);
+      if (!grupos.length) return { error: `No entendí «${txt}». Usa números de 1 a ${E.paginas.length}, por ejemplo: 1-3, 5, 8-10` };
+      return { grupos, prefijo: 'rango', texto: `Saldrán ${grupos.length} PDF: ` + grupos.map((g) => (g.length === 1 ? 'hoja ' : 'hojas ') + rangosDeHojas(g.map(pos))).join(' · ') + '.' };
+    }
+    return { grupos: E.paginas.map((p) => [p]), prefijo: 'pag', texto: `Saldrán ${E.paginas.length} PDF, uno por cada hoja.` };
+  }
+
+  function pintarDividir() {
+    const caja = $('#divResultado');
+    if (!caja) return;
+    const modo = modoDividir();
+    document.body.classList.toggle('modo-cortes', modo === 'cortes' && !!$('.bloque[data-bloque="dividir"].abierto'));
+    $('#campoRangos').hidden = modo !== 'rangos';
+    const plan = planDividir();
+    caja.textContent = plan.error || plan.texto;
+    caja.classList.toggle('falta', !!plan.error);
+    $('#btnDividirHacer').disabled = !!plan.error;
+    $('#txtDividirHacer').textContent = plan.grupos && plan.grupos.length > 1 ? `Descargar los ${plan.grupos.length} PDF` : 'Descargar el PDF';
+    $('#btnQuitarCortes').hidden = !(modo === 'cortes' && E.paginas.some((p) => p.corte));
+  }
+
+  function conectarDividir() {
+    $$('input[name="divModo"]').forEach((r) => r.addEventListener('change', () => {
+      pintarDividir();
+      if (r.value === 'rangos' && r.checked) $('#divRangos').focus();
+    }));
+    $('#divRangos').addEventListener('input', pintarDividir);
+    $('#divRangos').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') $('#btnDividirHacer').click(); });
+    $('#btnDividirHacer').addEventListener('click', () => {
+      const plan = planDividir();
+      if (plan.error) { G.aviso(plan.error, 'error'); return; }
+      entregarGrupos(plan.grupos, plan.prefijo);
+    });
+    $('#btnQuitarCortes').addEventListener('click', () => {
+      marcar();
+      E.paginas.forEach((p) => { p.corte = false; });
+      pintar();
+    });
+    // marcar o desmarcar hojas no siempre repinta todo: el resumen se pone al día igual
+    // (en fase de captura: la casilla de cada hoja no deja subir su clic)
+    ['click', 'change', 'keyup'].forEach((t) => $('#rejilla').addEventListener(t, () => setTimeout(pintarDividir, 0), true));
+    document.addEventListener('keyup', () => setTimeout(pintarDividir, 0));
   }
 
   function gruposPorMarcas() {
@@ -6145,6 +6228,7 @@
     }
     seccionActual = cual;
     marcarRiel();
+    pintarDividir();
     try { localStorage.setItem(CLAVE_RIEL, cual); } catch (e) {}
     // al abrir Buscar se lee ya el texto, para saber de entrada qué hojas
     // son escaneadas y ofrecer hacerlas buscables sin esperar a escribir
@@ -6485,28 +6569,7 @@
 
     // guardar / dividir
     $('#btnGuardar').addEventListener('click', guardar);
-    $('#btnDividirMarcas').addEventListener('click', () => {
-      const grupos = gruposPorMarcas();
-      if (grupos.filter((g) => g.length).length < 2) {
-        G.aviso('Marca primero dónde cortar con las tijeras entre páginas.', 'error');
-        return;
-      }
-      entregarGrupos(grupos, 'parte');
-    });
-    $('#btnExtraerSel').addEventListener('click', () => {
-      const objs = seleccionadas();
-      if (!objs.length) { G.aviso('Selecciona las páginas que quieres extraer.', 'error'); return; }
-      entregarGrupos([objs], 'extraido');
-    });
-    $('#btnDividirUna').addEventListener('click', () => {
-      if (!E.paginas.length) { G.aviso('No hay páginas.', 'error'); return; }
-      entregarGrupos(E.paginas.map((p) => [p]), 'pag');
-    });
-    $('#btnDividirRangos').addEventListener('click', () => {
-      const grupos = parsearRangos($('#divRangos').value, E.paginas.length);
-      if (!grupos.length) { G.aviso('Escribe rangos válidos, por ejemplo: 1-3, 5, 8-10', 'error'); return; }
-      entregarGrupos(grupos, 'rango');
-    });
+    conectarDividir();
 
     // modales
     $('#btnAyuda').addEventListener('click', () => { $('#modalAyuda').hidden = false; });

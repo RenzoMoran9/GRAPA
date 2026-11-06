@@ -72,12 +72,293 @@
 
   /* ------------------------------- Word ------------------------------- */
 
+  /* ---- fuentes: si falta la del documento, la más parecida, nunca la Times por defecto ---- */
+  const PARECIDAS = {
+    'calibri': ['Carlito', 'Arial'], 'calibri light': ['Carlito', 'Arial'],
+    'cambria': ['Caladea', 'Georgia'], 'arial': ['Liberation Sans', 'Arimo', 'Helvetica'],
+    'arial narrow': ['Liberation Sans Narrow', 'Arial', 'Liberation Sans'],
+    'arial black': ['Arial', 'Liberation Sans'],
+    'times new roman': ['Liberation Serif', 'Tinos', 'Times'],
+    'courier new': ['Liberation Mono', 'Cousine', 'Courier'],
+    'century gothic': ['URW Gothic', 'Avant Garde', 'Arial'], 'tahoma': ['Verdana', 'DejaVu Sans'],
+    'verdana': ['DejaVu Sans'], 'segoe ui': ['Arial', 'Liberation Sans'],
+    'book antiqua': ['Palatino Linotype', 'Palatino', 'Georgia'], 'garamond': ['Georgia'],
+  };
+  const CON_SERIFA = /times|cambria|georgia|garamond|antiqua|palatino|serif|bookman|century schoolbook/i;
+
+  /** «Arial Narrow» → «"Arial Narrow", "Liberation Sans Narrow", Arial, …, sans-serif». */
+  function conRespaldo(lista) {
+    const nombres = String(lista).split(',').map((x) => x.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    if (!nombres.length || /^var\(/.test(nombres[0])) return lista;
+    if (/^(serif|sans-serif|monospace)$/i.test(nombres[nombres.length - 1])) return lista;
+    const todos = [];
+    nombres.forEach((n) => { todos.push(n); (PARECIDAS[n.toLowerCase()] || []).forEach((p) => todos.push(p)); });
+    const unicos = todos.filter((n, i) => todos.findIndex((m) => m.toLowerCase() === n.toLowerCase()) === i);
+    const generica = CON_SERIFA.test(nombres[0]) ? 'serif' : /courier|mono/i.test(nombres[0]) ? 'monospace' : 'sans-serif';
+    return unicos.map((n) => (/\s/.test(n) ? `"${n}"` : n)).join(', ') + ', ' + generica;
+  }
+
+  function completarFuentes(caja) {
+    caja.querySelectorAll('style').forEach((st) => {
+      st.textContent = st.textContent
+        .replace(/(--docx-[\w-]+-font\s*:\s*)([^;}]+)/g, (m, a, b) => a + conRespaldo(b))
+        .replace(/(font-family\s*:\s*)([^;}]+)/g, (m, a, b) => a + conRespaldo(b));
+    });
+    caja.querySelectorAll('[style*="font-family"]').forEach((el) => {
+      el.style.fontFamily = conRespaldo(el.style.fontFamily);
+    });
+  }
+
+  /* ---- cuadros de texto ---- */
+
+  /**
+   * docx-preview dibuja los cuadros de texto como <svg><foreignObject>, que la
+   * «foto» de la hoja no sabe pintar: el encabezado perdía su texto. Se pasan
+   * a un <div> con la misma posición y medida.
+   */
+  function cuadrosDeTextoADiv(caja) {
+    caja.querySelectorAll('svg').forEach((svg) => {
+      const fo = svg.querySelector('foreignObject');
+      if (!fo) return;
+      const div = document.createElement('div');
+      div.setAttribute('style', svg.getAttribute('style') || '');
+      // los que Word pone «detrás del texto» quedaban detrás del papel blanco
+      if (parseInt(div.style.zIndex, 10) < 0) div.style.zIndex = '0';
+      div.style.overflow = 'visible';
+      while (fo.firstChild) div.appendChild(fo.firstChild);
+      svg.replaceWith(div);
+    });
+  }
+
+  const NS = {
+    w: 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+    wpg: 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
+    wps: 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+    mc: 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+    a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+  };
+
+  /**
+   * Los cuadros de texto agrupados (el pie con la dirección y la web, típico de
+   * los membretes) docx-preview no los dibuja: salían en blanco. Antes de
+   * abrir el documento, cada grupo con texto se cambia por una tabla sin
+   * bordes, con un cuadro por celda en el orden en que estaban de izquierda a
+   * derecha. No queda en la posición exacta, pero el texto está.
+   */
+  function gruposATablas(xml) {
+    if (!/wordprocessingGroup/.test(xml) || !/txbxContent/.test(xml)) return xml;
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return xml;
+    const grupos = Array.from(doc.getElementsByTagNameNS(NS.wpg, 'wgp'));
+    let cambio = false;
+    grupos.forEach((g) => {
+      if (!g.isConnected) return;
+      const cuadros = Array.from(g.getElementsByTagNameNS(NS.wps, 'wsp')).map((wsp) => {
+        const txt = wsp.getElementsByTagNameNS(NS.w, 'txbxContent')[0];
+        if (!txt || !txt.textContent.trim()) return null;
+        const off = wsp.getElementsByTagNameNS(NS.a, 'off')[0];
+        const ext = wsp.getElementsByTagNameNS(NS.a, 'ext')[0];
+        return {
+          txt,
+          x: off ? Number(off.getAttribute('x')) || 0 : 0,
+          // las medidas dentro de un grupo vienen a su propia escala: con un
+          // mínimo holgado, una dirección no se parte en una palabra por línea
+          ancho: Math.max(3200, ext ? Math.round((Number(ext.getAttribute('cx')) || 0) / 635) : 0),
+        };
+      }).filter(Boolean).sort((a, b) => a.x - b.x);
+      if (!cuadros.length) return;
+      // lo que se quita: el bloque alternativo entero, o el dibujo si va solo
+      let quitar = g;
+      for (let p = g.parentNode; p && p.nodeType === 1; p = p.parentNode) {
+        if (p.namespaceURI === NS.mc && p.localName === 'AlternateContent') { quitar = p; break; }
+        if (p.namespaceURI === NS.w && p.localName === 'drawing') quitar = p;
+      }
+      let parrafo = quitar.parentNode;
+      while (parrafo && !(parrafo.namespaceURI === NS.w && parrafo.localName === 'p')) parrafo = parrafo.parentNode;
+      if (!parrafo || !parrafo.parentNode) return;
+
+      const W = (n) => doc.createElementNS(NS.w, 'w:' + n);
+      const conVal = (el, atr, v) => { el.setAttributeNS(NS.w, 'w:' + atr, v); return el; };
+      const tbl = W('tbl');
+      const pr = W('tblPr');
+      pr.appendChild(conVal(conVal(W('tblW'), 'w', '0'), 'type', 'auto'));
+      const bordes = W('tblBorders');
+      ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].forEach((b) => bordes.appendChild(conVal(W(b), 'val', 'nil')));
+      pr.appendChild(bordes);
+      tbl.appendChild(pr);
+      const rejilla = W('tblGrid');
+      cuadros.forEach((c) => rejilla.appendChild(conVal(W('gridCol'), 'w', String(c.ancho))));
+      tbl.appendChild(rejilla);
+      const fila = W('tr');
+      cuadros.forEach((c) => {
+        const tc = W('tc');
+        const tcPr = W('tcPr');
+        tcPr.appendChild(conVal(conVal(W('tcW'), 'w', String(c.ancho)), 'type', 'dxa'));
+        tc.appendChild(tcPr);
+        Array.from(c.txt.childNodes).forEach((n) => tc.appendChild(n.cloneNode(true)));
+        const ultimo = tc.lastElementChild;
+        if (!ultimo || ultimo.localName !== 'p') tc.appendChild(W('p'));
+        fila.appendChild(tc);
+      });
+      tbl.appendChild(fila);
+      quitar.parentNode.removeChild(quitar);
+      parrafo.parentNode.insertBefore(tbl, parrafo.nextSibling);
+      cambio = true;
+    });
+    return cambio ? new XMLSerializer().serializeToString(doc) : xml;
+  }
+
+  /** Arregla lo que docx-preview no sabe dibujar, tocando solo una copia del archivo. */
+  async function prepararDocx(buffer) {
+    if (typeof JSZip === 'undefined') return buffer;
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      const partes = Object.keys(zip.files).filter((n) => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n));
+      let cambio = false;
+      for (const n of partes) {
+        const xml = await zip.file(n).async('string');
+        const nuevo = gruposATablas(xml);
+        if (nuevo !== xml) { zip.file(n, nuevo); cambio = true; }
+      }
+      return cambio ? await zip.generateAsync({ type: 'arraybuffer' }) : buffer;
+    } catch (e) {
+      console.warn('Word: no se pudo preparar el documento, se abre tal cual', e);
+      return buffer;
+    }
+  }
+
+  /* ---- repartir en hojas ---- */
+
+  /**
+   * docx-preview solo corta donde el documento tiene un salto de página
+   * manual: un memo de tres hojas salía como una sola hoja larguísima. Aquí se
+   * mide lo que se compuso y se reparte en hojas del tamaño del papel, con el
+   * mismo encabezado y pie en cada una. Las tablas largas se parten por filas.
+   */
+  function paginar(caja) {
+    let s = caja.querySelector('.gdocx-wrapper > section');
+    let vueltas = 0;
+    while (s && vueltas++ < 500) {
+      const nueva = partirSeccion(s);
+      s = nueva || s.nextElementSibling;
+      while (s && s.tagName !== 'SECTION') s = s.nextElementSibling;
+    }
+  }
+
+  const vacio = (el) => !el.textContent.trim() && !el.querySelector('img, svg, table, canvas, div[style*="position"]');
+
+  function partirSeccion(s) {
+    const alto = parseFloat(getComputedStyle(s).minHeight);
+    if (!alto) return null;
+    const rs = s.getBoundingClientRect();
+    if (rs.height <= alto + 1) return null;
+    const articulo = s.querySelector(':scope > article');
+    if (!articulo) return null;
+    // docx-preview a veces deja una lista numerada fuera del cuerpo de la hoja,
+    // entre el cuerpo y el pie: se mete en el cuerpo para que cuente al repartir
+    Array.from(s.children).forEach((ch) => {
+      if (ch === articulo || ch.tagName === 'HEADER' || ch.tagName === 'FOOTER') return;
+      if (ch.compareDocumentPosition(articulo) & Node.DOCUMENT_POSITION_FOLLOWING) articulo.prepend(ch);
+      else articulo.appendChild(ch);
+    });
+    // a veces el contenido viene envuelto en una sola caja (columnas): se entra en ella
+    let cont = articulo;
+    while (cont.children.length === 1 && cont.firstElementChild.tagName === 'DIV' && cont.firstElementChild.children.length > 1) {
+      cont = cont.firstElementChild;
+    }
+    const pie = s.querySelector(':scope > footer');
+    const limite = rs.top + alto - parseFloat(getComputedStyle(s).paddingBottom)
+      - (pie ? Math.max(0, pie.getBoundingClientRect().height - (parseFloat(pie.style.minHeight) || 0)) : 0);
+    const hijos = Array.from(cont.children);
+    let corte = -1;
+    for (let k = 0; k < hijos.length; k++) {
+      const r = hijos[k].getBoundingClientRect();
+      if (r.bottom <= limite + 0.5) continue;
+      if (r.top < limite && /^(TABLE|OL|UL)$/.test(hijos[k].tagName)) {
+        const resto = hijos[k].tagName === 'TABLE' ? partirTabla(hijos[k], limite) : partirLista(hijos[k], limite);
+        if (resto) { hijos.splice(k + 1, 0, resto); corte = k + 1; break; }
+      }
+      corte = k;
+      break;
+    }
+    if (corte === 0) corte = 1;               // algo más alto que una hoja: va solo en la suya
+    if (corte < 1 || corte >= hijos.length) return null;
+    const resto = hijos.slice(corte);
+    // los párrafos vacíos del final no merecen una hoja en blanco
+    if (resto.every(vacio)) { resto.forEach((el) => el.remove()); return null; }
+
+    const nueva = s.cloneNode(false);
+    const cabeza = s.querySelector(':scope > header');
+    if (cabeza) nueva.appendChild(cabeza.cloneNode(true));
+    const art = articulo.cloneNode(false);
+    let destino = art;
+    const cadena = [];
+    for (let p = cont; p !== articulo; p = p.parentElement) cadena.unshift(p);
+    cadena.forEach((el) => { const c = el.cloneNode(false); destino.appendChild(c); destino = c; });
+    resto.forEach((el) => destino.appendChild(el));
+    nueva.appendChild(art);
+    if (pie) nueva.appendChild(pie.cloneNode(true));
+    s.after(nueva);
+    return nueva;
+  }
+
+  /** Parte una tabla en la fila que ya no cabe; repite la cabecera si la tiene. */
+  function partirTabla(tabla, limite) {
+    const filas = Array.from(tabla.rows);
+    const enCabeza = tabla.tHead ? tabla.tHead.rows.length : 0;
+    const k = filas.findIndex((f, i) => i >= enCabeza && f.getBoundingClientRect().bottom > limite + 0.5);
+    if (k <= enCabeza) return null;
+    const otra = tabla.cloneNode(false);
+    Array.from(tabla.children).forEach((ch) => {
+      if (ch.tagName === 'COLGROUP' || ch.tagName === 'THEAD') otra.appendChild(ch.cloneNode(true));
+    });
+    const cuerpo = document.createElement('tbody');
+    filas.slice(k).forEach((f) => cuerpo.appendChild(f));
+    otra.appendChild(cuerpo);
+    tabla.after(otra);
+    return otra;
+  }
+
+  /**
+   * Una tabla más ancha que la hoja se cortaba por la derecha. Word deja que
+   * invada un poco el margen; si se sale del papel, aquí se achica hasta caber
+   * (y se le descuenta el alto que deja de ocupar, para que no quede un hueco).
+   */
+  function ajustarTablas(caja) {
+    caja.querySelectorAll('.gdocx-wrapper > section').forEach((s) => {
+      const rs = s.getBoundingClientRect();
+      const tope = rs.right - Math.min(24, parseFloat(getComputedStyle(s).paddingRight) / 2 || 24);
+      s.querySelectorAll('table').forEach((t) => {
+        if (t.parentElement.closest('table')) return;      // las de dentro van con la suya
+        const r = t.getBoundingClientRect();
+        if (r.right <= tope + 1 || r.width <= 0) return;
+        const k = Math.max(0.5, (tope - r.left) / r.width);
+        t.style.transform = `scale(${k})`;
+        t.style.transformOrigin = '0 0';
+        t.style.marginBottom = `${-(1 - k) * r.height}px`;
+      });
+    });
+  }
+
+  /** Parte una lista en el punto que ya no cabe; la numeración sigue donde iba. */
+  function partirLista(lista, limite) {
+    const items = Array.from(lista.children);
+    const k = items.findIndex((li) => li.getBoundingClientRect().bottom > limite + 0.5);
+    if (k <= 0) return null;
+    const otra = lista.cloneNode(false);
+    if (lista.tagName === 'OL') otra.setAttribute('start', String((parseInt(lista.getAttribute('start'), 10) || 1) + k));
+    items.slice(k).forEach((li) => otra.appendChild(li));
+    lista.after(otra);
+    return otra;
+  }
+
   async function wordAPdf(file, avisar) {
     if (typeof docx === 'undefined') throw new Error('falta el lector de Word');
     const caja = cajaOculta();
     try {
       if (avisar) avisar(`Componiendo ${file.name}…`);
-      await docx.renderAsync(await file.arrayBuffer(), caja, null, {
+      const datos = await prepararDocx(await file.arrayBuffer());
+      await docx.renderAsync(datos, caja, null, {
         className: 'gdocx',
         inWrapper: true,
         breakPages: true,          // respeta los saltos de página del documento
@@ -87,6 +368,12 @@
         renderFooters: true,
         useBase64URL: true,        // las imágenes quedan dentro, sin pedir nada fuera
       });
+      completarFuentes(caja);
+      cuadrosDeTextoADiv(caja);
+      // con las fuentes ya puestas, se espera a que carguen antes de medir
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      ajustarTablas(caja);
+      paginar(caja);
       // docx-preview deja una <section> por hoja, ya con su tamaño y márgenes
       const hojas = Array.from(caja.querySelectorAll('.gdocx-wrapper > section'));
       if (!hojas.length) throw new Error('el documento salió vacío');
@@ -236,12 +523,380 @@
     }
   }
 
+  /* ------------------- Excel con su formato (ExcelJS) ------------------- */
+  /*
+   * El lector de arriba solo saca los valores: sin colores, sin bordes, sin
+   * celdas combinadas ni logos, y sin el área de impresión, así que un cuadro
+   * comparativo salía diminuto o en blanco. Este arma cada hoja como la
+   * imprime Excel: área de impresión, anchos y altos, celdas combinadas,
+   * rellenos, bordes, fuentes, formatos de número, imágenes, orientación,
+   * márgenes, «ajustar a una página» y filas de título repetidas.
+   */
+
+  const PAPELES = { 1: [8.5, 11], 5: [8.5, 14], 8: [11.69, 16.54], 9: [8.27, 11.69], 11: [5.83, 8.27] };   // pulgadas
+  const INDEXADOS = ['000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF',
+    '000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF', '800000', '008000',
+    '000080', '808000', '800080', '008080', 'C0C0C0', '808080', '9999FF', '993366', 'FFFFCC', 'CCFFFF',
+    '660066', 'FF8080', '0066CC', 'CCCCFF', '000080', 'FF00FF', 'FFFF00', '00FFFF', '800080', '800000',
+    '008080', '0000FF', '00CCFF', 'CCFFFF', 'CCFFCC', 'FFFF99', '99CCFF', 'FF99CC', 'CC99FF', 'FFCC99',
+    '3366FF', '33CCCC', '99CC00', 'FFCC00', 'FF9900', 'FF6600', '666699', '969696', '003366', '339966',
+    '003300', '333300', '993300', '993366', '333399', '333333'];
+  // colores del tema de Office, en el orden de Excel (0 fondo, 1 texto, 2, 3, énfasis 1–6)
+  const TEMA_OFFICE = ['FFFFFF', '000000', 'E7E6E6', '44546A', '4472C4', 'ED7D31', 'A5A5A5', 'FFC000', '5B9BD5', '70AD47'];
+
+  function temaDelLibro(libro) {
+    try {
+      const xml = libro._themes && (libro._themes.theme1 || Object.values(libro._themes)[0]);
+      if (!xml) return TEMA_OFFICE;
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      const esquema = doc.getElementsByTagNameNS(NS.a, 'clrScheme')[0];
+      if (!esquema) return TEMA_OFFICE;
+      const leidos = Array.from(esquema.children).map((el) => {
+        const c = el.firstElementChild;
+        return c ? (c.getAttribute('val') && c.localName === 'srgbClr' ? c.getAttribute('val') : c.getAttribute('lastClr') || '000000') : '000000';
+      });
+      // en el archivo van oscuro 1, claro 1, oscuro 2, claro 2…; Excel numera claro 1 primero
+      const orden = [1, 0, 3, 2, 4, 5, 6, 7, 8, 9];
+      return orden.map((i, k) => leidos[i] || TEMA_OFFICE[k]);
+    } catch (e) { return TEMA_OFFICE; }
+  }
+
+  function conTinte(hex, tinte) {
+    if (!tinte) return '#' + hex;
+    let r = parseInt(hex.slice(0, 2), 16) / 255, g = parseInt(hex.slice(2, 4), 16) / 255, b = parseInt(hex.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h /= 6;
+    }
+    l = tinte < 0 ? l * (1 + tinte) : l * (1 - tinte) + tinte;
+    const f = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    if (s === 0) r = g = b = l;
+    else { const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; r = f(p, q, h + 1 / 3); g = f(p, q, h); b = f(p, q, h - 1 / 3); }
+    return '#' + [r, g, b].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+  }
+
+  function colorCss(c, tema) {
+    if (!c) return null;
+    if (c.argb) return '#' + String(c.argb).slice(-6);
+    if (c.theme != null) return conTinte(tema[c.theme] || '000000', c.tint);
+    if (c.indexed != null) return INDEXADOS[c.indexed] ? '#' + INDEXADOS[c.indexed] : null;
+    return null;
+  }
+
+  const BORDES = {
+    thin: '1px solid', hair: '1px solid', medium: '2px solid', thick: '3px solid', double: '3px double',
+    dashed: '1px dashed', dotted: '1px dotted', mediumDashed: '2px dashed', dashDot: '1px dashed',
+    mediumDashDot: '2px dashed', dashDotDot: '1px dotted', mediumDashDotDot: '2px dotted', slantDashDot: '2px dashed',
+  };
+
+  const col2num = (letras) => letras.toUpperCase().split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  function rango(txt) {
+    const m = /\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?/i.exec(String(txt || '').replace(/^.*!/, ''));
+    if (!m) return null;
+    const r = { c1: col2num(m[1]), r1: +m[2], c2: col2num(m[3] || m[1]), r2: +(m[4] || m[2]) };
+    return { r1: Math.min(r.r1, r.r2), r2: Math.max(r.r1, r.r2), c1: Math.min(r.c1, r.c2), c2: Math.max(r.c1, r.c2) };
+  }
+
+  /** El texto de la celda tal como lo muestra Excel (con su formato de número). */
+  function textoCelda(celda) {
+    let v = celda.value;
+    if (v == null) return '';
+    if (typeof v === 'object' && !(v instanceof Date)) {
+      if (v.richText) return v.richText.map((t) => t.text).join('');
+      if ('result' in v) v = v.result;
+      else if ('text' in v) v = v.text;
+      else if (v.error) return v.error;
+      else if (v.formula || v.sharedFormula) return '';
+      if (v && typeof v === 'object' && !(v instanceof Date)) return v.error || '';
+    }
+    if (v == null) return '';
+    if (typeof v === 'boolean') return v ? 'VERDADERO' : 'FALSO';
+    const ssf = typeof XLSX !== 'undefined' && XLSX.SSF;
+    if (v instanceof Date) {
+      const serie = (v.getTime() - Date.UTC(1899, 11, 30)) / 864e5;
+      try { return ssf ? ssf.format(celda.numFmt || 'dd/mm/yyyy', serie) : v.toLocaleDateString('es'); } catch (e) { return v.toLocaleDateString('es'); }
+    }
+    if (typeof v === 'number') {
+      try { return ssf ? ssf.format(celda.numFmt || 'General', v) : String(v); } catch (e) { return String(v); }
+    }
+    return String(v);
+  }
+
+  const esNumero = (celda) => {
+    const v = celda.value && celda.value.result !== undefined ? celda.value.result : celda.value;
+    return typeof v === 'number' || v instanceof Date;
+  };
+
+  function estiloFuente(f, tema) {
+    f = f || {};
+    const css = [`font-family:${conRespaldo(f.name || 'Calibri')}`, `font-size:${f.size || 11}pt`];
+    if (f.bold) css.push('font-weight:bold');
+    if (f.italic) css.push('font-style:italic');
+    const deco = [f.underline ? 'underline' : '', f.strike ? 'line-through' : ''].filter(Boolean).join(' ');
+    if (deco) css.push('text-decoration:' + deco);
+    const color = colorCss(f.color, tema);
+    if (color) css.push('color:' + color);
+    if (f.vertAlign === 'superscript') css.push('vertical-align:super;font-size:smaller');
+    return css.join(';');
+  }
+
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  /** Lo que ocupa la hoja: el área de impresión o, si no hay, hasta la última celda con algo. */
+  function rangoDeHoja(hoja) {
+    const ps = hoja.pageSetup || {};
+    const area = ps.printArea && rango(String(ps.printArea).split(/&&|,/)[0]);
+    if (area) return area;
+    let r2 = 0, c2 = 0;
+    hoja.eachRow({ includeEmpty: false }, (fila, nr) => {
+      fila.eachCell({ includeEmpty: false }, (celda, nc) => {
+        const s = celda.style || {};
+        const conAlgo = textoCelda(celda) !== '' || (s.fill && s.fill.pattern && s.fill.pattern !== 'none')
+          || (s.border && Object.values(s.border).some((b) => b && b.style));
+        if (conAlgo) { r2 = Math.max(r2, nr); c2 = Math.max(c2, nc); }
+      });
+    });
+    (hoja.model.merges || []).forEach((m) => { const g = rango(m); if (g && g.r1 <= r2) { r2 = Math.max(r2, g.r2); c2 = Math.max(c2, g.c2); } });
+    (hoja.getImages() || []).forEach((im) => {
+      const br = im.range && im.range.br;
+      if (br) { r2 = Math.max(r2, Math.ceil(br.nativeRow + 1)); c2 = Math.max(c2, Math.ceil(br.nativeCol + 1)); }
+    });
+    if (!r2 || !c2) return null;
+    return { r1: 1, c1: 1, r2: Math.min(r2, 5000), c2: Math.min(c2, 200) };
+  }
+
+  async function imagenesDeHoja(libro, hoja) {
+    const lista = [];
+    for (const im of hoja.getImages() || []) {
+      try {
+        const media = libro.getImage(Number(im.imageId));
+        if (!media) continue;
+        let url;
+        if (media.base64) url = media.base64.startsWith('data:') ? media.base64 : `data:image/${media.extension};base64,${media.base64}`;
+        else if (media.buffer) {
+          const blob = new Blob([media.buffer], { type: 'image/' + (media.extension === 'jpg' ? 'jpeg' : media.extension) });
+          url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+        }
+        if (url && im.range && im.range.tl) lista.push({ url, rango: im.range });
+      } catch (e) { /* una imagen rara no detiene la hoja */ }
+    }
+    return lista;
+  }
+
+  async function excelConFormato(file, avisar) {
+    if (typeof ExcelJS === 'undefined') throw new Error('falta el lector de Excel');
+    const libro = new ExcelJS.Workbook();
+    await libro.xlsx.load(await file.arrayBuffer());
+    const tema = temaDelLibro(libro);
+    const caja = cajaOculta();
+    caja.style.width = 'auto';
+    const lienzos = [];
+    try {
+      for (const hoja of libro.worksheets) {
+        if (hoja.state && hoja.state !== 'visible') continue;
+        const area = rangoDeHoja(hoja);
+        if (!area) continue;
+        const ps = hoja.pageSetup || {};
+
+        // columnas y filas visibles, con su medida en píxeles
+        const cols = [];
+        for (let c = area.c1; c <= area.c2; c++) {
+          const col = hoja.getColumn(c);
+          if (col.hidden) continue;
+          const ancho = col.width || (hoja.properties && hoja.properties.defaultColWidth) || 8.43;
+          cols.push({ c, px: Math.round(ancho * 7 + 5) });
+        }
+        const altoBase = (hoja.properties && hoja.properties.defaultRowHeight) || 15;
+        const filas = [];
+        for (let r = area.r1; r <= area.r2; r++) {
+          const f = hoja.getRow(r);
+          if (f.hidden) continue;
+          filas.push({ r, px: Math.round((f.height || altoBase) * 4 / 3) });
+        }
+        if (!cols.length || !filas.length) continue;
+        const anchoTabla = cols.reduce((s, c) => s + c.px, 0);
+        const colX = new Map(); let x = 0; cols.forEach((c) => { colX.set(c.c, x); x += c.px; });
+
+        // celdas combinadas: para cada celda, la combinada que la cubre
+        const cubre = new Map();
+        (hoja.model.merges || []).forEach((m) => {
+          const g = rango(m);
+          if (!g) return;
+          for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) cubre.set(r + ':' + c, g);
+        });
+
+        // papel, márgenes y escala
+        const [pw, ph] = PAPELES[ps.paperSize] || PAPELES[9];
+        const echada = ps.orientation === 'landscape';
+        const papelW = Math.round((echada ? ph : pw) * 96), papelH = Math.round((echada ? pw : ph) * 96);
+        const mg = Object.assign({ left: 0.7, right: 0.7, top: 0.75, bottom: 0.75 }, ps.margins || {});
+        const utilW = papelW - (mg.left + mg.right) * 96, utilH = papelH - (mg.top + mg.bottom) * 96;
+        const altoTabla = filas.reduce((s, f) => s + f.px, 0);
+        let k = (ps.scale || 100) / 100;
+        if (ps.fitToPage) {
+          const aw = ps.fitToWidth === 0 ? Infinity : utilW * (ps.fitToWidth || 1) / anchoTabla;
+          const ah = ps.fitToHeight === 0 || ps.fitToHeight == null ? Infinity : utilH * ps.fitToHeight / altoTabla;
+          k = Math.min(1, aw, ah);
+        }
+        // Excel mandaría las columnas que no caben a otra hoja; aquí se achica para que
+        // la tabla se lea entera en el ancho del papel
+        // (sin piso: un cuadro comparativo ancho Excel lo imprime al 12 %, y así sale igual)
+        k = Math.max(0.05, Math.min(k, utilW / anchoTabla));
+
+        // filas de título repetidas y saltos de página manuales
+        const titulos = [];
+        const pt = ps.printTitlesRow && /(\d+):\$?(\d+)/.exec(String(ps.printTitlesRow));
+        if (pt) filas.forEach((f) => { if (f.r >= +pt[1] && f.r <= +pt[2]) titulos.push(f); });
+        const saltos = new Set((hoja.rowBreaks || []).map((b) => b.id));
+
+        // reparto de filas por hoja
+        const paginas = [];
+        let actual = [], alto = 0;
+        const altoTitulos = titulos.reduce((s, f) => s + f.px, 0);
+        const disponible = utilH / k;
+        filas.forEach((f) => {
+          const tope = paginas.length && titulos.length ? disponible - altoTitulos : disponible;
+          if (actual.length && alto + f.px > tope) { paginas.push(actual); actual = []; alto = 0; }
+          actual.push(f); alto += f.px;
+          if (saltos.has(f.r)) { paginas.push(actual); actual = []; alto = 0; }
+        });
+        if (actual.length) paginas.push(actual);
+
+        const imagenes = await imagenesDeHoja(libro, hoja);
+        const filaY = new Map(); let yy = 0; filas.forEach((f) => { filaY.set(f.r, yy); yy += f.px; });
+        // Las imágenes se anclan a celdas que pueden quedar fuera del área de impresión
+        // (el logo en la columna A con el área desde la B): se miden desde la A1 y se
+        // corren lo que mida lo que queda fuera.
+        const anchoCol = (c) => { const col = hoja.getColumn(c); return col.hidden ? 0 : Math.round((col.width || (hoja.properties && hoja.properties.defaultColWidth) || 8.43) * 7 + 5); };
+        const altoFila = (r) => { const f = hoja.getRow(r); return f.hidden ? 0 : Math.round((f.height || altoBase) * 4 / 3); };
+        const xAbs = (c) => { let s = 0; for (let j = 1; j < c; j++) s += anchoCol(j); return s; };
+        const yAbs = (r) => { let s = 0; for (let j = 1; j < r; j++) s += altoFila(j); return s; };
+        const x0Area = xAbs(area.c1), y0Area = yAbs(area.r1);
+
+        for (let p = 0; p < paginas.length; p++) {
+          if (avisar) avisar(`${file.name} · ${hoja.name}: hoja ${p + 1} de ${paginas.length}…`);
+          const enPagina = (p > 0 && titulos.length ? titulos.filter((t) => !paginas[p].includes(t)) : []).concat(paginas[p]);
+          let html = `<table style="border-collapse:collapse;table-layout:fixed;width:${anchoTabla}px"><colgroup>`
+            + cols.map((c) => `<col style="width:${c.px}px">`).join('') + '</colgroup>';
+          for (const f of enPagina) {
+            html += `<tr style="height:${f.px}px">`;
+            for (let i = 0; i < cols.length; i++) {
+              const c = cols[i].c;
+              const g = cubre.get(f.r + ':' + c);
+              let rs = 1, cs = 1, h = f.px;
+              if (g) {
+                // una combinada se dibuja una vez por hoja, desde su primera fila y columna
+                // visibles aquí (si empezó en la hoja anterior, sigue en esta)
+                const filasG = enPagina.filter((x) => x.r >= g.r1 && x.r <= g.r2);
+                const colsG = cols.filter((x) => x.c >= g.c1 && x.c <= g.c2);
+                if (filasG[0] !== f || colsG[0].c !== c) continue;
+                rs = filasG.length; cs = colsG.length;
+                h = filasG.reduce((s, x) => s + x.px, 0);
+              }
+              const fuente = g ? hoja.getCell(g.r1, g.c1) : hoja.getCell(f.r, c);
+              const st = fuente.style || {};
+              const css = [estiloFuente(st.font, tema), 'padding:0 3px', `height:${h}px`];
+              const relleno = st.fill && st.fill.type === 'pattern' && st.fill.pattern !== 'none' ? colorCss(st.fill.fgColor, tema)
+                : st.fill && st.fill.type === 'gradient' && st.fill.stops ? colorCss(st.fill.stops[0].color, tema) : null;
+              if (relleno) css.push('background:' + relleno);
+              // en una combinada, cada borde exterior lo lleva la celda de ese lado
+              const borde = (lado, celdaB) => {
+                const b = celdaB && celdaB.style && celdaB.style.border && celdaB.style.border[lado];
+                if (b && b.style && BORDES[b.style]) css.push(`border-${lado}:${BORDES[b.style]} ${colorCss(b.color, tema) || '#000'}`);
+              };
+              borde('top', fuente);
+              borde('left', fuente);
+              borde('bottom', g ? hoja.getCell(Math.min(g.r2, enPagina[enPagina.length - 1].r), g.c1) : fuente);
+              borde('right', g ? hoja.getCell(g.r1, g.c2) : fuente);
+              const al = st.alignment || {};
+              const txt = textoCelda(fuente);
+              const hor = al.horizontal === 'centerContinuous' ? 'center' : al.horizontal === 'distributed' ? 'justify'
+                : al.horizontal === 'fill' ? 'left'
+                : al.horizontal || (esNumero(fuente) ? 'right' : typeof fuente.value === 'boolean' ? 'center' : 'left');
+              css.push('text-align:' + hor);
+              css.push('vertical-align:' + (al.vertical === 'middle' || al.vertical === 'center' ? 'middle' : al.vertical === 'top' ? 'top' : 'bottom'));
+              if (al.indent) css.push(`padding-left:${3 + al.indent * 9}px`);
+              let dentro = fuente.value && fuente.value.richText
+                ? fuente.value.richText.map((t) => `<span style="${estiloFuente(Object.assign({}, st.font, t.font), tema)}">${esc(t.text)}</span>`).join('')
+                : esc(txt);
+              if (al.wrapText) {
+                css.push('overflow:hidden', 'white-space:pre-wrap', 'word-wrap:break-word');
+                dentro = `<div style="max-height:${h}px;overflow:hidden">${dentro}</div>`;
+              } else if (!g && txt && hor === 'left' && i < cols.length - 1 && textoCelda(hoja.getCell(f.r, cols[i + 1].c)) === '') {
+                // el texto sin ajustar se sale hacia la celda vacía de al lado, como en Excel
+                css.push('overflow:visible', 'white-space:nowrap');
+                dentro = `<span style="position:relative;z-index:1">${dentro}</span>`;
+              } else {
+                css.push('overflow:hidden', 'white-space:nowrap');
+              }
+              html += `<td${rs > 1 ? ` rowspan="${rs}"` : ''}${cs > 1 ? ` colspan="${cs}"` : ''} style="${css.join(';')}">${dentro}</td>`;
+            }
+            html += '</tr>';
+          }
+          html += '</table>';
+
+          const papel = document.createElement('div');
+          papel.style.cssText = `position:relative;width:${papelW}px;height:${papelH}px;background:#fff;overflow:hidden`;
+          const contenido = document.createElement('div');
+          const dx = ps.horizontalCentered ? Math.max(0, (utilW - anchoTabla * k) / 2) : 0;
+          contenido.style.cssText = `position:absolute;left:${mg.left * 96 + dx}px;top:${mg.top * 96}px;width:${anchoTabla}px;`
+            + `transform:scale(${k});transform-origin:0 0;color:#000`;
+          contenido.innerHTML = html;
+          // las imágenes (logos) van en su sitio, si su fila cayó en esta hoja
+          const tituloExtra = p > 0 && titulos.length ? altoTitulos : 0;
+          const yIni = y0Area + (filaY.get(paginas[p][0].r) || 0);
+          const yFin = yIni + paginas[p].reduce((t, f) => t + f.px, 0);
+          imagenes.forEach((im) => {
+            const tl = im.rango.tl, br = im.rango.br;
+            const ax = xAbs(Math.floor(tl.nativeCol) + 1) + (tl.nativeColOff || 0) / 9525;
+            const ay = yAbs(Math.floor(tl.nativeRow) + 1) + (tl.nativeRowOff || 0) / 9525;
+            let w, h;
+            if (br) {
+              w = xAbs(Math.floor(br.nativeCol) + 1) + (br.nativeColOff || 0) / 9525 - ax;
+              h = yAbs(Math.floor(br.nativeRow) + 1) + (br.nativeRowOff || 0) / 9525 - ay;
+            } else if (im.rango.ext) { w = im.rango.ext.width; h = im.rango.ext.height; }
+            if (!(w > 0 && h > 0)) return;
+            // va en la hoja donde cae su esquina de arriba (o en la primera, si está encima del área)
+            const enEsta = (ay >= yIni && ay < yFin) || (p === 0 && ay < yIni);
+            if (!enEsta) return;
+            const img = document.createElement('img');
+            img.src = im.url;
+            img.style.cssText = `position:absolute;left:${ax - x0Area}px;top:${ay - yIni + tituloExtra}px;width:${w}px;height:${h}px;z-index:2`;
+            contenido.appendChild(img);
+          });
+          papel.appendChild(contenido);
+          caja.appendChild(papel);
+          await Promise.all(Array.from(papel.querySelectorAll('img')).map((im) => (im.complete ? null : new Promise((r) => { im.onload = im.onerror = r; }))));
+          if (document.fonts && document.fonts.ready) await document.fonts.ready;
+          lienzos.push({ lienzo: await fotografiar(papel), anchoPx: papelW, altoPx: papelH });
+          papel.remove();
+        }
+      }
+      if (!lienzos.length) throw new Error('el libro no tiene celdas con datos');
+      return pdfDesdeLienzos(lienzos);
+    } finally {
+      caja.remove();
+    }
+  }
+
   /* ------------------------------ entrada ----------------------------- */
 
   /** Devuelve los bytes de un PDF a partir de un archivo de Office. */
   G.officeAPdf = async function (file, avisar) {
     if (G.esWord(file)) return wordAPdf(file, avisar);
-    if (G.esExcel(file)) return excelAPdf(file, avisar);
+    if (G.esExcel(file)) {
+      // .xlsx y .xlsm, con su formato; los .xls antiguos y los .csv, con el lector simple
+      if (/\.(xlsx|xlsm)$/i.test(file.name) && typeof ExcelJS !== 'undefined') {
+        try { return await excelConFormato(file, avisar); } catch (e) {
+          console.warn('Excel: no se pudo con el formato, se usa el lector simple', e);
+        }
+      }
+      return excelAPdf(file, avisar);
+    }
     throw new Error('formato no admitido');
   };
 })(window.Grapa);

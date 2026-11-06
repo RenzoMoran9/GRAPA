@@ -319,6 +319,94 @@ const PRUEBAS = {
     // y el cupo de tableros no se ve mientras sobren
     afirmar(await page.isHidden('#tablerosCupo'), 'sin «1 de 10» con un solo tablero');
   },
+
+  async 'separar: se elige qué sacar y dice qué va a salir antes de descargar'({ page }) {
+    await page.evaluate(() => window.Grapa.guia.abrirEjemplo());
+    await page.waitForFunction(() => window.Grapa.estado.paginas.length === 6, null, { timeout: 20000 });
+    await page.click('#btnSelNada');
+    await page.click('.riel-btn[data-va="dividir"]');
+    // sin hojas marcadas, explica qué hacer y no deja descargar
+    afirmar((await page.textContent('#divResultado')).includes('Marca las hojas'), 'pide marcar hojas');
+    afirmar(await page.isDisabled('#btnDividirHacer'), 'botón apagado sin nada que sacar');
+    const casillas = await page.$$('.pag-check');
+    await casillas[1].click();
+    await casillas[4].click();
+    await page.waitForFunction(() => document.querySelector('#divResultado').textContent.includes('2 hojas: 2, 5'));
+    // partir con las tijeras: se ven siempre y el resumen cuenta las partes
+    await page.click('#btnSelNada');
+    await page.check('input[name="divModo"][value="cortes"]');
+    afirmar(await page.evaluate(() => document.body.classList.contains('modo-cortes')), 'tijeras a la vista');
+    await (await page.$$('.corte button'))[1].click();
+    await (await page.$$('.corte button'))[3].click();
+    await page.waitForFunction(() => document.querySelector('#divResultado').textContent.startsWith('Saldrán 3 PDF: hojas 1–2 · hojas 3–4 · hojas 5–6'));
+    afirmar((await page.textContent('#txtDividirHacer')) === 'Descargar los 3 PDF', 'el botón dice cuántos');
+    const [zip] = await Promise.all([page.waitForEvent('download'), page.click('#btnDividirHacer')]);
+    afirmar(/\.zip$/.test(zip.suggestedFilename()), 'varios PDF van en un ZIP', zip.suggestedFilename());
+    // por números de hoja, con error en palabras si no se entiende
+    await page.check('input[name="divModo"][value="rangos"]');
+    await page.fill('#divRangos', 'abc');
+    afirmar((await page.textContent('#divResultado')).includes('No entendí'), 'explica el error');
+    await page.fill('#divRangos', '1-2, 5');
+    afirmar((await page.textContent('#divResultado')) === 'Saldrán 2 PDF: hojas 1–2 · hoja 5.', 'rangos en palabras');
+  },
+
+  async 'word: un documento largo sale en hojas A4, no en una sola hoja larga'({ page }) {
+    const r = await page.evaluate(async () => {
+      // un .docx mínimo armado aquí: 160 párrafos, papel A4, sin saltos manuales
+      const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const parrafos = Array.from({ length: 160 }, (_, i) => `<w:p><w:r><w:t>Párrafo ${i + 1} del informe de prueba, con texto suficiente para ocupar una línea entera del documento.</w:t></w:r></w:p>`).join('');
+      const zip = new JSZip();
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="${W}"><w:body>${parrafos}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1701" w:bottom="1417" w:left="1701"/></w:sectPr></w:body></w:document>`);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const archivo = new File([blob], 'largo.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const pdf = await PDFLib.PDFDocument.load(await window.Grapa.officeAPdf(archivo));
+      return pdf.getPages().map((p) => [Math.round(p.getWidth()), Math.round(p.getHeight())]);
+    });
+    afirmar(r.length >= 3, 'varias hojas', r.length);
+    afirmar(r.every(([w, h]) => w === 595 && h === 842), 'todas A4', r);
+  },
+
+  async 'excel: respeta el formato y «ajustar a una página»'({ page }) {
+    const r = await page.evaluate(async () => {
+      // un cuadro ancho como los comparativos: 30 columnas, título combinado, relleno y bordes
+      const libro = new ExcelJS.Workbook();
+      const h = libro.addWorksheet('Cuadro');
+      h.pageSetup = { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
+      for (let c = 1; c <= 30; c++) h.getColumn(c).width = 18;
+      h.mergeCells('A1:AD1');
+      h.getCell('A1').value = 'CUADRO COMPARATIVO DE PRUEBA';
+      h.getCell('A1').font = { bold: true, size: 16 };
+      h.getCell('A1').alignment = { horizontal: 'center' };
+      for (let r = 3; r <= 40; r++) {
+        for (let c = 1; c <= 30; c++) {
+          const celda = h.getCell(r, c);
+          celda.value = r === 3 ? `Postor ${c}` : r * c;
+          celda.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          if (r === 3) celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        }
+      }
+      const buf = await libro.xlsx.writeBuffer();
+      const archivo = new File([buf], 'cuadro.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const bytes = await window.Grapa.officeAPdf(archivo);
+      const pdf = await PDFLib.PDFDocument.load(bytes);
+      // la fila de cabecera tiene que salir roja: se mira la imagen de la hoja
+      const doc = await window.Grapa.pdfjsLib.getDocument({ data: bytes }).promise;
+      const pag = await doc.getPage(1);
+      const vp = pag.getViewport({ scale: 1 });
+      const lienzo = document.createElement('canvas');
+      lienzo.width = vp.width; lienzo.height = vp.height;
+      await pag.render({ canvasContext: lienzo.getContext('2d'), viewport: vp }).promise;
+      const datos = lienzo.getContext('2d').getImageData(0, 0, lienzo.width, lienzo.height / 3).data;
+      let rojos = 0;
+      for (let i = 0; i < datos.length; i += 4) if (datos[i] > 200 && datos[i + 1] < 80 && datos[i + 2] < 80) rojos++;
+      return { hojas: pdf.getPageCount(), w: Math.round(pdf.getPage(0).getWidth()), h: Math.round(pdf.getPage(0).getHeight()), rojos };
+    });
+    afirmar(r.hojas === 1, 'cabe en una hoja, como pide el archivo', r);
+    afirmar(r.w > r.h, 'horizontal', r);
+    afirmar(r.rojos > 200, 'la cabecera conserva su relleno rojo', r);
+  },
 };
 
 /* ---------------- el corredor ---------------- */
