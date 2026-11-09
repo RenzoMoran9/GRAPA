@@ -518,10 +518,14 @@ const PRUEBAS = {
       const tc = await (await doc.getPage(1)).getTextContent();
       const de = (re) => tc.items.find((i) => re.test(i.str));
       return { nuevo: de(/corregido/) && de(/corregido/).transform.slice(4), viejo: de(/expediente 3$/) && de(/expediente 3$/).transform.slice(4),
-               texto: (de(/corregido/) || {}).str, visto: !!de(/Visto bueno/) };
+               texto: (de(/corregido/) || {}).str, visto: !!de(/Visto bueno/),
+               otros: tc.items.filter((i) => /^Texto de prueba del expediente \d+$/.test(i.str)).length };
     });
     afirmar(pdf.texto === 'Renglón corregido: S/ 1,250.00 ñandú' && pdf.visto, 'el PDF lleva los dos textos, con tildes y eñes', pdf);
-    afirmar(pdf.viejo && Math.abs(pdf.nuevo[0] - pdf.viejo[0]) < 1 && Math.abs(pdf.nuevo[1] - pdf.viejo[1]) < 1.5, 'el renglón nuevo cae sobre el viejo', pdf);
+    // de raíz: el renglón viejo ya no está en el PDF, ni debajo de un parche, y el nuevo cae en su sitio
+    afirmar(!pdf.viejo, 'el texto viejo se quitó del PDF', pdf);
+    afirmar(Math.abs(pdf.nuevo[0] - 60) < 1 && Math.abs(pdf.nuevo[1] - 594) < 1.5, 'el renglón nuevo cae donde estaba el viejo', pdf);
+    afirmar(pdf.otros === 14, 'los demás renglones siguen todos', pdf);
     // Esc apaga la herramienta sin cerrar las hojas en grande, y deshacer quita los cambios
     await page.keyboard.press('Escape');
     afirmar(await page.evaluate(() => !document.querySelector('#lector').hidden && !document.querySelector('.capa-editar') && document.querySelector('#barraEditor').hidden), 'Esc cierra el editor y deja las hojas en grande');
