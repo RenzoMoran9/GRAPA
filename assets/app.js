@@ -444,7 +444,11 @@
     capa.className = 'pag-sellos';
     const vis = visDe(pagina);
     const k = anchoPx / vis.w;
+    // lo corregido va debajo: una firma puesta encima de un texto cambiado se tiene que ver
+    const textos = nodoTextos(pagina, vis);
+    if (textos) capa.appendChild(textos);
     pagina.sellos.forEach((s) => {
+      if (s.rol === 'texto') return;
       if (s.rol === 'firma') {
         const firma = G.firmaPorId(s.firmaId);
         if (!firma) return;
@@ -837,7 +841,7 @@
       // no corresponder con la lista que el lector acabe recorriendo
       [icono('lupa'), 'Ver esta hoja en grande', () => abrirLector(pagina)],
       [icono('firma'), 'Colocar firma o sello', () => abrirFirmar(pagina)],
-      [icono('texto'), 'Corregir el texto de esta hoja', () => editarTexto([pagina])],
+      [icono('texto'), 'Corregir el texto de esta hoja', () => editarTextoAqui(pagina)],
       [icono('guardar'), 'Descargar solo esta hoja', () => descargarHoja(pagina)],
       [icono('imprimir'), 'Imprimir esta hoja', () => imprimirHojas([pagina], 'la hoja ' + (E.paginas.indexOf(pagina) + 1))],
       [icono('duplicar'), 'Duplicar', () => { marcar(); duplicar([pagina]); }],
@@ -1083,7 +1087,7 @@
     filas.push(['Foliación', totalFolios
       ? { ok: true, t: totalFolios === 1 ? '1 folio' : totalFolios + ' folios' }
       : { t: 'Sin foliar' }]);
-    const sellos = E.paginas.reduce((n, p) => n + p.sellos.filter((x) => x.rol !== 'folio').length, 0);
+    const sellos = E.paginas.reduce((n, p) => n + p.sellos.filter((x) => x.rol !== 'folio' && x.rol !== 'texto').length, 0);
     filas.push(['Firmas y sellos', sellos ? { t: sellos === 1 ? '1 colocado' : sellos + ' colocados' } : { t: 'Ninguno' }]);
     const { blancas, giradas } = avisosRevision();
     const sinRevisar = E.paginas.filter((p) => !revision.hechas.has(p.uid)).length;
@@ -4376,6 +4380,7 @@
 
   function alternarCaptura(si, modo) {
     const nuevo = modo || 'imagen';
+    if (si !== false && editando) alternarEdicion(false);
     // pulsar el otro botón no apaga: cambia de herramienta
     if (si == null && capturando && modoCaptura !== nuevo) si = true;
     capturando = si == null ? !capturando : si;
@@ -4403,6 +4408,7 @@
     pagina.sellos.forEach((s) => {
       ctx.save();
       ctx.globalAlpha = s.opacidad == null ? 1 : s.opacidad;
+      if (s.rol === 'texto') { dibujarTextoEn(ctx, pagina, s, W, H); ctx.restore(); return; }
       if (s.rol === 'firma') {
         const firma = G.firmaPorId(s.firmaId);
         if (!firma) { ctx.restore(); return; }
@@ -4639,6 +4645,582 @@
     });
   }
 
+  /* =========================================================
+     EDITAR TEXTO · dentro de Pdflash
+     En «Ver en grande», con «Editar texto» encendido, cada trozo de texto
+     de la hoja se puede pulsar y corregir ahí mismo, y pulsando en un sitio
+     vacío se escribe texto nuevo. Vale para un PDF con texto y para un
+     escaneo, que se lee primero con el lector de escaneos.
+
+     Cada corrección es un sello más de la hoja (rol «texto»): un parche del
+     color del papel que tapa lo que había y, encima, lo nuevo. Por eso se
+     deshace con Ctrl+Z, se guarda con el expediente, se puede volver a
+     cambiar y viaja con la hoja como una firma. Al exportar se escribe en el
+     PDF como texto de verdad.
+     ========================================================= */
+  const FAMILIAS_CSS = {
+    sans: 'Helvetica, Arial, "Liberation Sans", sans-serif',
+    serif: '"Times New Roman", Times, "Liberation Serif", serif',
+    mono: '"Courier New", Courier, "Liberation Mono", monospace',
+  };
+  const NS_SVG = 'http://www.w3.org/2000/svg';
+  let editando = false;
+  let edicion = null;             // la caja abierta: { hoja, pagina, m, nodo, campo }
+  let ultimoEstilo = { tam: 11, color: '#111111', familia: 'sans', negrita: false, cursiva: false };
+
+  /** Un punto guardado con la hoja girada de una manera, visto con `giro` grados más. */
+  function girarPunto(x, y, giro) {
+    switch (G.norm(giro || 0)) {
+      case 90: return { x: 1 - y, y: x };
+      case 180: return { x: 1 - x, y: 1 - y };
+      case 270: return { x: y, y: 1 - x };
+      default: return { x, y };
+    }
+  }
+  const giroDeMas = (pagina, s) => G.norm(pagina.giro - (s.giroAl == null ? pagina.giro : s.giroAl));
+  const cajaDeTapa = (t) => ({ x0: t.x, x1: t.x + t.w, y0: t.y, y1: t.y + t.h });
+
+  /** Los textos corregidos o añadidos de la hoja, como se ven: un dibujo que crece con ella. */
+  function nodoTextos(pagina, vis) {
+    const textos = pagina.sellos.filter((s) => s.rol === 'texto');
+    if (!textos.length) return null;
+    const svg = document.createElementNS(NS_SVG, 'svg');
+    svg.setAttribute('class', 'sellos-texto');
+    svg.setAttribute('viewBox', `0 0 ${vis.w} ${vis.h}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    textos.forEach((s) => {
+      const d = giroDeMas(pagina, s);
+      if (s.tapa) {
+        const c = G.girarCaja(cajaDeTapa(s.tapa), d);
+        const r = document.createElementNS(NS_SVG, 'rect');
+        r.setAttribute('x', c.x0 * vis.w); r.setAttribute('y', c.y0 * vis.h);
+        r.setAttribute('width', (c.x1 - c.x0) * vis.w); r.setAttribute('height', (c.y1 - c.y0) * vis.h);
+        r.setAttribute('fill', s.tapa.color || '#ffffff');
+        svg.appendChild(r);
+      }
+      if (String(s.texto || '').trim()) {
+        const p = girarPunto(s.x, s.y, d);
+        const t = document.createElementNS(NS_SVG, 'text');
+        t.setAttribute('x', p.x * vis.w); t.setAttribute('y', p.y * vis.h);
+        t.setAttribute('font-size', s.tam || 11);
+        t.setAttribute('font-family', FAMILIAS_CSS[s.familia] || FAMILIAS_CSS.sans);
+        if (s.negrita) t.setAttribute('font-weight', '700');
+        if (s.cursiva) t.setAttribute('font-style', 'italic');
+        t.setAttribute('fill', s.color || '#111111');
+        t.setAttribute('xml:space', 'preserve');
+        if (d) t.setAttribute('transform', `rotate(${d} ${p.x * vis.w} ${p.y * vis.h})`);
+        t.textContent = s.texto;
+        svg.appendChild(t);
+      }
+    });
+    return svg;
+  }
+
+  /** Lo mismo, pintado en un lienzo (las capturas). */
+  function dibujarTextoEn(ctx, pagina, s, W, H) {
+    const vis = visDe(pagina), k = W / vis.w, d = giroDeMas(pagina, s);
+    if (s.tapa) {
+      const c = G.girarCaja(cajaDeTapa(s.tapa), d);
+      ctx.fillStyle = s.tapa.color || '#ffffff';
+      ctx.fillRect(c.x0 * W, c.y0 * H, (c.x1 - c.x0) * W, (c.y1 - c.y0) * H);
+    }
+    if (!String(s.texto || '').trim()) return;
+    const p = girarPunto(s.x, s.y, d);
+    ctx.font = `${s.cursiva ? 'italic ' : ''}${s.negrita ? 'bold ' : ''}${(s.tam || 11) * k}px ${FAMILIAS_CSS[s.familia] || FAMILIAS_CSS.sans}`;
+    ctx.fillStyle = s.color || '#111111';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.translate(p.x * W, p.y * H);
+    if (d) ctx.rotate((d * Math.PI) / 180);
+    ctx.fillText(s.texto, 0, 0);
+  }
+
+  /** Cuánto ocupa un texto a tamaño 1, con la letra del navegador más parecida. */
+  let lienzoMedir = null;
+  function anchoTexto(texto, estilo) {
+    if (!lienzoMedir) lienzoMedir = document.createElement('canvas').getContext('2d');
+    lienzoMedir.font = `${estilo.cursiva ? 'italic ' : ''}${estilo.negrita ? 'bold ' : ''}100px ${FAMILIAS_CSS[estilo.familia] || FAMILIAS_CSS.sans}`;
+    return lienzoMedir.measureText(texto).width / 100;
+  }
+
+  /* ---------- los trozos de texto de una hoja ---------- */
+
+  const trozosLeidos = new Map();
+  const claveTrozos = (p) => `${p.fuenteId}:${p.indice}:${G.norm(p.giro)}:${p.enderezo || 0}`;
+
+  /**
+   * Los trozos que se pueden pulsar: cada renglón, partido donde hay un hueco
+   * grande (las columnas de una tabla van cada una por su lado, para que
+   * corregir un precio no arrastre la descripción de al lado).
+   */
+  function trozosDe(pagina) {
+    const k = claveTrozos(pagina);
+    if (trozosLeidos.has(k)) return trozosLeidos.get(k);
+    const p = (async () => {
+      const lec = await G.leerLineas(pagina);
+      // una hoja que hubo que girar para poder leerla: sus letras están de cabeza o de lado
+      if (lec.girada) return { trozos: [], girada: true, origen: lec.origen };
+      const vis = visDe(pagina);
+      const th = ((lec.torcida || 0) * Math.PI) / 180, co = Math.cos(th), si = Math.sin(th);
+      const trozos = [];
+      (lec.lineas || []).forEach((l) => {
+        const ws = (l.palabras || []).slice().sort((a, b) => a.x0 - b.x0);
+        let grupo = [];
+        const cerrar = () => {
+          if (!grupo.length) return;
+          let texto = '';
+          grupo.forEach((w, i) => {
+            if (i) {
+              const hueco = (w.x0 - grupo[i - 1].x1) * vis.w, alto = (w.y1 - w.y0) * vis.h;
+              // un PDF parte «48,000.00» en trozos que se tocan: esos van pegados
+              texto += lec.origen === 'texto' && hueco < alto * 0.12 ? '' : ' ';
+            }
+            texto += w.t;
+          });
+          const t = {
+            texto, origen: lec.origen,
+            x0: Math.min(...grupo.map((w) => w.x0)), x1: Math.max(...grupo.map((w) => w.x1)),
+            y0: Math.min(...grupo.map((w) => w.y0)), y1: Math.max(...grupo.map((w) => w.y1)),
+          };
+          if (th) {
+            // se leyó enderezada: el trozo vuelve a donde está en la hoja torcida
+            const cx = ((t.x0 + t.x1) / 2 - 0.5) * vis.w, cy = ((t.y0 + t.y1) / 2 - 0.5) * vis.h;
+            const mx = (cx * co + cy * si - cx) / vis.w, my = (-cx * si + cy * co - cy) / vis.h;
+            t.x0 += mx; t.x1 += mx; t.y0 += my; t.y1 += my;
+          }
+          if (texto.trim() && t.x1 > t.x0 && t.y1 > t.y0) trozos.push(t);
+          grupo = [];
+        };
+        ws.forEach((w) => {
+          const previo = grupo[grupo.length - 1];
+          if (previo && (w.x0 - previo.x1) * vis.w > (l.y1 - l.y0) * vis.h * 1.1) cerrar();
+          grupo.push(w);
+        });
+        cerrar();
+      });
+      return { trozos, girada: false, origen: lec.origen };
+    })();
+    trozosLeidos.set(k, p);
+    p.catch(() => trozosLeidos.delete(k));
+    return p;
+  }
+
+  /** La letra con la que está escrito un trozo de un PDF con texto: familia, negrita y cursiva. */
+  async function letraDe(pagina, t) {
+    const r = { familia: 'sans', negrita: false, cursiva: false, sabe: false };
+    try {
+      const fuente = E.fuentes.get(pagina.fuenteId);
+      const pag = await fuente.doc.getPage(pagina.indice + 1);
+      const tc = await pag.getTextContent();
+      const vp = pag.getViewport({ scale: 1, rotation: G.norm(pagina.giro) });
+      const it = tc.items.find((x) => {
+        if (!String(x.str || '').trim()) return false;
+        const m = window.pdfjsLib.Util.transform(vp.transform, x.transform);
+        const px = m[4] / vp.width, py = m[5] / vp.height;
+        return px >= t.x0 - 0.004 && px <= t.x1 && py >= t.y0 && py <= t.y1 + 0.004;
+      });
+      if (!it) return r;
+      const estilo = (tc.styles || {})[it.fontName] || {};
+      let nombre = '';
+      try { nombre = String((pag.commonObjs.get(it.fontName) || {}).name || ''); } catch (e) { /* aún no se dibujó */ }
+      const pista = (nombre + ' ' + (estilo.fontFamily || '')).toLowerCase();
+      if (/mono|courier|consol/.test(pista)) r.familia = 'mono';
+      else if (/times|serif|roman|georgia|garamond|cambria|book/.test(pista) && !/sans/.test(pista)) r.familia = 'serif';
+      if (nombre) {
+        r.sabe = true;
+        r.negrita = /bold|black|heavy|semibold|demi/i.test(nombre);
+        r.cursiva = /italic|oblique/i.test(nombre);
+      }
+    } catch (e) { /* se queda con la letra corriente */ }
+    return r;
+  }
+
+  /** El color del papel y el de la tinta en un trozo de la hoja ya dibujada. */
+  function coloresEn(hoja, c) {
+    const lienzo = hoja.querySelector('canvas');
+    const r = { papel: '#ffffff', tinta: '#111111' };
+    if (!lienzo) return r;
+    try {
+      const W = lienzo.width, H = lienzo.height;
+      const x = Math.max(0, Math.floor(c.x0 * W) - 2), y = Math.max(0, Math.floor(c.y0 * H) - 2);
+      const an = Math.min(W - x, Math.ceil((c.x1 - c.x0) * W) + 4), al = Math.min(H - y, Math.ceil((c.y1 - c.y0) * H) + 4);
+      if (an < 2 || al < 2) return r;
+      const d = lienzo.getContext('2d').getImageData(x, y, an, al).data;
+      // el papel es el color que más se repite (de 16 en 16, para juntar los parecidos)
+      const cuenta = new Map();
+      for (let i = 0; i < d.length; i += 4) {
+        const k = (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4);
+        const v = cuenta.get(k) || [0, 0, 0, 0];
+        v[0]++; v[1] += d[i]; v[2] += d[i + 1]; v[3] += d[i + 2];
+        cuenta.set(k, v);
+      }
+      let mejor = null;
+      cuenta.forEach((v) => { if (!mejor || v[0] > mejor[0]) mejor = v; });
+      const pr = mejor[1] / mejor[0], pg = mejor[2] / mejor[0], pb = mejor[3] / mejor[0];
+      // la tinta, lo que más se aparta del papel
+      let lejos = 0;
+      const dist = (i) => Math.abs(d[i] - pr) + Math.abs(d[i + 1] - pg) + Math.abs(d[i + 2] - pb);
+      for (let i = 0; i < d.length; i += 4) lejos = Math.max(lejos, dist(i));
+      let n = 0, tr = 0, tg = 0, tb = 0;
+      if (lejos > 90) {
+        for (let i = 0; i < d.length; i += 4) {
+          if (dist(i) < lejos * 0.7) continue;
+          n++; tr += d[i]; tg += d[i + 1]; tb += d[i + 2];
+        }
+      }
+      const hex = (a, b, c2) => '#' + [a, b, c2].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+      r.papel = hex(pr, pg, pb);
+      if (n) r.tinta = hex(tr / n, tg / n, tb / n);
+    } catch (e) { /* un lienzo que no deja leerse: blanco y negro */ }
+    return r;
+  }
+
+  /**
+   * El parche tiene que tapar TODA la letra vieja. La caja que da el lector de
+   * escaneos a veces se queda corta —la cola de una «p», un renglón algo
+   * torcido— y asomaría un resto de tinta por el borde. Se agranda lado por
+   * lado mientras justo afuera siga habiendo tinta, hasta un tope: más allá
+   * ya sería el renglón de al lado.
+   */
+  function crecerTapa(hoja, c, papel, tope) {
+    const lienzo = hoja.querySelector('canvas');
+    if (!lienzo) return c;
+    try {
+      const W = lienzo.width, H = lienzo.height;
+      const T = Math.max(2, Math.round(tope * H));
+      const bx = Math.max(0, Math.floor(c.x0 * W) - T), by = Math.max(0, Math.floor(c.y0 * H) - T);
+      const bw = Math.min(W, Math.ceil(c.x1 * W) + T) - bx, bh = Math.min(H, Math.ceil(c.y1 * H) + T) - by;
+      if (bw < 2 || bh < 2) return c;
+      const d = lienzo.getContext('2d').getImageData(bx, by, bw, bh).data;
+      const n = parseInt(papel.slice(1), 16), pr = n >> 16, pg = (n >> 8) & 255, pb = n & 255;
+      const tinta = (x, y) => {
+        const i = (y * bw + x) * 4;
+        return Math.abs(d[i] - pr) + Math.abs(d[i + 1] - pg) + Math.abs(d[i + 2] - pb) > 110;
+      };
+      let x0 = Math.floor(c.x0 * W) - bx, x1 = Math.ceil(c.x1 * W) - bx - 1;
+      let y0 = Math.floor(c.y0 * H) - by, y1 = Math.ceil(c.y1 * H) - by - 1;
+      const fila = (y) => { for (let x = x0; x <= x1; x++) if (tinta(x, y)) return true; return false; };
+      const columna = (x) => { for (let y = y0; y <= y1; y++) if (tinta(x, y)) return true; return false; };
+      const yMin = Math.max(0, y0 - T), yMax = Math.min(bh - 1, y1 + T);
+      const xMin = Math.max(0, x0 - T), xMax = Math.min(bw - 1, x1 + T);
+      while (y0 > yMin && fila(y0 - 1)) y0--;
+      while (y1 < yMax && fila(y1 + 1)) y1++;
+      while (x0 > xMin && columna(x0 - 1)) x0--;
+      while (x1 < xMax && columna(x1 + 1)) x1++;
+      // y un punto de aire, para el borde difuminado de la letra
+      return { x0: (bx + x0 - 1) / W, x1: (bx + x1 + 2) / W, y0: (by + y0 - 1) / H, y1: (by + y1 + 2) / H };
+    } catch (e) { return c; }
+  }
+
+  /* ---------- la capa que se pulsa ---------- */
+
+  /** Dónde cae en la hoja un texto ya puesto, para poder pulsarlo. */
+  function cajaDeSello(pagina, s) {
+    if (s.tapa) return cajaDeTapa(s.tapa);
+    const vis = visDe(pagina), tam = s.tam || 11;
+    const an = Math.max(anchoTexto(s.texto || '', s) * tam, tam) / vis.w;
+    return { x0: s.x, x1: s.x + an, y0: s.y - (tam * 0.85) / vis.h, y1: s.y + (tam * 0.25) / vis.h };
+  }
+
+  function ponerCapaEdicion(hoja, pagina) {
+    const previa = hoja.querySelector('.capa-editar');
+    if (previa) previa.remove();
+    if (!editando) return;
+    const capa = document.createElement('div');
+    capa.className = 'capa-editar';
+    const poner = (c, clase, datos, titulo) => {
+      const b = document.createElement('div');
+      b.className = 'trozo ' + clase;
+      b.style.left = c.x0 * 100 + '%'; b.style.top = c.y0 * 100 + '%';
+      b.style.width = (c.x1 - c.x0) * 100 + '%'; b.style.height = (c.y1 - c.y0) * 100 + '%';
+      Object.assign(b.dataset, datos);
+      b.title = titulo;
+      capa.appendChild(b);
+      return b;
+    };
+    const puestos = [];
+    pagina.sellos.forEach((s, i) => {
+      if (s.rol !== 'texto') return;
+      const derecho = !giroDeMas(pagina, s);
+      const c = G.girarCaja(cajaDeSello(pagina, s), giroDeMas(pagina, s));
+      puestos.push(c);
+      poner(c, 'puesto' + (derecho ? '' : ' fijo'), derecho ? { sello: String(i) } : {},
+        derecho ? 'Texto que cambiaste: pulsa para volver a cambiarlo'
+          : 'Este texto se puso con la hoja girada de otra manera: gírala como estaba para cambiarlo');
+    });
+    hoja.appendChild(capa);
+
+    const nota = document.createElement('span');
+    nota.className = 'capa-editar-nota';
+    nota.textContent = 'Leyendo el texto de la hoja…';
+    capa.appendChild(nota);
+    const baja = G.alEstadoOcr ? G.alEstadoOcr((t) => { if (t) nota.textContent = t; }) : null;
+    trozosDe(pagina).then((r) => {
+      if (!capa.isConnected) return;
+      capa._trozos = r.trozos;
+      r.trozos.forEach((t, i) => {
+        // lo que ya se corrigió no se ofrece otra vez: debajo está el texto viejo
+        const cx = (t.x0 + t.x1) / 2, cy = (t.y0 + t.y1) / 2;
+        if (puestos.some((c) => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1)) return;
+        poner(t, 'leido', { trozo: String(i) }, 'Pulsa para corregir este texto');
+      });
+      if (r.girada) {
+        nota.textContent = 'Esta hoja está de lado o de cabeza: gírala para corregir su texto. Sí puedes escribir texto nuevo.';
+        nota.classList.add('fija');
+      } else if (!r.trozos.length) {
+        nota.textContent = 'No se encontró texto en esta hoja. Pulsa donde quieras para escribir.';
+        nota.classList.add('fija');
+      } else nota.remove();
+    }).catch((e) => {
+      console.error(e);
+      if (!capa.isConnected) return;
+      nota.textContent = 'No se pudo leer el texto de esta hoja. Sí puedes escribir texto nuevo.';
+      nota.classList.add('fija');
+    }).then(() => { if (baja) baja(); });
+
+    capa.addEventListener('click', (ev) => {
+      if (ev.target.closest('.editor-texto')) return;
+      // con una caja abierta, pulsar fuera la da por buena
+      if (edicion) { cerrarEdicion(true); return; }
+      const b = ev.target.closest('.trozo');
+      if (b && b.dataset.sello != null) abrirEdicion(hoja, pagina, { sello: Number(b.dataset.sello) });
+      else if (b && b.dataset.trozo != null) abrirEdicion(hoja, pagina, { trozo: capa._trozos[Number(b.dataset.trozo)] });
+      else if (!b) {
+        const caja = hoja.getBoundingClientRect();
+        abrirEdicion(hoja, pagina, { x: (ev.clientX - caja.left) / caja.width, y: (ev.clientY - caja.top) / caja.height });
+      }
+    });
+  }
+
+  function refrescarCapasEdicion() {
+    $$('.hoja', $('#lectorHojas')).forEach((hoja) => {
+      const pagina = E.paginas.find((p) => p.uid === hoja.dataset.uid);
+      if (!pagina || hoja.dataset.pintada !== '1') { const c = hoja.querySelector('.capa-editar'); if (c) c.remove(); return; }
+      ponerCapaEdicion(hoja, pagina);
+    });
+  }
+
+  function alternarEdicion(si) {
+    const nuevo = si == null ? !editando : !!si;
+    if (nuevo && !permitido('editarTexto')) return;
+    if (nuevo && capturando) alternarCaptura(false);
+    if (!nuevo && edicion) cerrarEdicion(true);
+    if (nuevo === editando) return;
+    editando = nuevo;
+    document.body.classList.toggle('editando-texto', editando);
+    $('#lectorEditarTexto').classList.toggle('activo', editando);
+    $('#lectorEditarTexto').setAttribute('aria-pressed', String(editando));
+    refrescarCapasEdicion();
+    if (editando) G.aviso('Pulsa un texto para corregirlo, o un sitio vacío de la hoja para escribir.', '');
+  }
+
+  /** Desde la barra, el menú o el menú de una hoja: se abre en grande y con la herramienta puesta. */
+  function editarTextoAqui(pagina) {
+    if (!permitido('editarTexto')) return;
+    if (!E.paginas.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
+    const cual = pagina && pagina.uid ? pagina : null;
+    if (!lector.abierto || cual) abrirLector(cual || undefined);
+    if (lector.abierto) alternarEdicion(true);
+  }
+
+  /* ---------- la caja donde se escribe ---------- */
+
+  async function abrirEdicion(hoja, pagina, que) {
+    const vis = visDe(pagina);
+    let m;
+    if (que.sello != null) {
+      const s = pagina.sellos[que.sello];
+      if (!s) return;
+      m = Object.assign({ indice: que.sello, original: s.texto || '' }, JSON.parse(JSON.stringify(s)));
+    } else if (que.trozo) {
+      const t = que.trozo;
+      const alto = (t.y1 - t.y0) * vis.h, ancho = (t.x1 - t.x0) * vis.w;
+      const col = coloresEn(hoja, t);
+      const letra = t.origen === 'texto' ? await letraDe(pagina, t) : { familia: 'sans', negrita: false, cursiva: false, sabe: false };
+      if (!editando || !hoja.isConnected) return;
+      let tam;
+      if (t.origen === 'texto') {
+        // un PDF dice a qué tamaño escribió; si no dijo con qué letra, se mira cuál encaja en el ancho
+        tam = alto / 1.05;
+        if (!letra.sabe) {
+          const fina = Math.abs(anchoTexto(t.texto, letra) * tam - ancho);
+          const gruesa = Math.abs(anchoTexto(t.texto, Object.assign({}, letra, { negrita: true })) * tam - ancho);
+          letra.negrita = gruesa < fina * 0.6;
+        }
+      } else {
+        // de un escaneo solo se sabe cuánto ocupa: el tamaño con el que el texto llena ese ancho
+        tam = ancho / (anchoTexto(t.texto, letra) || 1);
+        if (!(tam > alto * 0.6 && tam < alto * 1.5)) tam = alto * 0.9;
+      }
+      tam = Math.round(Math.min(Math.max(tam, 4), 96) * 2) / 2;
+      const cola = t.origen === 'texto' ? 0.19 * alto / tam : (/[gjpqyQ,;()]/.test(t.texto) ? 0.21 : 0.02);
+      const aire = tam * 0.12;
+      const tapa = crecerTapa(hoja, {
+        x0: t.x0 - aire / vis.w, x1: t.x1 + aire / vis.w, y0: t.y0 - aire / vis.h, y1: t.y1 + aire / vis.h,
+      }, col.papel, (tam * 0.4) / vis.h);
+      m = {
+        indice: -1, original: t.texto, texto: t.texto,
+        x: t.x0, y: t.y1 - (cola * tam) / vis.h, tam, color: col.tinta,
+        familia: letra.familia, negrita: letra.negrita, cursiva: letra.cursiva,
+        tapa: { x: tapa.x0, y: tapa.y0, w: tapa.x1 - tapa.x0, h: tapa.y1 - tapa.y0, color: col.papel },
+      };
+    } else {
+      m = Object.assign({ indice: -1, original: '', texto: '', x: que.x, y: que.y, tapa: null }, ultimoEstilo);
+    }
+    if (edicion) cerrarEdicion(true);
+
+    const nodo = document.createElement('div');
+    nodo.className = 'editor-texto';
+    nodo.innerHTML = `
+      <div class="editor-barra" role="toolbar" aria-label="Formato del texto">
+        <button type="button" data-hace="menos" title="Letra más chica" aria-label="Letra más chica">A−</button>
+        <span class="editor-tam" title="Tamaño de la letra"></span>
+        <button type="button" data-hace="mas" title="Letra más grande" aria-label="Letra más grande">A+</button>
+        <button type="button" data-hace="negrita" title="Negrita" aria-label="Negrita"><b>N</b></button>
+        <button type="button" data-hace="cursiva" title="Cursiva" aria-label="Cursiva"><i>K</i></button>
+        <select data-hace="familia" title="Tipo de letra" aria-label="Tipo de letra">
+          <option value="sans">Arial</option><option value="serif">Times</option><option value="mono">Courier</option>
+        </select>
+        <input type="color" data-hace="color" title="Color de la letra" aria-label="Color de la letra">
+        <button type="button" data-hace="borrar" class="editor-borrar"></button>
+        <button type="button" data-hace="listo" class="editor-listo" title="Dejarlo así (Enter)">Listo</button>
+      </div>
+      <input type="text" class="editor-campo" spellcheck="false" autocomplete="off" aria-label="Texto">`;
+    const campo = nodo.querySelector('.editor-campo');
+    campo.value = m.texto || '';
+    nodo.querySelector('[data-hace="familia"]').value = m.familia || 'sans';
+    nodo.querySelector('[data-hace="color"]').value = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '#111111';
+    const borrar = nodo.querySelector('[data-hace="borrar"]');
+    // «Borrar» quita el texto de la hoja; en uno que ya se cambió, deshace el cambio
+    borrar.textContent = m.indice >= 0 ? (m.tapa ? 'Dejar como estaba' : 'Quitar') : 'Borrar';
+    borrar.title = m.indice >= 0
+      ? (m.tapa ? 'Quita tu cambio: vuelve a verse el texto que traía la hoja' : 'Quita este texto')
+      : 'Borra este texto de la hoja';
+    borrar.hidden = m.indice < 0 && !m.tapa;
+    hoja.querySelector('.capa-editar').appendChild(nodo);
+    edicion = { hoja, pagina, m, nodo, campo };
+    acomodarEdicion();
+
+    nodo.addEventListener('mousedown', (ev) => { if (ev.target !== campo && !/SELECT|INPUT/.test(ev.target.tagName)) ev.preventDefault(); });
+    nodo.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const b = ev.target.closest('button[data-hace]');
+      if (!b) return;
+      const hace = b.dataset.hace;
+      if (hace === 'menos') m.tam = Math.max(4, m.tam - 0.5);
+      else if (hace === 'mas') m.tam = Math.min(96, m.tam + 0.5);
+      else if (hace === 'negrita') m.negrita = !m.negrita;
+      else if (hace === 'cursiva') m.cursiva = !m.cursiva;
+      else if (hace === 'listo') { cerrarEdicion(true); return; }
+      else if (hace === 'borrar') {
+        if (m.indice >= 0) { quitarTextoPuesto(); return; }
+        campo.value = '';
+        cerrarEdicion(true);
+        return;
+      }
+      edicion.tocado = true;
+      acomodarEdicion();
+      campo.focus();
+    });
+    nodo.querySelector('[data-hace="familia"]').addEventListener('change', (ev) => { m.familia = ev.target.value; edicion.tocado = true; acomodarEdicion(); campo.focus(); });
+    nodo.querySelector('[data-hace="color"]').addEventListener('input', (ev) => { m.color = ev.target.value; edicion.tocado = true; acomodarEdicion(); });
+    campo.addEventListener('input', acomodarEdicion);
+    campo.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); cerrarEdicion(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cerrarEdicion(false); }
+    });
+    campo.focus();
+    if (m.indice >= 0 || que.trozo) campo.select();
+  }
+
+  /** Pone la caja sobre su texto, con la letra y el tamaño con que va a quedar. */
+  function acomodarEdicion() {
+    if (!edicion) return;
+    const { hoja, pagina, m, nodo, campo } = edicion;
+    const vis = visDe(pagina), k = hoja.clientWidth / vis.w;
+    const px = m.tam * k;
+    nodo.style.left = m.x * 100 + '%';
+    // el pie de la letra cae, dentro del campo, a un tamaño de letra de su borde de arriba
+    nodo.style.top = ((m.y * vis.h - m.tam) / vis.h) * 100 + '%';
+    campo.style.fontSize = px + 'px';
+    campo.style.height = campo.style.lineHeight = px * 1.3 + 'px';
+    campo.style.fontFamily = FAMILIAS_CSS[m.familia] || FAMILIAS_CSS.sans;
+    campo.style.fontWeight = m.negrita ? '700' : '400';
+    campo.style.fontStyle = m.cursiva ? 'italic' : 'normal';
+    campo.style.color = m.color || '#111111';
+    campo.style.background = (m.tapa && m.tapa.color) || '#ffffff';
+    const escrito = anchoTexto(campo.value || ' ', m) * px;
+    const minimo = m.tapa ? m.tapa.w * hoja.clientWidth : px * 6;
+    campo.style.width = Math.ceil(Math.max(escrito + px * 0.8, minimo)) + 'px';
+    nodo.querySelector('.editor-tam').textContent = String(m.tam).replace('.', ',');
+    nodo.querySelector('[data-hace="negrita"]').classList.toggle('activo', !!m.negrita);
+    nodo.querySelector('[data-hace="cursiva"]').classList.toggle('activo', !!m.cursiva);
+    // arriba no cabe la barra en los primeros renglones de la hoja: ahí va debajo
+    nodo.classList.toggle('abajo', m.y * hoja.clientHeight < 70);
+    nodo.classList.toggle('a-la-derecha', m.x > 0.6);
+  }
+
+  /** Repinta sin que la hoja que se está corrigiendo salte de sitio. */
+  function pintarSinSaltar() {
+    const cont = $('#lectorHojas');
+    const arriba = cont.scrollTop, lado = cont.scrollLeft;
+    pintar();
+    cont.scrollTop = arriba; cont.scrollLeft = lado;
+  }
+
+  function cerrarEdicion(guardar) {
+    const ed = edicion;
+    if (!ed) return;
+    edicion = null;
+    ed.nodo.remove();
+    if (!guardar) return;
+    const { pagina, m } = ed;
+    if (!E.paginas.includes(pagina)) return;
+    const escrito = ed.campo.value.replace(/\s+/g, ' ').trim();
+    const sinSigno = Array.from(escrito).filter((c) => !G.seEscribe(c));
+    const texto = Array.from(escrito).filter((c) => G.seEscribe(c)).join('').replace(/\s+/g, ' ').trim();
+    const sello = {
+      rol: 'texto', texto, x: m.x, y: m.y, tam: m.tam, color: m.color || '#111111',
+      familia: m.familia || 'sans', negrita: !!m.negrita, cursiva: !!m.cursiva,
+      tapa: m.tapa || null, giroAl: G.norm(pagina.giro),
+    };
+    if (m.indice >= 0) {
+      const previo = pagina.sellos[m.indice];
+      if (!previo || JSON.stringify(Object.assign({}, previo, { giroAl: sello.giroAl })) === JSON.stringify(sello)) return;
+      marcar();
+      if (!texto && !sello.tapa) pagina.sellos.splice(m.indice, 1);
+      else pagina.sellos[m.indice] = sello;
+    } else {
+      // sin tocar nada no se pone nada: ni un parche sobre el texto que ya estaba bien
+      if (m.tapa ? (texto === m.original && !estiloCambiado(ed)) : !texto) return;
+      marcar();
+      pagina.sellos.push(sello);
+    }
+    // el texto nuevo que se escriba después sale como el último que se escribió, no como un título corregido
+    if (texto && !sello.tapa) ultimoEstilo = { tam: sello.tam, color: sello.color, familia: sello.familia, negrita: sello.negrita, cursiva: sello.cursiva };
+    pintarSinSaltar();
+    if (sinSigno.length) {
+      G.aviso(`No se pudo escribir «${Array.from(new Set(sinSigno)).join(' ')}»: ese signo no está en las letras del PDF. Lo demás quedó puesto.`, 'error');
+    }
+  }
+
+  /** ¿Se le cambió la letra, el tamaño o el color a un trozo, aunque diga lo mismo? */
+  function estiloCambiado(ed) {
+    return !!ed.tocado;
+  }
+
+  function quitarTextoPuesto() {
+    const ed = edicion;
+    if (!ed || ed.m.indice < 0) return;
+    edicion = null;
+    ed.nodo.remove();
+    if (!E.paginas.includes(ed.pagina) || !ed.pagina.sellos[ed.m.indice]) return;
+    marcar();
+    ed.pagina.sellos.splice(ed.m.indice, 1);
+    pintarSinSaltar();
+    G.aviso(ed.m.tapa ? 'Quitado tu cambio: se ve el texto que traía la hoja.' : 'Texto quitado.', 'ok');
+  }
+
   /* ---------------- editor de texto (Pdflash Editor) ----------------
      Pdflash no lleva el motor de edición dentro: abre Pdflash Editor en otra
      pestaña y le pasa el documento en memoria. Por eso siguen siendo dos
@@ -4775,7 +5357,7 @@
         }
         G.aviso((enBlanco ? 'Ahí no hay ningún editor, así que cerré la pestaña. ' : 'La pestaña del editor no responde. ')
           + 'Guarda «GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
-          + 'en «Archivo de salida» → «Editor de texto».', 'error');
+          + 'en «Archivo de salida» → «Editor avanzado».', 'error');
       }, 12000);
     }
 
@@ -5160,6 +5742,7 @@
       if (sellosPrevios) sellosPrevios.remove();
       hoja.insertBefore(lienzo, hoja.firstChild);
       hoja.appendChild(nodoSellos(pagina, hoja.clientWidth));
+      ponerCapaEdicion(hoja, pagina);
     }).catch(() => {});
   }
 
@@ -5208,6 +5791,8 @@
           const c = hoja.querySelector('canvas');
           const sellos = hoja.querySelector('.pag-sellos');
           if (sellos) sellos.remove();
+          const capaEd = hoja.querySelector('.capa-editar');
+          if (capaEd) { if (edicion && edicion.hoja === hoja) cerrarEdicion(true); capaEd.remove(); }
           if (c) {
             const hueco = document.createElement('div');
             hueco.className = 'hoja-hueco';
@@ -5321,6 +5906,7 @@
   }
 
   function cerrarLector() {
+    if (editando) alternarEdicion(false);
     if (capturando) alternarCaptura(false);
     cerrarTextoCopiado();
     lector.abierto = false;
@@ -6220,6 +6806,8 @@
     if (ev.key === 'Escape') {
       // estando a media captura, Esc cancela la captura y no cierra el lector
       if (capturando && $$('.modal:not([hidden])').length === 0) { alternarCaptura(false); return; }
+      // y con «Editar texto» puesto, lo apaga
+      if (editando && $$('.modal:not([hidden])').length === 0) { alternarEdicion(false); return; }
       // Esc en un campo del panel (el buscador, por ejemplo) es para ese
       // campo, no para cerrar las hojas en grande
       const enPanel = enCampo && !ev.target.closest('#lector');
@@ -6572,7 +7160,8 @@
     $('#editorTextoUrl').addEventListener('input', () => {
       try { localStorage.setItem(CLAVE_EDITOR_TEXTO, $('#editorTextoUrl').value.trim()); } catch (e) {}
     });
-    $('#btnEditarTexto').addEventListener('click', editarTexto);
+    $('#btnEditarTexto').addEventListener('click', () => editarTextoAqui());
+    $('#menuEditorAvanzado').addEventListener('click', () => editarTexto());
 
     $('#btnVista').addEventListener('click', () => {
       vista = vista === 'paquetes' ? 'hojas' : 'paquetes';
@@ -6752,10 +7341,7 @@
       const p = paginaActualLector();
       if (p) imprimirHojas([p], 'la hoja ' + (E.paginas.indexOf(p) + 1));
     });
-    $('#lectorEditarTexto').addEventListener('click', () => {
-      const p = paginaActualLector();
-      if (p) editarTexto([p]);
-    });
+    $('#lectorEditarTexto').addEventListener('click', () => alternarEdicion());
     $('#lectorCapturar').addEventListener('click', () => alternarCaptura(null, 'imagen'));
     $('#lectorCopiarTexto').addEventListener('click', () => alternarCaptura(null, 'texto'));
     conectarCaptura();

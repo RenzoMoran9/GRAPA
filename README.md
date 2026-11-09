@@ -46,7 +46,8 @@ Funciona en Chrome, Edge y Firefox actuales.
 - **Una herramienta a la vez:** el riel de la izquierda elige la herramienta
   y el panel enseña solo esa, con una línea que dice para qué sirve.
 - La barra de arriba lleva lo de siempre (Abrir, Imprimir, Guardar, Exportar
-  PDF); *Editar texto* está en *Archivo* y el tema claro/oscuro en *Ver*.
+  PDF); *Editar texto* está en *Archivo* y en «Ver en grande», y el tema
+  claro/oscuro en *Ver*.
 
 ### Armar el expediente
 - Abre varios PDF a la vez, arrastrándolos o con **Abrir archivos**.
@@ -126,7 +127,7 @@ avanzar con todos en paralelo.
   queda algo sin guardar (con todo guardado ya no molesta).
 - Al **continuar donde lo dejaste**, un expediente que no cambió desde que lo
   guardaste vuelve como *Guardado*, no como *Sin guardar*.
-- Lo que corrige el **editor de texto** vuelve al tablero que mandó las hojas,
+- Lo que corrige el **editor avanzado** vuelve al tablero que mandó las hojas,
   aunque mientras tanto hayas cambiado de tablero.
 
 ### Muchos expedientes abiertos: la memoria
@@ -437,40 +438,62 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
 
 ## Corregir el texto de un PDF
 
-Pdflash arma el expediente; para **corregir una palabra dentro de un PDF** está
-**Pdflash Editor**, un programa aparte:
-<https://github.com/RenzoMoran9/HERRAMIENTA-PDF>
+Se corrige **dentro de Pdflash, sobre la misma hoja**, sin abrir otro programa
+ni otra pestaña. En **Ver en grande**, pulsa **✎ Editar texto** (también está
+en *Archivo ▸ Editar texto* y en el menú de cada hoja, «Corregir el texto de
+esta hoja»):
 
-Descarga su `GrapaEditor.html` y guárdalo **en la misma carpeta que
-`Grapa.html`**. Con Pdflash abierto desde la web, si el editor no está al lado se
-usa el publicado.
+- **Pulsa un texto y cámbialo.** Cada trozo de texto de la hoja queda marcado
+  con una línea punteada; al pulsarlo se abre ahí mismo una caja con lo que
+  dice, con su mismo tamaño, color y tipo de letra. Escribe y pulsa `Enter`
+  (o **Listo**); `Esc` lo deja como estaba.
+- **Pulsa un sitio vacío y escribe.** Para poner una fecha, un número, una
+  nota o llenar un formato.
+- **También en escaneos.** Pdflash lee primero la hoja con su lector de
+  escaneos, tapa la palabra vieja con el color del papel y escribe la nueva
+  encima.
+- **La barrita de la caja** cambia el tamaño (A− / A+), negrita, cursiva, el
+  tipo de letra (Arial, Times, Courier) y el color. **Borrar** quita ese texto
+  de la hoja.
+- **Lo que cambiaste se puede volver a cambiar**: queda con un borde naranja
+  mientras la herramienta está puesta. «Dejar como estaba» quita tu cambio y
+  vuelve a verse el texto original. `Ctrl+Z` también lo deshace.
+- En una tabla, cada columna va por su lado: corregir un precio no arrastra la
+  descripción de al lado.
+- Los cambios **viajan con la hoja**, como una firma: se guardan con el
+  expediente, siguen a la hoja si la giras o la mueves, y al exportar quedan
+  escritos en el PDF como texto de verdad.
 
-**Para corregir una hoja suelta** —que es lo normal— usa la **T** de esa hoja,
-o ábrela en grande y pulsa la **T** de la barra del lector. El botón **T Editar
-texto** de arriba manda las hojas marcadas, o el expediente entero si no hay
-ninguna marcada.
+Lo que conviene saber:
 
-Al terminar, **Devolver a Pdflash** trae lo corregido **a su sitio**: cada hoja
-sustituye a la suya, en la misma posición y el mismo paquete, y **recupera sus
-folios y firmas**. Si vuelven más o menos hojas de las que se mandaron, entra
-como documento aparte y no se toca el expediente.
+- Cada cambio es **un parche del color del papel con el texto nuevo encima**.
+  Se ve y se imprime como el original, pero en un PDF con texto la palabra
+  vieja sigue debajo del parche: un buscador todavía la encuentra. Para
+  tachar datos que no deben poder recuperarse, esto no sirve todavía.
+- Se corrige **renglón por renglón**: si el texto nuevo es más largo, no
+  empuja los renglones de abajo. Para rehacer un párrafo entero está el
+  editor avanzado.
+- Las letras son las catorce que todo PDF trae (Arial/Helvetica, Times y
+  Courier, con sus negritas y cursivas). Si el original usa otra, se pone la
+  más parecida. Escriben el español completo; un signo raro (un emoji, letras
+  de otro alfabeto) no se puede poner, y Pdflash lo avisa.
+- En un escaneo no se sabe con qué letra se escribió: sale en Arial, y se
+  cambia desde la barrita si hace falta.
+- Una hoja escaneada **de lado o de cabeza** hay que girarla antes: mientras
+  tanto solo deja escribir texto nuevo.
 
-Lo que viaja al editor va **sin comprimir y sin sellos**. Comprimir volvería la
-hoja una foto —con «Mínimo», también las de texto— y entonces no habría ni una
-letra que corregir; y los folios y firmas los vuelve a poner Pdflash al guardar,
-así que si viajaran pegados saldrían por duplicado.
+### Editor avanzado (otra pestaña)
 
-**El documento viaja de una pestaña a otra en memoria**: no se guarda en disco,
-no pasa por ninguna red y no hace falta internet. Si el editor no está al lado,
-Pdflash lo dice y no pasa nada más.
+Para cambios grandes sigue estando **Pdflash Editor**, un programa aparte
+(<https://github.com/RenzoMoran9/HERRAMIENTA-PDF>), en *Archivo ▸ Editor
+avanzado*. Recibe las hojas marcadas (o todas) **en memoria**, sin que salgan
+de tu computadora, y **Devolver a Pdflash** las trae a su sitio con sus folios
+y firmas. Con Pdflash guardado en tu equipo hace falta su `GrapaEditor.html`
+en la misma carpeta; desde la web se usa el publicado.
 
-No corrige texto de escaneos: ahí no hay letras, hay una foto.
-
-> **Por qué son dos programas y no uno.** Pdflash Editor usa MuPDF, que es libre
-> pero con licencia AGPL: todo programa que lo lleve *dentro* queda sujeto a esa
-> licencia. Pdflash no lo lleva dentro, solo lo abre en otra pestaña, así que
-> sigue siendo un programa independiente. Por eso el editor vive en su propio
-> repositorio.
+> **Por qué es otro programa.** Pdflash Editor usa MuPDF, que es libre pero
+> con licencia AGPL: todo programa que lo lleve *dentro* queda sujeto a esa
+> licencia. El editor que trae Pdflash no usa MuPDF.
 
 ## Ubicar formatos y copiar texto (también de escaneos)
 
