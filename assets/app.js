@@ -4662,6 +4662,7 @@
     sans: 'Helvetica, Arial, "Liberation Sans", sans-serif',
     serif: '"Times New Roman", Times, "Liberation Serif", serif',
     mono: '"Courier New", Courier, "Liberation Mono", monospace',
+    signos: '"Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", "Noto Sans Symbols2", sans-serif',
   };
   const NS_SVG = 'http://www.w3.org/2000/svg';
   let editando = false;
@@ -4696,6 +4697,7 @@
         r.setAttribute('x', c.x0 * vis.w); r.setAttribute('y', c.y0 * vis.h);
         r.setAttribute('width', (c.x1 - c.x0) * vis.w); r.setAttribute('height', (c.y1 - c.y0) * vis.h);
         r.setAttribute('fill', s.tapa.color || '#ffffff');
+        if (s.tapa.opacidad != null) { r.setAttribute('fill-opacity', s.tapa.opacidad); r.style.mixBlendMode = 'multiply'; }
         svg.appendChild(r);
       }
       if (String(s.texto || '').trim()) {
@@ -4721,8 +4723,11 @@
     const vis = visDe(pagina), k = W / vis.w, d = giroDeMas(pagina, s);
     if (s.tapa) {
       const c = G.girarCaja(cajaDeTapa(s.tapa), d);
+      ctx.save();
+      if (s.tapa.opacidad != null) { ctx.globalAlpha = s.tapa.opacidad; ctx.globalCompositeOperation = 'multiply'; }
       ctx.fillStyle = s.tapa.color || '#ffffff';
       ctx.fillRect(c.x0 * W, c.y0 * H, (c.x1 - c.x0) * W, (c.y1 - c.y0) * H);
+      ctx.restore();
     }
     if (!String(s.texto || '').trim()) return;
     const p = girarPunto(s.x, s.y, d);
@@ -4876,58 +4881,169 @@
   }
 
   /**
-   * El parche tiene que tapar TODA la letra vieja. La caja que da el lector de
-   * escaneos a veces se queda corta —la cola de una «p», un renglón algo
-   * torcido— y asomaría un resto de tinta por el borde. Se agranda lado por
-   * lado mientras justo afuera siga habiendo tinta, hasta un tope: más allá
-   * ya sería el renglón de al lado.
+   * Dónde está de verdad la tinta de un trozo, mirando la hoja dibujada.
+   * La caja que da el lector de escaneos es aproximada: a veces sobra, a veces
+   * corta la cola de una «p», y en una tabla incluye las rayas de la celda.
+   * Aquí se mide la letra punto por punto, sin contar las rayas (una fila o
+   * una columna con un trazo largo y seguido es una raya, no una letra), y se
+   * deja crecer un poco si la letra se sale de la caja. Con eso se sabe el
+   * tamaño real de la letra y el parche tapa justo la palabra: no se come
+   * las rayas de la tabla ni deja restos.
    */
-  function crecerTapa(hoja, c, papel, tope) {
+  function tintaDe(hoja, c, papel) {
     const lienzo = hoja.querySelector('canvas');
-    if (!lienzo) return c;
+    if (!lienzo) return null;
     try {
       const W = lienzo.width, H = lienzo.height;
-      const T = Math.max(2, Math.round(tope * H));
-      const bx = Math.max(0, Math.floor(c.x0 * W) - T), by = Math.max(0, Math.floor(c.y0 * H) - T);
-      const bw = Math.min(W, Math.ceil(c.x1 * W) + T) - bx, bh = Math.min(H, Math.ceil(c.y1 * H) + T) - by;
-      if (bw < 2 || bh < 2) return c;
+      const altoCaja = Math.max(2, (c.y1 - c.y0) * H);
+      const P = Math.max(3, Math.round(altoCaja * 0.35));          // cuánto se mira alrededor
+      const bx = Math.max(0, Math.floor(c.x0 * W) - P), by = Math.max(0, Math.floor(c.y0 * H) - P);
+      const bw = Math.min(W, Math.ceil(c.x1 * W) + P) - bx, bh = Math.min(H, Math.ceil(c.y1 * H) + P) - by;
+      if (bw < 3 || bh < 3) return null;
       const d = lienzo.getContext('2d').getImageData(bx, by, bw, bh).data;
       const n = parseInt(papel.slice(1), 16), pr = n >> 16, pg = (n >> 8) & 255, pb = n & 255;
-      const tinta = (x, y) => {
-        const i = (y * bw + x) * 4;
-        return Math.abs(d[i] - pr) + Math.abs(d[i + 1] - pg) + Math.abs(d[i + 2] - pb) > 110;
-      };
-      let x0 = Math.floor(c.x0 * W) - bx, x1 = Math.ceil(c.x1 * W) - bx - 1;
-      let y0 = Math.floor(c.y0 * H) - by, y1 = Math.ceil(c.y1 * H) - by - 1;
+      const m = new Uint8Array(bw * bh);
+      for (let i = 0, k = 0; i < d.length; i += 4, k++) {
+        m[k] = Math.abs(d[i] - pr) + Math.abs(d[i + 1] - pg) + Math.abs(d[i + 2] - pb) > 110 ? 1 : 0;
+      }
+      // las rayas: un trazo seguido mucho más largo que una letra
+      const largoLetra = altoCaja * 1.6;
+      const filaRaya = new Uint8Array(bh), colRaya = new Uint8Array(bw);
+      for (let y = 0; y < bh; y++) {
+        let run = 0, mayor = 0;
+        for (let x = 0; x < bw; x++) { run = m[y * bw + x] ? run + 1 : 0; if (run > mayor) mayor = run; }
+        if (mayor > Math.max(largoLetra, bw * 0.5)) filaRaya[y] = 1;
+      }
+      for (let x = 0; x < bw; x++) {
+        let run = 0, mayor = 0;
+        for (let y = 0; y < bh; y++) { run = m[y * bw + x] ? run + 1 : 0; if (run > mayor) mayor = run; }
+        if (mayor > Math.max(altoCaja * 1.15, bh * 0.8)) colRaya[x] = 1;
+      }
+      // junto a una raya queda su borde difuminado: tampoco cuenta
+      const ancha = (v) => { const r = new Uint8Array(v.length); for (let i = 0; i < v.length; i++) if (v[i]) { r[i] = 1; if (i) r[i - 1] = 1; if (i + 1 < v.length) r[i + 1] = 1; } return r; };
+      const fR = ancha(filaRaya), cR = ancha(colRaya);
+      const tinta = (x, y) => !fR[y] && !cR[x] && m[y * bw + x];
+      // la tinta dentro de la caja
+      const cx0 = Math.max(0, Math.floor(c.x0 * W) - bx), cx1 = Math.min(bw - 1, Math.ceil(c.x1 * W) - bx - 1);
+      const cy0 = Math.max(0, Math.floor(c.y0 * H) - by), cy1 = Math.min(bh - 1, Math.ceil(c.y1 * H) - by - 1);
+      let x0 = bw, x1 = -1, y0 = bh, y1 = -1;
+      for (let y = cy0; y <= cy1; y++) for (let x = cx0; x <= cx1; x++) {
+        if (!tinta(x, y)) continue;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+      if (x1 < 0) return null;
+      // y lo que se sale de ella, hasta que deja de haber tinta (o se llega a una raya)
       const fila = (y) => { for (let x = x0; x <= x1; x++) if (tinta(x, y)) return true; return false; };
       const columna = (x) => { for (let y = y0; y <= y1; y++) if (tinta(x, y)) return true; return false; };
-      const yMin = Math.max(0, y0 - T), yMax = Math.min(bh - 1, y1 + T);
-      const xMin = Math.max(0, x0 - T), xMax = Math.min(bw - 1, x1 + T);
-      while (y0 > yMin && fila(y0 - 1)) y0--;
-      while (y1 < yMax && fila(y1 + 1)) y1++;
-      while (x0 > xMin && columna(x0 - 1)) x0--;
-      while (x1 < xMax && columna(x1 + 1)) x1++;
-      // y un punto de aire, para el borde difuminado de la letra
-      return { x0: (bx + x0 - 1) / W, x1: (bx + x1 + 2) / W, y0: (by + y0 - 1) / H, y1: (by + y1 + 2) / H };
-    } catch (e) { return c; }
+      let hubo = true;
+      while (hubo) {
+        hubo = false;
+        if (y0 > 0 && !fR[y0 - 1] && fila(y0 - 1)) { y0--; hubo = true; }
+        if (y1 < bh - 1 && !fR[y1 + 1] && fila(y1 + 1)) { y1++; hubo = true; }
+        if (x0 > 0 && !cR[x0 - 1] && columna(x0 - 1)) { x0--; hubo = true; }
+        if (x1 < bw - 1 && !cR[x1 + 1] && columna(x1 + 1)) { x1++; hubo = true; }
+      }
+      let llena = 0;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (tinta(x, y)) llena++;
+      const an = x1 - x0 + 1, al = y1 - y0 + 1;
+      return { x0: (bx + x0) / W, x1: (bx + x1 + 1) / W, y0: (by + y0) / H, y1: (by + y1 + 1) / H, px: 1 / W, py: 1 / H,
+               forma: an / al, cubre: llena / (an * al) };
+    } catch (e) { return null; }
   }
 
-  /* ---------- la capa que se pulsa ---------- */
+  /**
+   * Cómo se ve un texto escrito con una letra: lo ancho que sale para su alto
+   * y cuánta tinta lleva. De un escaneo no se sabe con qué letra se escribió,
+   * pero sí cuánta tinta lleva, medida en la hoja: una negrita lleva más.
+   */
+  const aspectos = new Map();
+  function aspectoDe(texto, estilo) {
+    const k = [estilo.familia, estilo.negrita ? 1 : 0, texto].join('|');
+    if (aspectos.has(k)) return aspectos.get(k);
+    let r = null;
+    try {
+      const T = 48;
+      const c = document.createElement('canvas');
+      c.width = Math.min(4000, Math.ceil(anchoTexto(texto, estilo) * T) + 40); c.height = T * 2;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = '#000';
+      g.font = `${estilo.negrita ? 'bold ' : ''}${T}px ${FAMILIAS_CSS[estilo.familia] || FAMILIAS_CSS.sans}`;
+      g.textBaseline = 'alphabetic';
+      g.fillText(texto, 20, T * 1.4);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let x0 = c.width, x1 = -1, y0 = c.height, y1 = -1, llena = 0;
+      for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+        if (d[(y * c.width + x) * 4] > 128) continue;
+        llena++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+      if (x1 >= 0) r = { forma: (x1 - x0 + 1) / (y1 - y0 + 1), cubre: llena / ((x1 - x0 + 1) * (y1 - y0 + 1)) };
+    } catch (e) { r = null; }
+    aspectos.set(k, r);
+    return r;
+  }
 
-  /** Dónde cae en la hoja un texto ya puesto, para poder pulsarlo. */
+  function letraParecida(texto, tinta) {
+    // Solo se decide la negrita, por la tinta que lleva. La familia no se adivina: probado,
+    // el ancho de un escaneo no alcanza para distinguir Arial de Times y se equivocaba.
+    const r = { familia: 'sans', negrita: false, cursiva: false, sabe: false };
+    if (!tinta || !tinta.cubre) return r;
+    const fina = aspectoDe(texto, { familia: 'sans', negrita: false }), gruesa = aspectoDe(texto, { familia: 'sans', negrita: true });
+    if (!fina || !gruesa) return r;
+    r.negrita = Math.abs(Math.log(gruesa.cubre / tinta.cubre)) < Math.abs(Math.log(fina.cubre / tinta.cubre));
+    r.sabe = true;
+    return r;
+  }
+
+  /** Qué parte del tamaño de la letra ocupa un texto, de arriba abajo, según sus letras. */
+  function alturasDe(texto) {
+    const cola = /[gjpqyQ]/.test(texto) ? 0.21 : /[,;]/.test(texto) ? 0.13 : 0;
+    const alta = /[A-ZÁÉÍÓÚÑ0-9bdfhkltáéíóú()/\\|°%$#&¿?¡!]/.test(texto) ? 0.72 : 0.52;
+    return { cola, alta };
+  }
+
+  /* ---------- el editor: herramientas, selección y capa que se pulsa ---------- */
+
+  const HERRAMIENTAS = {
+    editar: 'Pulsa un texto de la hoja para corregirlo.',
+    texto: 'Pulsa donde quieras escribir.',
+    borrador: 'Arrastra sobre lo que quieras tapar con el color del papel.',
+    resaltar: 'Arrastra sobre lo que quieras resaltar.',
+    check: 'Pulsa donde va el visto.',
+    cruz: 'Pulsa donde va la equis.',
+  };
+  let herramienta = 'editar';
+  let elegido = null;             // lo seleccionado: { uid, indice }
+  let arrastre = null;            // mover algo ya puesto, o marcar un recuadro
+
+  /** Dónde cae en la hoja algo ya puesto, para poder pulsarlo y moverlo. */
   function cajaDeSello(pagina, s) {
-    if (s.tapa) return cajaDeTapa(s.tapa);
-    const vis = visDe(pagina), tam = s.tam || 11;
-    const an = Math.max(anchoTexto(s.texto || '', s) * tam, tam) / vis.w;
-    return { x0: s.x, x1: s.x + an, y0: s.y - (tam * 0.85) / vis.h, y1: s.y + (tam * 0.25) / vis.h };
+    const cajas = [];
+    if (s.tapa) cajas.push(cajaDeTapa(s.tapa));
+    if (String(s.texto || '').trim()) {
+      const vis = visDe(pagina), tam = s.tam || 11;
+      const an = Math.max(anchoTexto(s.texto, s) * tam, tam * 0.6) / vis.w;
+      cajas.push({ x0: s.x, x1: s.x + an, y0: s.y - (tam * 0.85) / vis.h, y1: s.y + (tam * 0.25) / vis.h });
+    }
+    if (!cajas.length) return { x0: s.x, x1: s.x + 0.02, y0: s.y - 0.01, y1: s.y };
+    return { x0: Math.min(...cajas.map((c) => c.x0)), x1: Math.max(...cajas.map((c) => c.x1)),
+             y0: Math.min(...cajas.map((c) => c.y0)), y1: Math.max(...cajas.map((c) => c.y1)) };
   }
+  const esDeTexto = (s) => !s.tipo || s.tipo === 'correccion' || s.tipo === 'nuevo';
+  const selloElegido = () => {
+    if (!elegido) return null;
+    const p = E.paginas.find((x) => x.uid === elegido.uid);
+    const s = p && p.sellos[elegido.indice];
+    return s && s.rol === 'texto' ? { pagina: p, sello: s } : null;
+  };
 
   function ponerCapaEdicion(hoja, pagina) {
     const previa = hoja.querySelector('.capa-editar');
     if (previa) previa.remove();
     if (!editando) return;
     const capa = document.createElement('div');
-    capa.className = 'capa-editar';
+    capa.className = 'capa-editar herr-' + herramienta;
     const poner = (c, clase, datos, titulo) => {
       const b = document.createElement('div');
       b.className = 'trozo ' + clase;
@@ -4938,17 +5054,20 @@
       capa.appendChild(b);
       return b;
     };
-    const puestos = [];
+    const tapados = [];
     pagina.sellos.forEach((s, i) => {
       if (s.rol !== 'texto') return;
-      const derecho = !giroDeMas(pagina, s);
-      const c = G.girarCaja(cajaDeSello(pagina, s), giroDeMas(pagina, s));
-      puestos.push(c);
-      poner(c, 'puesto' + (derecho ? '' : ' fijo'), derecho ? { sello: String(i) } : {},
-        derecho ? 'Texto que cambiaste: pulsa para volver a cambiarlo'
-          : 'Este texto se puso con la hoja girada de otra manera: gírala como estaba para cambiarlo');
+      const d = giroDeMas(pagina, s);
+      const c = G.girarCaja(cajaDeSello(pagina, s), d);
+      if (s.tapa) tapados.push(G.girarCaja(cajaDeTapa(s.tapa), d));
+      const b = poner(c, 'puesto' + (d ? ' fijo' : ''), d ? {} : { sello: String(i) },
+        d ? 'Se puso con la hoja girada de otra manera: gírala como estaba para cambiarlo'
+          : esDeTexto(s) ? 'Pulsa para cambiarlo · arrastra para moverlo' : 'Arrastra para moverlo · Supr lo quita');
+      if (elegido && elegido.uid === pagina.uid && elegido.indice === i) b.classList.add('elegido');
     });
     hoja.appendChild(capa);
+    conectarCapa(capa, hoja, pagina);
+    if (herramienta !== 'editar') return;
 
     const nota = document.createElement('span');
     nota.className = 'capa-editar-nota';
@@ -4961,35 +5080,145 @@
       r.trozos.forEach((t, i) => {
         // lo que ya se corrigió no se ofrece otra vez: debajo está el texto viejo
         const cx = (t.x0 + t.x1) / 2, cy = (t.y0 + t.y1) / 2;
-        if (puestos.some((c) => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1)) return;
-        poner(t, 'leido', { trozo: String(i) }, 'Pulsa para corregir este texto');
+        if (tapados.some((c) => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1)) return;
+        const b = poner(t, 'leido', { trozo: String(i) }, 'Pulsa para corregir este texto');
+        capa.insertBefore(b, capa.firstChild);   // debajo de lo ya puesto
       });
       if (r.girada) {
-        nota.textContent = 'Esta hoja está de lado o de cabeza: gírala para corregir su texto. Sí puedes escribir texto nuevo.';
+        nota.textContent = 'Esta hoja está de lado o de cabeza: gírala para corregir su texto. Sí puedes añadir texto.';
         nota.classList.add('fija');
       } else if (!r.trozos.length) {
-        nota.textContent = 'No se encontró texto en esta hoja. Pulsa donde quieras para escribir.';
+        nota.textContent = 'No se encontró texto en esta hoja. Usa «Añadir texto» para escribir.';
         nota.classList.add('fija');
       } else nota.remove();
     }).catch((e) => {
       console.error(e);
       if (!capa.isConnected) return;
-      nota.textContent = 'No se pudo leer el texto de esta hoja. Sí puedes escribir texto nuevo.';
+      nota.textContent = 'No se pudo leer el texto de esta hoja. Sí puedes añadir texto.';
       nota.classList.add('fija');
     }).then(() => { if (baja) baja(); });
+  }
 
+  function conectarCapa(capa, hoja, pagina) {
+    const punto = (ev) => {
+      const r = hoja.getBoundingClientRect();
+      return { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height };
+    };
+    capa.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0 || ev.target.closest('.editor-texto')) return;
+      const b = ev.target.closest('.trozo');
+      const p = punto(ev);
+      if (b && b.dataset.sello != null) {
+        // algo ya puesto: si se arrastra, se mueve; si solo se pulsa, se abre o se elige
+        ev.preventDefault();
+        if (edicion) cerrarEdicion(true);
+        arrastre = { tipo: 'mover', hoja, pagina, nodo: b, indice: Number(b.dataset.sello), p0: p, movido: false };
+      } else if (!b && (herramienta === 'borrador' || herramienta === 'resaltar')) {
+        ev.preventDefault();
+        if (edicion) cerrarEdicion(true);
+        const marco = document.createElement('div');
+        marco.className = 'editor-marco ' + herramienta;
+        capa.appendChild(marco);
+        arrastre = { tipo: 'marco', hoja, pagina, nodo: marco, p0: p, p1: p };
+      }
+    });
     capa.addEventListener('click', (ev) => {
       if (ev.target.closest('.editor-texto')) return;
+      if (capa._recienArrastrado) { capa._recienArrastrado = false; return; }
       // con una caja abierta, pulsar fuera la da por buena
       if (edicion) { cerrarEdicion(true); return; }
       const b = ev.target.closest('.trozo');
-      if (b && b.dataset.sello != null) abrirEdicion(hoja, pagina, { sello: Number(b.dataset.sello) });
-      else if (b && b.dataset.trozo != null) abrirEdicion(hoja, pagina, { trozo: capa._trozos[Number(b.dataset.trozo)] });
-      else if (!b) {
-        const caja = hoja.getBoundingClientRect();
-        abrirEdicion(hoja, pagina, { x: (ev.clientX - caja.left) / caja.width, y: (ev.clientY - caja.top) / caja.height });
-      }
+      if (b && b.dataset.sello != null) return;          // lo resolvió el mouseup
+      if (b && b.dataset.trozo != null) { abrirEdicion(hoja, pagina, { trozo: capa._trozos[Number(b.dataset.trozo)] }); return; }
+      if (b) return;
+      const p = punto(ev);
+      if (herramienta === 'texto') abrirEdicion(hoja, pagina, { x: p.x, y: p.y });
+      else if (herramienta === 'check' || herramienta === 'cruz') ponerMarca(pagina, p, herramienta);
+      else if (elegido) { elegido = null; pintarBarraEditor(); refrescarCapasEdicion(); }
     });
+  }
+
+  function conectarArrastreEditor() {
+    window.addEventListener('mousemove', (ev) => {
+      const a = arrastre;
+      if (!a) return;
+      const r = a.hoja.getBoundingClientRect();
+      const p = { x: Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)) };
+      if (a.tipo === 'marco') {
+        a.p1 = p;
+        a.nodo.style.left = Math.min(a.p0.x, p.x) * 100 + '%'; a.nodo.style.top = Math.min(a.p0.y, p.y) * 100 + '%';
+        a.nodo.style.width = Math.abs(p.x - a.p0.x) * 100 + '%'; a.nodo.style.height = Math.abs(p.y - a.p0.y) * 100 + '%';
+        return;
+      }
+      const dx = p.x - a.p0.x, dy = p.y - a.p0.y;
+      if (!a.movido && Math.hypot(dx * r.width, dy * r.height) < 4) return;
+      a.movido = true; a.dx = dx; a.dy = dy;
+      a.nodo.classList.add('moviendo');
+      a.nodo.style.transform = `translate(${dx * r.width}px, ${dy * r.height}px)`;
+    });
+    window.addEventListener('mouseup', () => {
+      const a = arrastre;
+      if (!a) return;
+      arrastre = null;
+      const capa = a.hoja.querySelector('.capa-editar');
+      if (a.tipo === 'marco') {
+        a.nodo.remove();
+        if (capa) capa._recienArrastrado = true;
+        const c = { x0: Math.min(a.p0.x, a.p1.x), x1: Math.max(a.p0.x, a.p1.x), y0: Math.min(a.p0.y, a.p1.y), y1: Math.max(a.p0.y, a.p1.y) };
+        if ((c.x1 - c.x0) * a.hoja.clientWidth < 5 || (c.y1 - c.y0) * a.hoja.clientHeight < 5) return;
+        const resalte = herramienta === 'resaltar';
+        marcar();
+        a.pagina.sellos.push({
+          rol: 'texto', tipo: resalte ? 'resalte' : 'borrador', texto: '', x: c.x0, y: c.y1, tam: 11,
+          tapa: resalte ? { x: c.x0, y: c.y0, w: c.x1 - c.x0, h: c.y1 - c.y0, color: '#ffe14a', opacidad: 0.45 }
+            : { x: c.x0, y: c.y0, w: c.x1 - c.x0, h: c.y1 - c.y0, color: papelAlrededor(a.hoja, c) },
+          giroAl: G.norm(a.pagina.giro),
+        });
+        elegido = { uid: a.pagina.uid, indice: a.pagina.sellos.length - 1 };
+        pintarSinSaltar();
+        return;
+      }
+      const s = a.pagina.sellos[a.indice];
+      if (!s) return;
+      // el clic que viene detrás de soltar no es otro gesto: que no cierre lo que se abra aquí
+      if (capa) capa._recienArrastrado = true;
+      if (!a.movido) {
+        // solo se pulsó: un texto se abre para cambiarlo; lo demás queda elegido
+        elegido = { uid: a.pagina.uid, indice: a.indice };
+        pintarBarraEditor();
+        if (esDeTexto(s)) abrirEdicion(a.hoja, a.pagina, { sello: a.indice });
+        else refrescarCapasEdicion();
+        return;
+      }
+      if (capa) capa._recienArrastrado = true;
+      marcar();
+      const n = JSON.parse(JSON.stringify(s));
+      // de una corrección se mueve lo escrito; el parche se queda tapando lo viejo
+      if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; }
+      if (n.tapa && n.tipo !== 'correccion' && n.tipo) { n.tapa.x += a.dx; n.tapa.y += a.dy; if (!String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; } }
+      a.pagina.sellos[a.indice] = n;
+      elegido = { uid: a.pagina.uid, indice: a.indice };
+      pintarSinSaltar();
+    });
+  }
+
+  /** El color del papel justo alrededor de un recuadro (para el borrador). */
+  function papelAlrededor(hoja, c) {
+    const m = 0.006;
+    return coloresEn(hoja, { x0: c.x0 - m, x1: c.x1 + m, y0: c.y0 - m, y1: c.y1 + m }, true).papel;
+  }
+
+  function ponerMarca(pagina, p, cual) {
+    const vis = visDe(pagina), tam = 16;
+    marcar();
+    pagina.sellos.push({
+      rol: 'texto', tipo: 'marca', texto: cual === 'check' ? '✔' : '✘',
+      x: p.x - (tam * 0.42) / vis.w, y: p.y + (tam * 0.36) / vis.h, tam,
+      color: ultimoEstilo.color || '#111111', familia: 'signos', negrita: false, cursiva: false,
+      tapa: null, giroAl: G.norm(pagina.giro),
+    });
+    elegido = { uid: pagina.uid, indice: pagina.sellos.length - 1 };
+    pintarSinSaltar();
   }
 
   function refrescarCapasEdicion() {
@@ -5000,6 +5229,106 @@
     });
   }
 
+  /* ---------- la barra del editor ---------- */
+
+  /** A qué se le aplica el formato: a la caja abierta, a lo elegido, o a lo próximo que se escriba. */
+  function destinoFormato() {
+    if (edicion) return { m: edicion.m, abierta: true };
+    const e = selloElegido();
+    if (e && String(e.sello.texto || '').trim()) return { m: e.sello, elegida: e };
+    return { m: ultimoEstilo };
+  }
+
+  function pintarBarraEditor() {
+    const barra = $('#barraEditor');
+    barra.hidden = !editando;
+    if (!editando) return;
+    $$('[data-herr]', barra).forEach((b) => {
+      b.classList.toggle('activo', b.dataset.herr === herramienta);
+      b.setAttribute('aria-pressed', String(b.dataset.herr === herramienta));
+    });
+    const { m } = destinoFormato();
+    const signo = m.familia === 'signos';
+    $('#edFamilia').value = signo ? 'sans' : (m.familia || 'sans');
+    $('#edFamilia').disabled = signo;
+    $('#edTam').textContent = String(m.tam || 11).replace('.', ',');
+    $('#edNegrita').classList.toggle('activo', !!m.negrita);
+    $('#edCursiva').classList.toggle('activo', !!m.cursiva);
+    $('#edNegrita').disabled = $('#edCursiva').disabled = signo;
+    $('#edColor').value = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '#111111';
+    const hay = !!edicion || !!selloElegido();
+    $('#edQuitar').disabled = !hay;
+    const ed = edicion && edicion.m;
+    $('#edQuitar').textContent = ed && ed.indice < 0 && ed.tapa ? 'Borrar texto'
+      : (ed && ed.indice >= 0 && ed.tipo === 'correccion') || (!ed && selloElegido() && selloElegido().sello.tipo === 'correccion') ? 'Dejar como estaba' : 'Quitar';
+    $('#edPista').textContent = edicion ? 'Escribe y pulsa Enter. Esc lo deja como estaba.'
+      : selloElegido() ? 'Arrástralo para moverlo. Supr lo quita.' : HERRAMIENTAS[herramienta];
+  }
+
+  function elegirHerramienta(cual) {
+    if (!HERRAMIENTAS[cual]) return;
+    if (edicion) cerrarEdicion(true);
+    herramienta = cual;
+    elegido = null;
+    pintarBarraEditor();
+    refrescarCapasEdicion();
+  }
+
+  function cambiarFormato(cambio) {
+    const d = destinoFormato();
+    if (d.abierta) {
+      cambio(d.m);
+      edicion.tocado = true;
+      acomodarEdicion();
+      edicion.campo.focus();
+    } else if (d.elegida) {
+      marcar();
+      const n = JSON.parse(JSON.stringify(d.m));
+      cambio(n);
+      d.elegida.pagina.sellos[elegido.indice] = n;
+      pintarSinSaltar();
+    } else cambio(ultimoEstilo);
+    pintarBarraEditor();
+  }
+
+  function quitarDelEditor() {
+    if (edicion) {
+      if (edicion.m.indice >= 0) { quitarTextoPuesto(); return; }
+      if (edicion.m.tapa) { edicion.campo.value = ''; cerrarEdicion(true); return; }   // borrar el texto de la hoja
+      cerrarEdicion(false);
+      return;
+    }
+    const e = selloElegido();
+    if (!e) return;
+    marcar();
+    e.pagina.sellos.splice(elegido.indice, 1);
+    elegido = null;
+    pintarSinSaltar();
+  }
+
+  function conectarBarraEditor() {
+    const barra = $('#barraEditor');
+    barra.addEventListener('mousedown', (ev) => { if (!/SELECT|INPUT/.test(ev.target.tagName)) ev.preventDefault(); });
+    $$('[data-herr]', barra).forEach((b) => b.addEventListener('click', () => elegirHerramienta(b.dataset.herr)));
+    $('#edMenos').addEventListener('click', () => cambiarFormato((m) => { m.tam = Math.max(4, (m.tam || 11) - 0.5); }));
+    $('#edMas').addEventListener('click', () => cambiarFormato((m) => { m.tam = Math.min(96, (m.tam || 11) + 0.5); }));
+    $('#edNegrita').addEventListener('click', () => cambiarFormato((m) => { m.negrita = !m.negrita; }));
+    $('#edCursiva').addEventListener('click', () => cambiarFormato((m) => { m.cursiva = !m.cursiva; }));
+    $('#edFamilia').addEventListener('change', (ev) => cambiarFormato((m) => { m.familia = ev.target.value; }));
+    $('#edColor').addEventListener('change', (ev) => cambiarFormato((m) => { m.color = ev.target.value; }));
+    $('#edColor').addEventListener('input', (ev) => { if (edicion) { edicion.m.color = ev.target.value; edicion.tocado = true; acomodarEdicion(); } });
+    $('#edQuitar').addEventListener('click', quitarDelEditor);
+    $('#edListo').addEventListener('click', () => alternarEdicion(false));
+    conectarArrastreEditor();
+    document.addEventListener('keydown', (ev) => {
+      if (!editando || edicion || /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
+      if ((ev.key === 'Delete' || ev.key === 'Backspace') && selloElegido()) {
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        quitarDelEditor();
+      }
+    }, true);
+  }
+
   function alternarEdicion(si) {
     const nuevo = si == null ? !editando : !!si;
     if (nuevo && !permitido('editarTexto')) return;
@@ -5007,14 +5336,16 @@
     if (!nuevo && edicion) cerrarEdicion(true);
     if (nuevo === editando) return;
     editando = nuevo;
+    elegido = null;
+    if (editando) herramienta = 'editar';
     document.body.classList.toggle('editando-texto', editando);
     $('#lectorEditarTexto').classList.toggle('activo', editando);
     $('#lectorEditarTexto').setAttribute('aria-pressed', String(editando));
+    pintarBarraEditor();
     refrescarCapasEdicion();
-    if (editando) G.aviso('Pulsa un texto para corregirlo, o un sitio vacío de la hoja para escribir.', '');
   }
 
-  /** Desde la barra, el menú o el menú de una hoja: se abre en grande y con la herramienta puesta. */
+  /** Desde la barra, el menú o el menú de una hoja: se abre en grande y con el editor puesto. */
   function editarTextoAqui(pagina) {
     if (!permitido('editarTexto')) return;
     if (!E.paginas.length) { G.aviso('Primero abre un PDF.', 'error'); return; }
@@ -5034,101 +5365,66 @@
       m = Object.assign({ indice: que.sello, original: s.texto || '' }, JSON.parse(JSON.stringify(s)));
     } else if (que.trozo) {
       const t = que.trozo;
-      const alto = (t.y1 - t.y0) * vis.h, ancho = (t.x1 - t.x0) * vis.w;
       const col = coloresEn(hoja, t);
-      const letra = t.origen === 'texto' ? await letraDe(pagina, t) : { familia: 'sans', negrita: false, cursiva: false, sabe: false };
+      let letra = t.origen === 'texto' ? await letraDe(pagina, t) : null;
       if (!editando || !hoja.isConnected) return;
-      let tam;
+      // la letra, medida en la hoja: de ahí salen el tamaño, el sitio y el parche
+      const tinta = tintaDe(hoja, t, col.papel) || t;
+      if (!letra) letra = letraParecida(t.texto, tinta);
+      const alto = (tinta.y1 - tinta.y0) * vis.h, ancho = (tinta.x1 - tinta.x0) * vis.w;
+      const { cola, alta } = alturasDe(t.texto);
+      let tam, y;
       if (t.origen === 'texto') {
-        // un PDF dice a qué tamaño escribió; si no dijo con qué letra, se mira cuál encaja en el ancho
-        tam = alto / 1.05;
-        if (!letra.sabe) {
-          const fina = Math.abs(anchoTexto(t.texto, letra) * tam - ancho);
-          const gruesa = Math.abs(anchoTexto(t.texto, Object.assign({}, letra, { negrita: true })) * tam - ancho);
-          letra.negrita = gruesa < fina * 0.6;
-        }
+        // un PDF dice a qué tamaño escribió y dónde apoya la letra
+        const altoCaja = (t.y1 - t.y0) * vis.h;
+        tam = altoCaja / 1.05;
+        y = t.y1 - (0.19 * altoCaja) / vis.h;
       } else {
-        // de un escaneo solo se sabe cuánto ocupa: el tamaño con el que el texto llena ese ancho
-        tam = ancho / (anchoTexto(t.texto, letra) || 1);
-        if (!(tam > alto * 0.6 && tam < alto * 1.5)) tam = alto * 0.9;
+        tam = alto / (alta + cola);
+        y = tinta.y1 - (cola * tam) / vis.h;
+      }
+      if (!letra.sabe) {
+        // no se sabe si es negrita: se mira con cuál de las dos el texto ocupa lo que ocupa
+        const fina = Math.abs(anchoTexto(t.texto, letra) * tam - ancho);
+        const gruesa = Math.abs(anchoTexto(t.texto, Object.assign({}, letra, { negrita: true })) * tam - ancho);
+        letra.negrita = gruesa < fina;
+      }
+      if (t.origen !== 'texto') {
+        // y que no salga más ancho que el original: en una tabla se montaría en la columna de al lado
+        const ocupa = anchoTexto(t.texto, letra) * tam;
+        if (ocupa > ancho * 1.04) tam *= (ancho * 1.04) / ocupa;
       }
       tam = Math.round(Math.min(Math.max(tam, 4), 96) * 2) / 2;
-      const cola = t.origen === 'texto' ? 0.19 * alto / tam : (/[gjpqyQ,;()]/.test(t.texto) ? 0.21 : 0.02);
-      const aire = tam * 0.12;
-      const tapa = crecerTapa(hoja, {
-        x0: t.x0 - aire / vis.w, x1: t.x1 + aire / vis.w, y0: t.y0 - aire / vis.h, y1: t.y1 + aire / vis.h,
-      }, col.papel, (tam * 0.4) / vis.h);
+      const ax = (tinta.px || 0.001) * 2, ay = (tinta.py || 0.001) * 2;
       m = {
-        indice: -1, original: t.texto, texto: t.texto,
-        x: t.x0, y: t.y1 - (cola * tam) / vis.h, tam, color: col.tinta,
+        indice: -1, tipo: 'correccion', original: t.texto, texto: t.texto,
+        x: tinta.x0, y, tam, color: col.tinta,
         familia: letra.familia, negrita: letra.negrita, cursiva: letra.cursiva,
-        tapa: { x: tapa.x0, y: tapa.y0, w: tapa.x1 - tapa.x0, h: tapa.y1 - tapa.y0, color: col.papel },
+        tapa: { x: tinta.x0 - ax, y: tinta.y0 - ay, w: (tinta.x1 - tinta.x0) + 2 * ax, h: (tinta.y1 - tinta.y0) + 2 * ay, color: col.papel },
       };
     } else {
-      m = Object.assign({ indice: -1, original: '', texto: '', x: que.x, y: que.y, tapa: null }, ultimoEstilo);
+      m = Object.assign({ indice: -1, tipo: 'nuevo', original: '', texto: '', x: que.x, y: que.y, tapa: null }, ultimoEstilo);
     }
     if (edicion) cerrarEdicion(true);
+    const capa = hoja.querySelector('.capa-editar');
+    if (!capa) return;
 
     const nodo = document.createElement('div');
     nodo.className = 'editor-texto';
-    nodo.innerHTML = `
-      <div class="editor-barra" role="toolbar" aria-label="Formato del texto">
-        <button type="button" data-hace="menos" title="Letra más chica" aria-label="Letra más chica">A−</button>
-        <span class="editor-tam" title="Tamaño de la letra"></span>
-        <button type="button" data-hace="mas" title="Letra más grande" aria-label="Letra más grande">A+</button>
-        <button type="button" data-hace="negrita" title="Negrita" aria-label="Negrita"><b>N</b></button>
-        <button type="button" data-hace="cursiva" title="Cursiva" aria-label="Cursiva"><i>K</i></button>
-        <select data-hace="familia" title="Tipo de letra" aria-label="Tipo de letra">
-          <option value="sans">Arial</option><option value="serif">Times</option><option value="mono">Courier</option>
-        </select>
-        <input type="color" data-hace="color" title="Color de la letra" aria-label="Color de la letra">
-        <button type="button" data-hace="borrar" class="editor-borrar"></button>
-        <button type="button" data-hace="listo" class="editor-listo" title="Dejarlo así (Enter)">Listo</button>
-      </div>
-      <input type="text" class="editor-campo" spellcheck="false" autocomplete="off" aria-label="Texto">`;
+    nodo.innerHTML = '<input type="text" class="editor-campo" spellcheck="false" autocomplete="off" aria-label="Texto">';
     const campo = nodo.querySelector('.editor-campo');
     campo.value = m.texto || '';
-    nodo.querySelector('[data-hace="familia"]').value = m.familia || 'sans';
-    nodo.querySelector('[data-hace="color"]').value = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '#111111';
-    const borrar = nodo.querySelector('[data-hace="borrar"]');
-    // «Borrar» quita el texto de la hoja; en uno que ya se cambió, deshace el cambio
-    borrar.textContent = m.indice >= 0 ? (m.tapa ? 'Dejar como estaba' : 'Quitar') : 'Borrar';
-    borrar.title = m.indice >= 0
-      ? (m.tapa ? 'Quita tu cambio: vuelve a verse el texto que traía la hoja' : 'Quita este texto')
-      : 'Borra este texto de la hoja';
-    borrar.hidden = m.indice < 0 && !m.tapa;
-    hoja.querySelector('.capa-editar').appendChild(nodo);
+    capa.appendChild(nodo);
     edicion = { hoja, pagina, m, nodo, campo };
     acomodarEdicion();
-
-    nodo.addEventListener('mousedown', (ev) => { if (ev.target !== campo && !/SELECT|INPUT/.test(ev.target.tagName)) ev.preventDefault(); });
-    nodo.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const b = ev.target.closest('button[data-hace]');
-      if (!b) return;
-      const hace = b.dataset.hace;
-      if (hace === 'menos') m.tam = Math.max(4, m.tam - 0.5);
-      else if (hace === 'mas') m.tam = Math.min(96, m.tam + 0.5);
-      else if (hace === 'negrita') m.negrita = !m.negrita;
-      else if (hace === 'cursiva') m.cursiva = !m.cursiva;
-      else if (hace === 'listo') { cerrarEdicion(true); return; }
-      else if (hace === 'borrar') {
-        if (m.indice >= 0) { quitarTextoPuesto(); return; }
-        campo.value = '';
-        cerrarEdicion(true);
-        return;
-      }
-      edicion.tocado = true;
-      acomodarEdicion();
-      campo.focus();
-    });
-    nodo.querySelector('[data-hace="familia"]').addEventListener('change', (ev) => { m.familia = ev.target.value; edicion.tocado = true; acomodarEdicion(); campo.focus(); });
-    nodo.querySelector('[data-hace="color"]').addEventListener('input', (ev) => { m.color = ev.target.value; edicion.tocado = true; acomodarEdicion(); });
+    pintarBarraEditor();
     campo.addEventListener('input', acomodarEdicion);
     campo.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); cerrarEdicion(true); }
       else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cerrarEdicion(false); }
     });
+    nodo.addEventListener('mousedown', (ev) => ev.stopPropagation());
+    nodo.addEventListener('click', (ev) => ev.stopPropagation());
     campo.focus();
     if (m.indice >= 0 || que.trozo) campo.select();
   }
@@ -5138,7 +5434,7 @@
     if (!edicion) return;
     const { hoja, pagina, m, nodo, campo } = edicion;
     const vis = visDe(pagina), k = hoja.clientWidth / vis.w;
-    const px = m.tam * k;
+    const px = (m.tam || 11) * k;
     nodo.style.left = m.x * 100 + '%';
     // el pie de la letra cae, dentro del campo, a un tamaño de letra de su borde de arriba
     nodo.style.top = ((m.y * vis.h - m.tam) / vis.h) * 100 + '%';
@@ -5151,13 +5447,8 @@
     campo.style.background = (m.tapa && m.tapa.color) || '#ffffff';
     const escrito = anchoTexto(campo.value || ' ', m) * px;
     const minimo = m.tapa ? m.tapa.w * hoja.clientWidth : px * 6;
-    campo.style.width = Math.ceil(Math.max(escrito + px * 0.8, minimo)) + 'px';
-    nodo.querySelector('.editor-tam').textContent = String(m.tam).replace('.', ',');
-    nodo.querySelector('[data-hace="negrita"]').classList.toggle('activo', !!m.negrita);
-    nodo.querySelector('[data-hace="cursiva"]').classList.toggle('activo', !!m.cursiva);
-    // arriba no cabe la barra en los primeros renglones de la hoja: ahí va debajo
-    nodo.classList.toggle('abajo', m.y * hoja.clientHeight < 70);
-    nodo.classList.toggle('a-la-derecha', m.x > 0.6);
+    campo.style.width = Math.ceil(Math.max(escrito + px * 0.6, minimo)) + 'px';
+    pintarBarraEditor();
   }
 
   /** Repinta sin que la hoja que se está corrigiendo salte de sitio. */
@@ -5166,6 +5457,9 @@
     const arriba = cont.scrollTop, lado = cont.scrollLeft;
     pintar();
     cont.scrollTop = arriba; cont.scrollLeft = lado;
+    pintarBarraEditor();
+    // si nada cambió en las hojas (solo la selección), las capas no se rehicieron solas
+    refrescarCapasEdicion();
   }
 
   function cerrarEdicion(guardar) {
@@ -5173,6 +5467,7 @@
     if (!ed) return;
     edicion = null;
     ed.nodo.remove();
+    pintarBarraEditor();
     if (!guardar) return;
     const { pagina, m } = ed;
     if (!E.paginas.includes(pagina)) return;
@@ -5180,21 +5475,23 @@
     const sinSigno = Array.from(escrito).filter((c) => !G.seEscribe(c));
     const texto = Array.from(escrito).filter((c) => G.seEscribe(c)).join('').replace(/\s+/g, ' ').trim();
     const sello = {
-      rol: 'texto', texto, x: m.x, y: m.y, tam: m.tam, color: m.color || '#111111',
+      rol: 'texto', tipo: m.tipo || (m.tapa ? 'correccion' : 'nuevo'), texto, x: m.x, y: m.y, tam: m.tam, color: m.color || '#111111',
       familia: m.familia || 'sans', negrita: !!m.negrita, cursiva: !!m.cursiva,
       tapa: m.tapa || null, giroAl: G.norm(pagina.giro),
     };
     if (m.indice >= 0) {
       const previo = pagina.sellos[m.indice];
-      if (!previo || JSON.stringify(Object.assign({}, previo, { giroAl: sello.giroAl })) === JSON.stringify(sello)) return;
+      if (!previo) return;
+      if (texto === (previo.texto || '') && !ed.tocado) return;
       marcar();
-      if (!texto && !sello.tapa) pagina.sellos.splice(m.indice, 1);
+      if (!texto && !sello.tapa) { pagina.sellos.splice(m.indice, 1); elegido = null; }
       else pagina.sellos[m.indice] = sello;
     } else {
       // sin tocar nada no se pone nada: ni un parche sobre el texto que ya estaba bien
-      if (m.tapa ? (texto === m.original && !estiloCambiado(ed)) : !texto) return;
+      if (m.tapa ? (texto === m.original && !ed.tocado) : !texto) return;
       marcar();
       pagina.sellos.push(sello);
+      elegido = { uid: pagina.uid, indice: pagina.sellos.length - 1 };
     }
     // el texto nuevo que se escriba después sale como el último que se escribió, no como un título corregido
     if (texto && !sello.tapa) ultimoEstilo = { tam: sello.tam, color: sello.color, familia: sello.familia, negrita: sello.negrita, cursiva: sello.cursiva };
@@ -5202,11 +5499,6 @@
     if (sinSigno.length) {
       G.aviso(`No se pudo escribir «${Array.from(new Set(sinSigno)).join(' ')}»: ese signo no está en las letras del PDF. Lo demás quedó puesto.`, 'error');
     }
-  }
-
-  /** ¿Se le cambió la letra, el tamaño o el color a un trozo, aunque diga lo mismo? */
-  function estiloCambiado(ed) {
-    return !!ed.tocado;
   }
 
   function quitarTextoPuesto() {
@@ -5217,6 +5509,7 @@
     if (!E.paginas.includes(ed.pagina) || !ed.pagina.sellos[ed.m.indice]) return;
     marcar();
     ed.pagina.sellos.splice(ed.m.indice, 1);
+    elegido = null;
     pintarSinSaltar();
     G.aviso(ed.m.tapa ? 'Quitado tu cambio: se ve el texto que traía la hoja.' : 'Texto quitado.', 'ok');
   }
@@ -7342,6 +7635,7 @@
       if (p) imprimirHojas([p], 'la hoja ' + (E.paginas.indexOf(p) + 1));
     });
     $('#lectorEditarTexto').addEventListener('click', () => alternarEdicion());
+    conectarBarraEditor();
     $('#lectorCapturar').addEventListener('click', () => alternarCaptura(null, 'imagen'));
     $('#lectorCopiarTexto').addEventListener('click', () => alternarCaptura(null, 'texto'));
     conectarCaptura();

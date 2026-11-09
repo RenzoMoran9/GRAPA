@@ -6,7 +6,7 @@
 <title>Pdflash · Taller de PDF</title>
 <meta name="description" content="Pdflash: une, divide, reordena, folia y firma tus PDF sin salir de tu computadora. Todo se procesa en tu navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e0532f'/%3E%3Cpath d='M8 20V13a4 4 0 0 1 8 0v9a3 3 0 0 0 6 0v-6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=20261110">
+<link rel="stylesheet" href="assets/styles.css?v=20261111">
 </head>
 <body>
 
@@ -526,16 +526,16 @@
             <button class="btn btn-mini" id="lectorBuscarSiguiente" title="Coincidencia siguiente" aria-label="Coincidencia siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
           </span>
           <span class="separador-vertical"></span>
-          <button class="btn btn-mini" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
-          <button class="btn btn-mini" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
-          <button class="btn btn-mini" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
-          <button class="btn btn-mini" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
-          <button class="btn btn-mini" id="lectorCopiarTexto" title="Marca con el cursor un trozo de la hoja y se copia su texto (también si es un escaneo). T"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copiar-texto"/></svg> Copiar texto</button>
-          <button class="btn btn-mini" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
-          <button class="btn btn-mini" id="lectorImprimir" title="Imprimir esta hoja" aria-label="Imprimir esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg></button>
-          <button class="btn btn-mini" id="lectorEditarTexto" aria-pressed="false" title="Corrige el texto de la hoja o escribe encima, aquí mismo: pulsa un texto para cambiarlo o un sitio vacío para escribir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-editar"/></svg> Editar texto</button>
-          <button class="btn btn-mini" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
-          <button class="btn btn-mini btn-peligro-suave" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
+          <button class="btn btn-mini al-leer" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
+          <button class="btn btn-mini al-leer" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
+          <button class="btn btn-mini al-leer" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
+          <button class="btn btn-mini al-leer" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
+          <button class="btn btn-mini al-leer" id="lectorCopiarTexto" title="Marca con el cursor un trozo de la hoja y se copia su texto (también si es un escaneo). T"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copiar-texto"/></svg> Copiar texto</button>
+          <button class="btn btn-mini al-leer" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
+          <button class="btn btn-mini al-leer" id="lectorImprimir" title="Imprimir esta hoja" aria-label="Imprimir esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg></button>
+          <button class="btn btn-mini" id="lectorEditarTexto" aria-pressed="false" title="Abre el editor: corregir texto, escribir, borrar, resaltar y poner vistos, sobre la misma hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-editar"/></svg> Editar</button>
+          <button class="btn btn-mini al-leer" id="lectorFirmar" title="Colocar firma en esta hoja" aria-label="Colocar firma"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></button>
+          <button class="btn btn-mini btn-peligro-suave al-leer" id="lectorEliminar" title="Eliminar esta hoja" aria-label="Eliminar esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-borrar"/></svg></button>
           <span class="separador-vertical"></span>
           <label class="zoom">Columnas
             <select id="lectorColumnas">
@@ -549,6 +549,33 @@
           <button class="btn btn-secundario" id="lectorCerrar" title="Cerrar (Esc)">Cerrar</button>
         </div>
       </header>
+      <!-- El editor: sus herramientas arriba, como en cualquier editor de PDF. -->
+      <div class="barra-editor" id="barraEditor" role="toolbar" aria-label="Editor" hidden>
+        <div class="ed-grupo">
+          <button type="button" class="ed-herr" data-herr="editar" title="Corregir un texto que ya está en la hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-editar"/></svg><span>Editar texto</span></button>
+          <button type="button" class="ed-herr" data-herr="texto" title="Escribir texto nuevo en cualquier sitio"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg><span>Añadir texto</span></button>
+          <button type="button" class="ed-herr" data-herr="borrador" title="Tapar algo con el color del papel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l9.6-9.6a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg><span>Borrador</span></button>
+          <button type="button" class="ed-herr" data-herr="resaltar" title="Resaltar en amarillo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg><span>Resaltar</span></button>
+          <button type="button" class="ed-herr" data-herr="check" title="Poner un visto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg><span>Visto</span></button>
+          <button type="button" class="ed-herr" data-herr="cruz" title="Poner una equis"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg><span>Equis</span></button>
+        </div>
+        <div class="ed-grupo ed-formato">
+          <select id="edFamilia" title="Tipo de letra" aria-label="Tipo de letra">
+            <option value="sans">Arial</option><option value="serif">Times</option><option value="mono">Courier</option>
+          </select>
+          <button type="button" id="edMenos" title="Letra más chica" aria-label="Letra más chica">A−</button>
+          <span class="ed-tam" id="edTam" title="Tamaño de la letra">11</span>
+          <button type="button" id="edMas" title="Letra más grande" aria-label="Letra más grande">A+</button>
+          <button type="button" id="edNegrita" title="Negrita" aria-label="Negrita"><b>N</b></button>
+          <button type="button" id="edCursiva" title="Cursiva" aria-label="Cursiva"><i>K</i></button>
+          <input type="color" id="edColor" title="Color" aria-label="Color" value="#111111">
+        </div>
+        <div class="ed-grupo ed-fin">
+          <span class="ed-pista" id="edPista" aria-live="polite"></span>
+          <button type="button" id="edQuitar" class="ed-quitar" disabled>Quitar</button>
+          <button type="button" id="edListo" class="ed-listo" title="Salir del editor (Esc). Lo hecho queda en la hoja.">Listo</button>
+        </div>
+      </div>
       <div class="lector-hojas" id="lectorHojas"></div>
       <div class="texto-copiado" id="textoCopiado" hidden role="status">
         <div class="texto-copiado-cab">
@@ -850,17 +877,17 @@
 <script src="lib/xlsx.core.min.js"></script>
 <script src="lib/exceljs.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
-<script src="assets/config.js?v=20261110"></script>
-<script src="assets/cuentas.js?v=20261110"></script>
-<script src="assets/core.js?v=20261110"></script>
-<script src="assets/buscar.js?v=20261110"></script>
-<script src="assets/revisar.js?v=20261110"></script>
-<script src="assets/ocr.js?v=20261110"></script>
-<script src="assets/ofertas.js?v=20261110"></script>
-<script src="assets/office.js?v=20261110"></script>
-<script src="assets/expedientes.js?v=20261110"></script>
-<script src="assets/firmas.js?v=20261110"></script>
-<script src="assets/app.js?v=20261110"></script>
-<script src="assets/guia.js?v=20261110"></script>
+<script src="assets/config.js?v=20261111"></script>
+<script src="assets/cuentas.js?v=20261111"></script>
+<script src="assets/core.js?v=20261111"></script>
+<script src="assets/buscar.js?v=20261111"></script>
+<script src="assets/revisar.js?v=20261111"></script>
+<script src="assets/ocr.js?v=20261111"></script>
+<script src="assets/ofertas.js?v=20261111"></script>
+<script src="assets/office.js?v=20261111"></script>
+<script src="assets/expedientes.js?v=20261111"></script>
+<script src="assets/firmas.js?v=20261111"></script>
+<script src="assets/app.js?v=20261111"></script>
+<script src="assets/guia.js?v=20261111"></script>
 </body>
 </html>
