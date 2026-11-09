@@ -1081,6 +1081,21 @@
     setTimeout(fin, 60);
   });
 
+  /* Las letras con las que se escribe el texto corregido o añadido: las catorce
+     que todo lector de PDF trae, así no hay que meter ninguna en el archivo.
+     Orden: normal, negrita, cursiva, negrita cursiva. */
+  G.FUENTES_TEXTO = {
+    sans: ['Helvetica', 'HelveticaBold', 'HelveticaOblique', 'HelveticaBoldOblique'],
+    serif: ['TimesRoman', 'TimesRomanBold', 'TimesRomanItalic', 'TimesRomanBoldItalic'],
+    mono: ['Courier', 'CourierBold', 'CourierOblique', 'CourierBoldOblique'],
+  };
+  /** Los signos que esas letras saben escribir (los del español y de Europa occidental). */
+  const SIGNOS_DE_MAS = new Set(Array.from('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ').map((c) => c.codePointAt(0)));
+  G.seEscribe = (c) => {
+    const n = c.codePointAt(0);
+    return (n >= 32 && n <= 126) || (n >= 160 && n <= 255) || SIGNOS_DE_MAS.has(n);
+  };
+
   /* ---------- texto invisible sobre una hoja escaneada ----------
      Lo que leyó el lector de escaneos se escribe encima de la foto, palabra
      por palabra y en su sitio, pero sin tinta (modo «invisible» del PDF): la
@@ -1238,6 +1253,13 @@
       if (!fuenteTexto) fuenteTexto = await salida.embedFont(StandardFonts.Helvetica);
       return fuenteTexto;
     };
+    // el texto que se corrige o se añade en «Editar texto»: la letra más parecida de las del PDF
+    const fuentesEdicion = new Map();
+    const pedirFuenteEdicion = async (sello) => {
+      const nombre = (G.FUENTES_TEXTO[sello.familia] || G.FUENTES_TEXTO.sans)[(sello.negrita ? 1 : 0) + (sello.cursiva ? 2 : 0)];
+      if (!fuentesEdicion.has(nombre)) fuentesEdicion.set(nombre, await salida.embedFont(StandardFonts[nombre]));
+      return fuentesEdicion.get(nombre);
+    };
     const pedirFirma = async (firmaId) => {
       if (imgsFirma.has(firmaId)) return imgsFirma.get(firmaId);
       const firma = G.estado.firmas.find((f) => f.id === firmaId);
@@ -1301,6 +1323,37 @@
             rotate: degrees(R + (sello.giro || 0)),
             opacity: sello.opacidad == null ? 1 : sello.opacidad,
           });
+        } else if (sello.rol === 'texto') {
+          // Texto corregido o añadido. Va pegado a lo que trae la hoja, no a cómo
+          // se mire: se guardó con el giro que tenía la hoja entonces (giroAl),
+          // y con ese se pone, aunque después se haya girado.
+          const R0 = G.norm(sello.giroAl == null ? R : sello.giroAl);
+          const v0 = G.cajaVisible(W, H, R0);
+          const en0 = (fx, fy) => {
+            const p = G.aPuntoPdf(fx * v0.w, fy * v0.h, W, H, R0);
+            return { x: p.x + OX, y: p.y + OY };
+          };
+          const t = sello.tapa;
+          if (t) {
+            // el parche del color del papel que tapa lo que había escrito
+            const a = en0(t.x, t.y), b = en0(t.x + t.w, t.y + t.h);
+            pag.drawRectangle({
+              x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
+              width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y),
+              color: G.aColorPdf(t.color || '#ffffff'), borderWidth: 0,
+            });
+          }
+          const fnt = await pedirFuenteEdicion(sello);
+          const letras = new Set(fnt.getCharacterSet());
+          const texto = Array.from(String(sello.texto || '').replace(/\s+/g, ' '))
+            .filter((c) => letras.has(c.codePointAt(0))).join('');
+          if (texto.trim()) {
+            const p = en0(sello.x, sello.y);
+            pag.drawText(texto, {
+              x: p.x, y: p.y, size: sello.tam || 11, font: fnt,
+              color: G.aColorPdf(sello.color || '#111111'), rotate: degrees(R0),
+            });
+          }
         } else if (sello.rol === 'folio' || sello.rol === 'marca') {
           const esFolio = sello.rol === 'folio';
           // El número de folio lo decide el taller (respeta el sentido elegido y

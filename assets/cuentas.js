@@ -36,7 +36,7 @@
     { id: 'dividir', grupo: 'Salida', nombre: 'Separar en otro PDF', desc: 'Sacar hojas o partir el expediente en varios PDF.', secciones: ['dividir'], botones: ['#btnDividirHacer'] },
     { id: 'exportar', grupo: 'Salida', nombre: 'Exportar PDF', desc: 'Armar y descargar el PDF terminado (Ctrl+S).', botones: ['#btnGuardar', '#btnDescargarSel'] },
     { id: 'imprimir', grupo: 'Salida', nombre: 'Imprimir', desc: 'Imprimir hojas, paquetes o la selección (Ctrl+P).', botones: ['#btnImprimir', '#btnImprimirSel'] },
-    { id: 'editarTexto', grupo: 'Salida', nombre: 'Editar texto', desc: 'Pasar las hojas al editor de texto.', botones: ['#btnEditarTexto'] },
+    { id: 'editarTexto', grupo: 'Salida', nombre: 'Editar texto', desc: 'Corregir el texto de una hoja o escribir encima.', botones: ['#btnEditarTexto', '#menuEditorAvanzado', '#lectorEditarTexto'] },
     { id: 'subirWeb', grupo: 'Salida', nombre: 'Subir a otra web', desc: 'Descargar el PDF y abrir un editor externo en internet.', botones: ['#btnEditorExterno'] },
   ];
   const FUNCION_DE_SECCION = {};

@@ -445,6 +445,61 @@ const PRUEBAS = {
     afirmar(await page.evaluate(() => window.Grapa.estado.paginas.length) === 4, 'deshacer deja las 4 hojas');
   },
 
+  async 'editar texto: se corrige y se escribe dentro de la hoja, sin otra pestaña, y sale en el PDF'({ page }) {
+    await abrir(page, ['Contrato', 2]);
+    const ventanas = page.context().pages().length;
+    await page.keyboard.press('v');
+    await page.click('#lectorEditarTexto');
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.leido');
+    const cual = (re) => page.evaluate((re) => document.querySelector('.hoja[data-indice="0"] .capa-editar')
+      ._trozos.findIndex((t) => new RegExp(re).test(t.texto)), re);
+    // corregir un renglón
+    await page.click(`.hoja[data-indice="0"] .trozo[data-trozo="${await cual('expediente 3$')}"]`);
+    await page.waitForSelector('.editor-campo');
+    afirmar(await page.inputValue('.editor-campo') === 'Texto de prueba del expediente 3', 'la caja trae lo que dice el renglón', await page.inputValue('.editor-campo'));
+    await page.fill('.editor-campo', 'Renglón corregido: S/ 1,250.00 ñandú');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 1);
+    // abrir uno y no tocarlo no deja nada
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.leido');
+    await page.click(`.hoja[data-indice="0"] .trozo[data-trozo="${await cual('expediente 5$')}"]`);
+    await page.waitForSelector('.editor-campo');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+    // escribir en un sitio vacío
+    const caja = await (await page.$('.hoja[data-indice="0"]')).boundingBox();
+    await page.mouse.click(caja.x + caja.width * 0.7, caja.y + 130);
+    await page.waitForSelector('.editor-campo');
+    await page.keyboard.type('Visto 😀 bueno');
+    await page.click('.editor-listo');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 2);
+    afirmar(page.context().pages().length === ventanas, 'no abrió otra pestaña');
+    const s = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos);
+    afirmar(s[0].tapa && Math.abs(s[0].tam - 11) <= 0.5 && !s[0].negrita, 'la corrección tapa lo viejo y sale a su tamaño', s[0]);
+    afirmar(!s[1].tapa && s[1].texto === 'Visto bueno', 'el texto nuevo no tapa nada, y el signo que no se puede escribir se quita', s[1]);
+    // lo cambiado se puede volver a pulsar
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.puesto');
+    afirmar(await page.$$eval('.hoja[data-indice="0"] .trozo.puesto', (t) => t.length) === 2, 'los dos cambios quedan a mano');
+    // y sale en el PDF, en su sitio
+    const pdf = await page.evaluate(async () => {
+      const G = window.Grapa;
+      const bytes = await G.construirPdf([G.estado.paginas[0]], {});
+      const doc = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+      const tc = await (await doc.getPage(1)).getTextContent();
+      const de = (re) => tc.items.find((i) => re.test(i.str));
+      return { nuevo: de(/corregido/) && de(/corregido/).transform.slice(4), viejo: de(/expediente 3$/) && de(/expediente 3$/).transform.slice(4),
+               texto: (de(/corregido/) || {}).str, visto: !!de(/Visto bueno/) };
+    });
+    afirmar(pdf.texto === 'Renglón corregido: S/ 1,250.00 ñandú' && pdf.visto, 'el PDF lleva los dos textos, con tildes y eñes', pdf);
+    afirmar(pdf.viejo && Math.abs(pdf.nuevo[0] - pdf.viejo[0]) < 1 && Math.abs(pdf.nuevo[1] - pdf.viejo[1]) < 1.5, 'el renglón nuevo cae sobre el viejo', pdf);
+    // Esc apaga la herramienta sin cerrar las hojas en grande, y deshacer quita los cambios
+    await page.keyboard.press('Escape');
+    afirmar(await page.evaluate(() => !document.querySelector('#lector').hidden && !document.querySelector('.capa-editar')), 'Esc apaga la herramienta y deja las hojas en grande');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer quita los cambios');
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {
