@@ -4710,7 +4710,11 @@
         if (s.cursiva) t.setAttribute('font-style', 'italic');
         t.setAttribute('fill', s.color || '#111111');
         t.setAttribute('xml:space', 'preserve');
-        if (d) t.setAttribute('transform', `rotate(${d} ${p.x * vis.w} ${p.y * vis.h})`);
+        const e = s.estira || 1;
+        if (d || e !== 1) {
+          t.setAttribute('x', 0); t.setAttribute('y', 0);
+          t.setAttribute('transform', `translate(${p.x * vis.w} ${p.y * vis.h}) rotate(${d}) scale(${e} 1)`);
+        }
         t.textContent = s.texto;
         svg.appendChild(t);
       }
@@ -4737,6 +4741,7 @@
     ctx.textBaseline = 'alphabetic';
     ctx.translate(p.x * W, p.y * H);
     if (d) ctx.rotate((d * Math.PI) / 180);
+    if (s.estira) ctx.scale(s.estira, 1);
     ctx.fillText(s.texto, 0, 0);
   }
 
@@ -4758,6 +4763,32 @@
    * grande (las columnas de una tabla van cada una por su lado, para que
    * corregir un precio no arrastre la descripción de al lado).
    */
+  function armarTrozo(grupo, lec, vis) {
+    const th = ((lec.torcida || 0) * Math.PI) / 180;
+    let texto = '';
+    grupo.forEach((w, i) => {
+      if (i) {
+        const hueco = (w.x0 - grupo[i - 1].x1) * vis.w, alto = (w.y1 - w.y0) * vis.h;
+        // un PDF parte «48,000.00» en trozos que se tocan: esos van pegados
+        texto += lec.origen === 'texto' && hueco < alto * 0.12 ? '' : ' ';
+      }
+      texto += w.t;
+    });
+    const t = {
+      texto, origen: lec.origen, palabras: grupo, lec,
+      x0: Math.min(...grupo.map((w) => w.x0)), x1: Math.max(...grupo.map((w) => w.x1)),
+      y0: Math.min(...grupo.map((w) => w.y0)), y1: Math.max(...grupo.map((w) => w.y1)),
+    };
+    if (th) {
+      // se leyó enderezada: el trozo vuelve a donde está en la hoja torcida
+      const co = Math.cos(th), si = Math.sin(th);
+      const cx = ((t.x0 + t.x1) / 2 - 0.5) * vis.w, cy = ((t.y0 + t.y1) / 2 - 0.5) * vis.h;
+      const mx = (cx * co + cy * si - cx) / vis.w, my = (-cx * si + cy * co - cy) / vis.h;
+      t.x0 += mx; t.x1 += mx; t.y0 += my; t.y1 += my;
+    }
+    return texto.trim() && t.x1 > t.x0 && t.y1 > t.y0 ? t : null;
+  }
+
   function trozosDe(pagina) {
     const k = claveTrozos(pagina);
     if (trozosLeidos.has(k)) return trozosLeidos.get(k);
@@ -4766,34 +4797,13 @@
       // una hoja que hubo que girar para poder leerla: sus letras están de cabeza o de lado
       if (lec.girada) return { trozos: [], girada: true, origen: lec.origen };
       const vis = visDe(pagina);
-      const th = ((lec.torcida || 0) * Math.PI) / 180, co = Math.cos(th), si = Math.sin(th);
       const trozos = [];
       (lec.lineas || []).forEach((l) => {
         const ws = (l.palabras || []).slice().sort((a, b) => a.x0 - b.x0);
         let grupo = [];
         const cerrar = () => {
-          if (!grupo.length) return;
-          let texto = '';
-          grupo.forEach((w, i) => {
-            if (i) {
-              const hueco = (w.x0 - grupo[i - 1].x1) * vis.w, alto = (w.y1 - w.y0) * vis.h;
-              // un PDF parte «48,000.00» en trozos que se tocan: esos van pegados
-              texto += lec.origen === 'texto' && hueco < alto * 0.12 ? '' : ' ';
-            }
-            texto += w.t;
-          });
-          const t = {
-            texto, origen: lec.origen,
-            x0: Math.min(...grupo.map((w) => w.x0)), x1: Math.max(...grupo.map((w) => w.x1)),
-            y0: Math.min(...grupo.map((w) => w.y0)), y1: Math.max(...grupo.map((w) => w.y1)),
-          };
-          if (th) {
-            // se leyó enderezada: el trozo vuelve a donde está en la hoja torcida
-            const cx = ((t.x0 + t.x1) / 2 - 0.5) * vis.w, cy = ((t.y0 + t.y1) / 2 - 0.5) * vis.h;
-            const mx = (cx * co + cy * si - cx) / vis.w, my = (-cx * si + cy * co - cy) / vis.h;
-            t.x0 += mx; t.x1 += mx; t.y0 += my; t.y1 += my;
-          }
-          if (texto.trim() && t.x1 > t.x0 && t.y1 > t.y0) trozos.push(t);
+          const t = grupo.length ? armarTrozo(grupo, lec, vis) : null;
+          if (t) trozos.push(t);
           grupo = [];
         };
         ws.forEach((w) => {
@@ -4808,6 +4818,55 @@
     trozosLeidos.set(k, p);
     p.catch(() => trozosLeidos.delete(k));
     return p;
+  }
+
+  /**
+   * En una tabla, dos celdas vecinas pueden quedar tan juntas que parecen un
+   * solo renglón («13,500.00 27,000.00»): son dos datos, y entre ellos pasa
+   * la raya de la tabla. Mirando la hoja dibujada, donde entre dos palabras
+   * hay una raya de arriba abajo, el trozo se parte ahí.
+   */
+  function partirPorRayas(hoja, pagina, trozos) {
+    const lienzo = hoja.querySelector('canvas');
+    if (!lienzo || !trozos.some((t) => t.palabras && t.palabras.length > 1)) return trozos;
+    let ctx;
+    try { ctx = lienzo.getContext('2d'); } catch (e) { return trozos; }
+    const W = lienzo.width, H = lienzo.height, vis = visDe(pagina);
+    const hayRaya = (xa, xb, y0, y1) => {
+      const alto = (y1 - y0) * H;
+      const x = Math.max(0, Math.floor(xa * W) - 2), an = Math.min(W - x, Math.max(1, Math.ceil((xb - xa) * W) + 4));
+      const y = Math.max(0, Math.floor(y0 * H - alto * 0.6)), al = Math.min(H - y, Math.ceil(alto * 2.2));
+      if (an < 1 || al < 4) return false;
+      let d;
+      try { d = ctx.getImageData(x, y, an, al).data; } catch (e) { return false; }
+      // el papel, por las esquinas del trocito; raya = una columna con tinta casi de arriba abajo
+      const pr = d[0], pg = d[1], pb = d[2];
+      for (let c = 0; c < an; c++) {
+        let run = 0, mayor = 0;
+        for (let f = 0; f < al; f++) {
+          const i = (f * an + c) * 4;
+          run = Math.abs(d[i] - pr) + Math.abs(d[i + 1] - pg) + Math.abs(d[i + 2] - pb) > 110 ? run + 1 : 0;
+          if (run > mayor) mayor = run;
+        }
+        if (mayor >= al * 0.9) return true;
+      }
+      return false;
+    };
+    const salida = [];
+    trozos.forEach((t) => {
+      if (!t.palabras || t.palabras.length < 2) { salida.push(t); return; }
+      const mov = { x: t.x0 - Math.min(...t.palabras.map((w) => w.x0)), y: t.y0 - Math.min(...t.palabras.map((w) => w.y0)) };
+      let grupo = [t.palabras[0]], partes = [];
+      for (let i = 1; i < t.palabras.length; i++) {
+        const a = t.palabras[i - 1], b = t.palabras[i];
+        if (b.x0 > a.x1 - 0.002 && hayRaya(a.x1 + mov.x, Math.max(b.x0, a.x1) + mov.x, t.y0, t.y1)) { partes.push(grupo); grupo = []; }
+        grupo.push(b);
+      }
+      partes.push(grupo);
+      if (partes.length === 1) { salida.push(t); return; }
+      partes.forEach((g) => { const n = armarTrozo(g, t.lec, vis); if (n) salida.push(n); });
+    });
+    return salida;
   }
 
   /** La letra con la que está escrito un trozo de un PDF con texto: familia, negrita y cursiva. */
@@ -5023,7 +5082,7 @@
     if (s.tapa) cajas.push(cajaDeTapa(s.tapa));
     if (String(s.texto || '').trim()) {
       const vis = visDe(pagina), tam = s.tam || 11;
-      const an = Math.max(anchoTexto(s.texto, s) * tam, tam * 0.6) / vis.w;
+      const an = Math.max(anchoTexto(s.texto, s) * tam * (s.estira || 1), tam * 0.6) / vis.w;
       cajas.push({ x0: s.x, x1: s.x + an, y0: s.y - (tam * 0.85) / vis.h, y1: s.y + (tam * 0.25) / vis.h });
     }
     if (!cajas.length) return { x0: s.x, x1: s.x + 0.02, y0: s.y - 0.01, y1: s.y };
@@ -5076,8 +5135,8 @@
     const baja = G.alEstadoOcr ? G.alEstadoOcr((t) => { if (t) nota.textContent = t; }) : null;
     trozosDe(pagina).then((r) => {
       if (!capa.isConnected) return;
-      capa._trozos = r.trozos;
-      r.trozos.forEach((t, i) => {
+      capa._trozos = partirPorRayas(hoja, pagina, r.trozos);
+      capa._trozos.forEach((t, i) => {
         // lo que ya se corrigió no se ofrece otra vez: debajo está el texto viejo
         const cx = (t.x0 + t.x1) / 2, cy = (t.y0 + t.y1) / 2;
         if (tapados.some((c) => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1)) return;
@@ -5194,7 +5253,7 @@
       marcar();
       const n = JSON.parse(JSON.stringify(s));
       // de una corrección se mueve lo escrito; el parche se queda tapando lo viejo
-      if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; }
+      if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; delete n.derecha; }
       if (n.tapa && n.tipo !== 'correccion' && n.tipo) { n.tapa.x += a.dx; n.tapa.y += a.dy; if (!String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; } }
       a.pagina.sellos[a.indice] = n;
       elegido = { uid: a.pagina.uid, indice: a.indice };
@@ -5389,16 +5448,22 @@
         const gruesa = Math.abs(anchoTexto(t.texto, Object.assign({}, letra, { negrita: true })) * tam - ancho);
         letra.negrita = gruesa < fina;
       }
-      if (t.origen !== 'texto') {
-        // y que no salga más ancho que el original: en una tabla se montaría en la columna de al lado
-        const ocupa = anchoTexto(t.texto, letra) * tam;
-        if (ocupa > ancho * 1.04) tam *= (ancho * 1.04) / ocupa;
-      }
       tam = Math.round(Math.min(Math.max(tam, 4), 96) * 2) / 2;
+      // La letra de fábrica no es la del original (Calibri sale más estrecha que Arial): se
+      // estrecha o se ensancha lo justo para que el texto ocupe lo que ocupaba. Así el nuevo
+      // sale igual de ancho y no se monta en la columna de al lado.
+      const anchoReal = t.origen === 'texto' ? (t.x1 - t.x0) * vis.w : ancho;
+      let estira = anchoReal / ((anchoTexto(t.texto, letra) * tam) || 1);
+      estira = Math.abs(estira - 1) < 0.03 ? 1 : Math.round(Math.min(Math.max(estira, 0.7), 1.2) * 1000) / 1000;
       const ax = (tinta.px || 0.001) * 2, ay = (tinta.py || 0.001) * 2;
       m = {
         indice: -1, tipo: 'correccion', original: t.texto, texto: t.texto,
-        x: tinta.x0, y, tam, color: col.tinta,
+        x: t.origen === 'texto' ? t.x0 : tinta.x0, y, tam, color: col.tinta, estira,
+        // un número va arrimado a la derecha, como en toda tabla de precios: si el nuevo tiene
+        // más o menos cifras, crece hacia la izquierda y la columna sigue alineada
+        derecha: /^[\s\d.,:%$S/+-]+$/.test(t.texto) && /\d/.test(t.texto) ? (t.origen === 'texto' ? t.x1 : tinta.x1) : null,
+        // en un PDF con texto, lo viejo se quita del propio archivo al exportar: aquí, dónde está
+        quita: t.origen === 'texto' ? { x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0 } : null,
         familia: letra.familia, negrita: letra.negrita, cursiva: letra.cursiva,
         tapa: { x: tinta.x0 - ax, y: tinta.y0 - ay, w: (tinta.x1 - tinta.x0) + 2 * ax, h: (tinta.y1 - tinta.y0) + 2 * ay, color: col.papel },
       };
@@ -5445,8 +5510,11 @@
     campo.style.fontStyle = m.cursiva ? 'italic' : 'normal';
     campo.style.color = m.color || '#111111';
     campo.style.background = (m.tapa && m.tapa.color) || '#ffffff';
+    const e = m.estira || 1;
+    campo.style.transformOrigin = 'left center';
+    campo.style.transform = e === 1 ? '' : `scaleX(${e})`;
     const escrito = anchoTexto(campo.value || ' ', m) * px;
-    const minimo = m.tapa ? m.tapa.w * hoja.clientWidth : px * 6;
+    const minimo = m.tapa ? (m.tapa.w * hoja.clientWidth) / e : px * 6;
     campo.style.width = Math.ceil(Math.max(escrito + px * 0.6, minimo)) + 'px';
     pintarBarraEditor();
   }
@@ -5479,6 +5547,12 @@
       familia: m.familia || 'sans', negrita: !!m.negrita, cursiva: !!m.cursiva,
       tapa: m.tapa || null, giroAl: G.norm(pagina.giro),
     };
+    if (m.estira && m.estira !== 1) sello.estira = m.estira;
+    if (m.derecha != null && !ed.movido) {
+      sello.derecha = m.derecha;
+      sello.x = m.derecha - (anchoTexto(texto, sello) * sello.tam * (sello.estira || 1)) / visDe(pagina).w;
+    }
+    if (m.quita) sello.quita = m.quita;
     if (m.indice >= 0) {
       const previo = pagina.sellos[m.indice];
       if (!previo) return;

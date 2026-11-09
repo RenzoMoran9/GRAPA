@@ -10,7 +10,7 @@
           PDFArray, PDFRef, PDFNumber, decodePDFRawStream,
           pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject,
           beginText, endText, setFontAndSize, setTextRenderingMode, TextRenderingMode,
-          setCharacterSqueeze, setTextMatrix, showText } = PDFLib;
+          setCharacterSqueeze, setTextMatrix, showText, setFillingColor } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
   const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
@@ -1081,6 +1081,292 @@
     setTimeout(fin, 60);
   });
 
+  /* =========================================================
+     EDITAR DE RAÍZ · quitar un texto del propio PDF
+     Corregir un texto tapándolo con un parche deja la palabra vieja debajo:
+     se ve bien, pero sigue en el archivo. Cuando la hoja trae texto de
+     verdad, aquí se entra en su contenido —las órdenes con que el PDF dibuja
+     la hoja— y se quitan las que escriben ese texto. Lo demás queda tal
+     cual, byte por byte: las rayas de la tabla, las imágenes, el resto del
+     texto.
+
+     Para saber qué orden escribe qué, se sigue el contenido como lo haría un
+     lector de PDF: dónde está la pluma (las matrices), con qué letra y a qué
+     tamaño, y cuánto avanza cada palabra (los anchos de la letra). Una orden
+     se quita si cae dentro del recuadro pedido. Y solo se hace cuando es
+     seguro: si no se puede saber dónde cae un texto, o quitarlo movería de
+     sitio al que viene detrás, ese recuadro se deja sin tocar y quien llama
+     lo tapa con el parche de siempre.
+     ========================================================= */
+
+  /** Parte el contenido en órdenes, cada una con sus operandos y el trozo de bytes que ocupa. */
+  function ordenesConSitio(b) {
+    const n = b.length, salida = [];
+    let i = 0, args = [], ini = -1;
+    const palabra = () => { const a = i; while (i < n && !BLANCOS.has(b[i]) && !DELIM.has(b[i])) i++; return String.fromCharCode.apply(null, b.subarray(a, i)); };
+    const cadena = () => {            // ( … ) con sus escapes
+      const r = []; let prof = 1; i++;
+      while (i < n && prof) {
+        let c = b[i++];
+        if (c === 92) {
+          c = b[i++];
+          if (c === 110) r.push(10); else if (c === 114) r.push(13); else if (c === 116) r.push(9);
+          else if (c === 98) r.push(8); else if (c === 102) r.push(12);
+          else if (c >= 48 && c <= 55) {
+            let v = c - 48;
+            for (let k = 0; k < 2 && b[i] >= 48 && b[i] <= 55; k++) v = v * 8 + (b[i++] - 48);
+            r.push(v & 255);
+          } else if (c === 13) { if (b[i] === 10) i++; } else if (c === 10) { /* renglón partido */ } else r.push(c);
+        } else if (c === 40) { prof++; r.push(c); } else if (c === 41) { prof--; if (prof) r.push(c); } else r.push(c);
+      }
+      return { t: 's', v: r };
+    };
+    const hexa = () => {
+      const r = []; let medio = -1; i++;
+      while (i < n && b[i] !== 62) {
+        const c = b[i++];
+        const v = c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1;
+        if (v < 0) continue;
+        if (medio < 0) medio = v; else { r.push(medio * 16 + v); medio = -1; }
+      }
+      if (medio >= 0) r.push(medio * 16);
+      i++;
+      return { t: 's', v: r };
+    };
+    const valor = () => {             // un operando (o null si lo que viene es otra cosa)
+      const c = b[i];
+      if (c === 40) return cadena();
+      if (c === 60 && b[i + 1] !== 60) return hexa();
+      if (c === 60) {                 // << … >>: no hace falta leerlo, solo saltarlo
+        let prof = 0;
+        while (i < n) {
+          if (b[i] === 60 && b[i + 1] === 60) { prof++; i += 2; }
+          else if (b[i] === 62 && b[i + 1] === 62) { prof--; i += 2; if (!prof) break; }
+          else if (b[i] === 40) cadena(); else i++;
+        }
+        return { t: 'd' };
+      }
+      if (c === 91) {
+        const v = []; i++;
+        while (i < n && b[i] !== 93) {
+          if (BLANCOS.has(b[i])) { i++; continue; }
+          const x = valor();
+          if (x) v.push(x); else i++;
+        }
+        i++;
+        return { t: 'a', v };
+      }
+      if (c === 47) { i++; return { t: 'n', v: palabra() }; }
+      const a = i, p = palabra();
+      if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(p)) return { t: 'x', v: parseFloat(p) };
+      i = a;
+      return null;
+    };
+    while (i < n) {
+      const c = b[i];
+      if (BLANCOS.has(c)) { i++; continue; }
+      if (c === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue; }
+      const a = i, v = valor();
+      if (v) { if (ini < 0) ini = a; args.push(v); continue; }
+      const p = palabra();
+      if (!p) { i++; continue; }
+      if (p === 'BI') {
+        while (i < n && !(BLANCOS.has(b[i]) && b[i + 1] === 69 && b[i + 2] === 73 && (i + 3 >= n || BLANCOS.has(b[i + 3]) || DELIM.has(b[i + 3])))) i++;
+        i = Math.min(n, i + 3);
+        args = []; ini = -1;
+        continue;
+      }
+      salida.push({ op: p, args, ini: ini < 0 ? a : ini, fin: i });
+      args = []; ini = -1;
+    }
+    return salida;
+  }
+
+  /** Los anchos de una letra del PDF: `ancho(codigo)` en milésimas, y de cuántos bytes es cada letra. */
+  function anchosDeLetra(context, dic) {
+    try {
+      const nombre = (k) => { const v = dic.lookup(PDFName.of(k)); return v ? String(v.toString()).replace(/^\//, '') : ''; };
+      const numero = (d, k, def) => { const v = d.lookup(PDFName.of(k)); return v && typeof v.asNumber === 'function' ? v.asNumber() : def; };
+      const tipo = nombre('Subtype');
+      if (tipo === 'Type0') {
+        if (!/^Identity-[HV]$/.test(nombre('Encoding'))) return null;
+        const hijos = dic.lookup(PDFName.of('DescendantFonts'));
+        const hijo = hijos && context.lookup(hijos.get(0));
+        if (!hijo) return null;
+        const dw = numero(hijo, 'DW', 1000), mapa = new Map();
+        const W = hijo.lookup(PDFName.of('W'));
+        if (W) {
+          const v = W.asArray().map((x) => context.lookup(x));
+          for (let k = 0; k < v.length;) {
+            const c = v[k].asNumber();
+            if (v[k + 1] && typeof v[k + 1].asArray === 'function') {
+              v[k + 1].asArray().forEach((w, j) => mapa.set(c + j, context.lookup(w).asNumber()));
+              k += 2;
+            } else {
+              const hasta = v[k + 1].asNumber(), w = v[k + 2].asNumber();
+              for (let j = c; j <= hasta && j - c < 70000; j++) mapa.set(j, w);
+              k += 3;
+            }
+          }
+        }
+        return { bytes: 2, ancho: (c) => (mapa.has(c) ? mapa.get(c) : dw) };
+      }
+      if (tipo !== 'TrueType' && tipo !== 'Type1' && tipo !== 'MMType1') return null;   // Type3 y rarezas
+      const W = dic.lookup(PDFName.of('Widths'));
+      if (!W) return null;                     // una de las catorce de siempre, sin tabla de anchos
+      const primero = numero(dic, 'FirstChar', 0);
+      const v = W.asArray().map((x) => context.lookup(x).asNumber());
+      const desc = dic.lookup(PDFName.of('FontDescriptor'));
+      const falta = desc ? numero(desc, 'MissingWidth', 0) : 0;
+      return { bytes: 1, ancho: (c) => (c >= primero && c - primero < v.length ? v[c - primero] : falta) };
+    } catch (e) { return null; }
+  }
+
+  /**
+   * Quita de la hoja el texto que cae en cada recuadro (`cajas`: {x0,y0,x1,y1}
+   * en puntos del PDF). Devuelve, por recuadro, si se pudo.
+   */
+  function quitarTextoDeRaiz(salida, pag, cajas) {
+    const hecho = cajas.map(() => false);
+    try {
+      const context = salida.context;
+      const cont = pag.node.Contents();
+      if (!cont) return hecho;
+      const flujos = cont instanceof PDFArray ? cont.asArray().map((r) => context.lookup(r)) : [cont];
+      const trozos = flujos.map(bytesDeFlujo);
+      const total = trozos.reduce((s, t) => s + t.length + 1, 0);
+      const b = new Uint8Array(total);
+      let o = 0;
+      trozos.forEach((t) => { b.set(t, o); o += t.length; b[o++] = 10; });
+
+      const recursos = pag.node.Resources();
+      const letras = recursos && recursos.lookup(PDFName.of('Font'));
+      const cacheLetras = new Map();
+      const letraDe = (nombre) => {
+        if (!cacheLetras.has(nombre)) {
+          let r = null;
+          try { const d = letras && letras.lookup(PDFName.of(nombre)); r = d ? anchosDeLetra(context, d) : null; } catch (e) { r = null; }
+          cacheLetras.set(nombre, r);
+        }
+        return cacheLetras.get(nombre);
+      };
+
+      // 1. seguir el contenido y apuntar dónde cae cada texto
+      const ordenes = ordenesConSitio(b);
+      const ID = [1, 0, 0, 1, 0, 0];
+      let ctm = ID, pila = [], tm = ID, tlm = ID, sabe = true;
+      let letra = null, tfs = 0, tc = 0, tw = 0, th = 1, tl = 0;
+      const num = (a, k) => (a[k] && a[k].t === 'x' ? a[k].v : 0);
+      const textos = [];                 // cada orden que escribe: dónde empieza y dónde acaba
+      let bloque = 0;
+      const avanceDe = (items) => {      // cuánto avanza la pluma, en unidades del texto
+        if (!letra || !tfs) return null;
+        let w = 0;
+        for (const it of items) {
+          if (it.t === 'x') { w -= (it.v / 1000) * tfs * th; continue; }
+          if (it.t !== 's') continue;
+          const v = it.v;
+          for (let k = 0; k + letra.bytes <= v.length; k += letra.bytes) {
+            const c = letra.bytes === 2 ? v[k] * 256 + v[k + 1] : v[k];
+            w += ((letra.ancho(c) / 1000) * tfs + tc + (letra.bytes === 1 && c === 32 ? tw : 0)) * th;
+          }
+        }
+        return w;
+      };
+      const escribir = (orden, items, previo) => {
+        const adv = avanceDe(items);
+        const m = porMatriz(tm, ctm);
+        const t = { orden, bloque, previo, sabe, adv, tfs, th, x0: m[4], y0: m[5], x1: m[4], y1: m[5], alto: Math.abs(tfs) * Math.hypot(m[2], m[3]) };
+        if (adv != null) {
+          t.x1 = adv * m[0] + m[4]; t.y1 = adv * m[1] + m[5];
+          tm = porMatriz([1, 0, 0, 1, adv, 0], tm);
+        } else sabe = false;             // sin anchos no se sabe dónde queda la pluma
+        textos.push(t);
+      };
+      const linea = (tx, ty) => { tlm = porMatriz([1, 0, 0, 1, tx, ty], tlm); tm = tlm; sabe = true; };
+      for (const d of ordenes) {
+        const a = d.args;
+        switch (d.op) {
+          case 'q': pila.push(ctm); break;
+          case 'Q': if (pila.length) ctm = pila.pop(); break;
+          case 'cm': ctm = porMatriz([0, 1, 2, 3, 4, 5].map((k) => num(a, k)), ctm); break;
+          case 'BT': tm = tlm = ID; sabe = true; bloque++; break;
+          case 'Tf': letra = a[0] && a[0].t === 'n' ? letraDe(a[0].v.replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))) : null; tfs = num(a, 1); break;
+          case 'Tc': tc = num(a, 0); break;
+          case 'Tw': tw = num(a, 0); break;
+          case 'Tz': th = num(a, 0) / 100; break;
+          case 'TL': tl = num(a, 0); break;
+          case 'Td': linea(num(a, 0), num(a, 1)); break;
+          case 'TD': tl = -num(a, 1); linea(num(a, 0), num(a, 1)); break;
+          case 'Tm': tm = tlm = [0, 1, 2, 3, 4, 5].map((k) => num(a, k)); sabe = true; break;
+          case 'T*': linea(0, -tl); break;
+          case 'Tj': escribir(d, a.filter((x) => x.t === 's'), ''); break;
+          case 'TJ': escribir(d, a[0] && a[0].t === 'a' ? a[0].v : [], ''); break;
+          case "'": linea(0, -tl); escribir(d, a.filter((x) => x.t === 's'), 'T* '); break;
+          case '"': tw = num(a, 0); tc = num(a, 1); linea(0, -tl);
+            escribir(d, a.filter((x) => x.t === 's'), `${num(a, 0)} Tw ${num(a, 1)} Tc T* `); break;
+          default: break;
+        }
+      }
+
+      // 2. qué se quita: lo que cae dentro de cada recuadro, y solo si es seguro
+      const quitar = new Set();
+      cajas.forEach((c, ci) => {
+        const margen = 0.6;
+        const dentro = (x, y) => x >= c.x0 - margen && x <= c.x1 + margen && y >= c.y0 - margen && y <= c.y1 + margen;
+        const mias = [];
+        let seguro = true;
+        textos.forEach((t, k) => {
+          const mx = (t.x0 + t.x1) / 2, my = (t.y0 + t.y1) / 2;
+          if (!t.sabe) {
+            // no se sabe dónde cae: si pudiera ser de aquí (mismo bloque que algo de aquí), no se toca nada
+            return;
+          }
+          if (dentro(mx, my)) {
+            // sin anchos, quitarlo movería al texto que venga pegado detrás
+            const sig = textos[k + 1];
+            if (t.adv == null && sig && sig.bloque === t.bloque && !sig.sabe) seguro = false;
+            mias.push(t);
+          } else if (t.adv != null) {
+            // un texto largo que solo pasa en parte por el recuadro: no se puede cortar por la mitad
+            const a0 = Math.max(Math.min(t.x0, t.x1), c.x0), a1 = Math.min(Math.max(t.x0, t.x1), c.x1);
+            const enY = my >= c.y0 - margen && my <= c.y1 + margen;
+            if (enY && a1 - a0 > Math.max(1.5, (c.x1 - c.x0) * 0.2) && Math.abs(t.y1 - t.y0) < 1) seguro = false;
+          }
+        });
+        // un texto del mismo bloque cuya posición no se sabe podría estar aquí también
+        if (mias.some((t) => textos.some((u) => !u.sabe && u.bloque === t.bloque))) seguro = false;
+        if (!seguro || !mias.length) return;
+        mias.forEach((t) => quitar.add(t));
+        hecho[ci] = true;
+      });
+      if (!quitar.size) return hecho;
+
+      // 3. el contenido de nuevo, igual que estaba menos esas órdenes
+      const partes = [];
+      let desde = 0;
+      const texto = (s) => Uint8Array.from(s, (ch) => ch.charCodeAt(0));
+      textos.filter((t) => quitar.has(t)).sort((p, q) => p.orden.ini - q.orden.ini).forEach((t) => {
+        partes.push(b.subarray(desde, t.orden.ini));
+        // la pluma avanza lo mismo que avanzaba, pero sin escribir: lo de detrás no se mueve
+        let pone = t.previo;
+        if (t.adv != null && t.tfs && t.th) pone += `[${(-(t.adv / (t.tfs * t.th)) * 1000).toFixed(3)}] TJ`;
+        partes.push(texto(pone + ' '));
+        desde = t.orden.fin;
+      });
+      partes.push(b.subarray(desde));
+      const largo = partes.reduce((s, p) => s + p.length, 0);
+      const nuevo = new Uint8Array(largo);
+      o = 0;
+      partes.forEach((p) => { nuevo.set(p, o); o += p.length; });
+      pag.node.set(PDFName.of('Contents'), context.register(context.flateStream(nuevo)));
+      return hecho;
+    } catch (e) {
+      console.warn('No se pudo quitar el texto de raíz; se tapa con un parche', e);
+      return cajas.map(() => false);
+    }
+  }
+
   /* Las letras con las que se escribe el texto corregido o añadido: las catorce
      que todo lector de PDF trae, así no hay que meter ninguna en el archivo.
      Orden: normal, negrita, cursiva, negrita cursiva. */
@@ -1304,6 +1590,21 @@
         return { x: p.x + OX, y: p.y + OY };
       };
 
+      // Los textos corregidos se quitan de raíz del contenido de la hoja cuando
+      // se puede (una hoja con texto de verdad, copiada tal cual); los que no,
+      // se tapan con su parche. `sinParche` son los que ya no lo necesitan.
+      const sinParche = new Set();
+      const deRaiz = aligerar.has(i) ? [] : est.sellos.filter((s) => s.rol === 'texto' && s.quita && s.tapa);
+      if (deRaiz.length) {
+        const cajas = deRaiz.map((s) => {
+          const R0 = G.norm(s.giroAl == null ? R : s.giroAl), v0 = G.cajaVisible(W, H, R0), q = s.quita;
+          const a = G.aPuntoPdf(q.x * v0.w, q.y * v0.h, W, H, R0), b = G.aPuntoPdf((q.x + q.w) * v0.w, (q.y + q.h) * v0.h, W, H, R0);
+          return { x0: Math.min(a.x, b.x) + OX, x1: Math.max(a.x, b.x) + OX, y0: Math.min(a.y, b.y) + OY, y1: Math.max(a.y, b.y) + OY };
+        });
+        quitarTextoDeRaiz(salida, pag, cajas).forEach((ok, k) => { if (ok) sinParche.add(deRaiz[k]); });
+        if (opciones.alQuitarDeRaiz) opciones.alQuitarDeRaiz(i, deRaiz.length, sinParche.size);
+      }
+
       // lo leído de un escaneo, como texto invisible encima («Hacer buscables»)
       const leido = opciones.capaTexto && opciones.capaTexto[i];
       if (leido) {
@@ -1335,7 +1636,7 @@
             const p = G.aPuntoPdf(fx * v0.w, fy * v0.h, W, H, R0);
             return { x: p.x + OX, y: p.y + OY };
           };
-          const t = sello.tapa;
+          const t = sinParche.has(sello) ? null : sello.tapa;
           if (t) {
             // el parche del color del papel que tapa lo que había escrito
             const a = en0(t.x, t.y), b = en0(t.x + t.w, t.y + t.h);
@@ -1354,10 +1655,20 @@
             .filter((c) => letras.has(c.codePointAt(0))).join('');
           if (texto.trim()) {
             const p = en0(sello.x, sello.y);
-            pag.drawText(texto, {
-              x: p.x, y: p.y, size: sello.tam || 11, font: fnt,
-              color: G.aColorPdf(sello.color || '#111111'), rotate: degrees(R0),
-            });
+            const estira = sello.estira && Math.abs(sello.estira - 1) > 0.005 ? sello.estira : 1;
+            if (estira === 1) {
+              pag.drawText(texto, {
+                x: p.x, y: p.y, size: sello.tam || 11, font: fnt,
+                color: G.aColorPdf(sello.color || '#111111'), rotate: degrees(R0),
+              });
+            } else {
+              // más estrecha o más ancha que la letra de fábrica, para ocupar lo que ocupaba el original
+              const rad = (R0 * Math.PI) / 180, co = Math.cos(rad), si = Math.sin(rad);
+              pag.pushOperators(pushGraphicsState(), setFillingColor(G.aColorPdf(sello.color || '#111111')),
+                beginText(), setFontAndSize(pag.node.newFontDictionary('PdflashT', fnt.ref), sello.tam || 11),
+                setCharacterSqueeze(Math.round(estira * 1000) / 10), setTextMatrix(co, si, -si, co, p.x, p.y),
+                showText(fnt.encodeText(texto)), endText(), popGraphicsState());
+            }
           }
         } else if (sello.rol === 'folio' || sello.rol === 'marca') {
           const esFolio = sello.rol === 'folio';

@@ -470,10 +470,23 @@ derecha:
 
 Lo que conviene saber:
 
-- Un texto corregido es **un parche del color del papel con el texto nuevo
-  encima**. Se ve y se imprime como el original, pero en un PDF con texto la
-  palabra vieja sigue debajo del parche: un buscador todavía la encuentra.
-  Para tachar datos que no deben poder recuperarse, esto no sirve todavía.
+- **En un PDF con texto se edita de raíz.** Al exportar, Pdflash entra en el
+  contenido del PDF y **quita la palabra vieja del propio archivo**: no queda
+  debajo de ningún parche, un buscador ya no la encuentra y las rayas de la
+  tabla, las imágenes y el resto del texto quedan como estaban. La nueva se
+  escribe en su sitio, a su tamaño, y ocupando el mismo ancho que la
+  original, para que no se monte en la columna de al lado. Un número queda
+  arrimado a la derecha, como en toda tabla de precios.
+- **En un escaneo no hay texto que quitar**, solo una foto: ahí lo viejo se
+  tapa con un parche del color del papel, medido sobre la propia letra, y lo
+  nuevo va encima.
+- En una tabla, dos celdas vecinas que parecen un solo renglón se separan
+  por la raya que pasa entre ellas: cada dato se corrige por su lado.
+- Si en un PDF concreto no es seguro quitar un texto de raíz (está escrito
+  de una manera que no permite saber dónde cae, o va dentro de un dibujo
+  reutilizado), Pdflash no arriesga la hoja: lo tapa con el parche.
+- En pantalla, mientras editas, lo viejo se ve tapado; la edición de raíz se
+  hace al armar el PDF (exportar, imprimir, descargar).
 - Se corrige **renglón por renglón**: si el texto nuevo es más largo, no
   empuja los renglones de abajo. Para rehacer un párrafo entero está el
   editor avanzado.
