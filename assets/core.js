@@ -1088,6 +1088,8 @@
     sans: ['Helvetica', 'HelveticaBold', 'HelveticaOblique', 'HelveticaBoldOblique'],
     serif: ['TimesRoman', 'TimesRomanBold', 'TimesRomanItalic', 'TimesRomanBoldItalic'],
     mono: ['Courier', 'CourierBold', 'CourierOblique', 'CourierBoldOblique'],
+    // el visto y la equis
+    signos: ['ZapfDingbats', 'ZapfDingbats', 'ZapfDingbats', 'ZapfDingbats'],
   };
   /** Los signos que esas letras saben escribir (los del español y de Europa occidental). */
   const SIGNOS_DE_MAS = new Set(Array.from('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ').map((c) => c.codePointAt(0)));
@@ -1341,6 +1343,9 @@
               x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
               width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y),
               color: G.aColorPdf(t.color || '#ffffff'), borderWidth: 0,
+              // el resaltador deja ver lo que hay debajo, como el de verdad
+              opacity: t.opacidad == null ? 1 : t.opacidad,
+              blendMode: t.opacidad == null ? undefined : PDFLib.BlendMode.Multiply,
             });
           }
           const fnt = await pedirFuenteEdicion(sello);

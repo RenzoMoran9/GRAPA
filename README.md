@@ -436,51 +436,55 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
   abre la pestaña, y tú lo arrastras ahí. Y ten presente que **lo que subas a un
   editor en línea sale de tu computadora**; eso ya depende de esa web.
 
-## Corregir el texto de un PDF
+## El editor: corregir, escribir, borrar y resaltar
 
-Se corrige **dentro de Pdflash, sobre la misma hoja**, sin abrir otro programa
-ni otra pestaña. En **Ver en grande**, pulsa **✎ Editar texto** (también está
-en *Archivo ▸ Editar texto* y en el menú de cada hoja, «Corregir el texto de
-esta hoja»):
+Todo se hace **dentro de Pdflash, sobre la misma hoja**, sin otro programa ni
+otra pestaña. En **Ver en grande**, pulsa **✎ Editar** (también en *Archivo ▸
+Editar texto* y en el menú de cada hoja). Arriba aparece la barra del editor,
+con sus herramientas a la izquierda, el formato en el centro y **Listo** a la
+derecha:
 
-- **Pulsa un texto y cámbialo.** Cada trozo de texto de la hoja queda marcado
-  con una línea punteada; al pulsarlo se abre ahí mismo una caja con lo que
-  dice, con su mismo tamaño, color y tipo de letra. Escribe y pulsa `Enter`
-  (o **Listo**); `Esc` lo deja como estaba.
-- **Pulsa un sitio vacío y escribe.** Para poner una fecha, un número, una
-  nota o llenar un formato.
-- **También en escaneos.** Pdflash lee primero la hoja con su lector de
-  escaneos, tapa la palabra vieja con el color del papel y escribe la nueva
-  encima.
-- **La barrita de la caja** cambia el tamaño (A− / A+), negrita, cursiva, el
-  tipo de letra (Arial, Times, Courier) y el color. **Borrar** quita ese texto
-  de la hoja.
-- **Lo que cambiaste se puede volver a cambiar**: queda con un borde naranja
-  mientras la herramienta está puesta. «Dejar como estaba» quita tu cambio y
-  vuelve a verse el texto original. `Ctrl+Z` también lo deshace.
-- En una tabla, cada columna va por su lado: corregir un precio no arrastra la
-  descripción de al lado.
+| Herramienta | Qué hace |
+|---|---|
+| **Editar texto** | Cada trozo de texto de la hoja queda marcado con una línea punteada. Púlsalo y cámbialo ahí mismo; sale con su tamaño, su color y su negrita. |
+| **Añadir texto** | Pulsa en cualquier sitio y escribe: una fecha, un número, llenar un formato. |
+| **Borrador** | Arrastra sobre lo que quieras tapar: lo cubre con el color del papel. |
+| **Resaltar** | Arrastra y queda resaltado en amarillo, dejando ver lo de debajo. |
+| **Visto / Equis** | Pulsa donde va la marca: ✔ o ✘. |
+
+- **Formato:** tipo de letra (Arial, Times, Courier), tamaño (A− / A+),
+  negrita, cursiva y color. Se aplica a lo que estás escribiendo, a lo que
+  tengas elegido o, si no hay nada, a lo próximo que escribas.
+- **Mover:** todo lo que pones se arrastra a otro sitio. **Quitar** (o `Supr`)
+  lo borra; en un texto corregido, «Dejar como estaba» devuelve el original.
+- `Enter` deja lo escrito, `Esc` lo cancela, y `Ctrl+Z` deshace cada paso.
+  **Listo** (o `Esc`) cierra el editor; lo hecho queda en la hoja.
+- **También en escaneos.** Pdflash lee primero la hoja con su lector, mide la
+  letra en el propio papel —su tamaño, dónde apoya y si es negrita— y tapa
+  solo la palabra, sin tocar las rayas de la tabla.
+- En una tabla, cada columna va por su lado: corregir un precio no arrastra
+  la descripción de al lado.
 - Los cambios **viajan con la hoja**, como una firma: se guardan con el
   expediente, siguen a la hoja si la giras o la mueves, y al exportar quedan
   escritos en el PDF como texto de verdad.
 
 Lo que conviene saber:
 
-- Cada cambio es **un parche del color del papel con el texto nuevo encima**.
-  Se ve y se imprime como el original, pero en un PDF con texto la palabra
-  vieja sigue debajo del parche: un buscador todavía la encuentra. Para
-  tachar datos que no deben poder recuperarse, esto no sirve todavía.
+- Un texto corregido es **un parche del color del papel con el texto nuevo
+  encima**. Se ve y se imprime como el original, pero en un PDF con texto la
+  palabra vieja sigue debajo del parche: un buscador todavía la encuentra.
+  Para tachar datos que no deben poder recuperarse, esto no sirve todavía.
 - Se corrige **renglón por renglón**: si el texto nuevo es más largo, no
   empuja los renglones de abajo. Para rehacer un párrafo entero está el
   editor avanzado.
-- Las letras son las catorce que todo PDF trae (Arial/Helvetica, Times y
-  Courier, con sus negritas y cursivas). Si el original usa otra, se pone la
-  más parecida. Escriben el español completo; un signo raro (un emoji, letras
-  de otro alfabeto) no se puede poner, y Pdflash lo avisa.
-- En un escaneo no se sabe con qué letra se escribió: sale en Arial, y se
-  cambia desde la barrita si hace falta.
-- Una hoja escaneada **de lado o de cabeza** hay que girarla antes: mientras
-  tanto solo deja escribir texto nuevo.
+- Las letras son las que todo PDF trae (Arial/Helvetica, Times y Courier, con
+  sus negritas y cursivas). Escriben el español completo; un signo raro (un
+  emoji, letras de otro alfabeto) no se puede poner, y Pdflash lo avisa.
+- En un escaneo se reconoce el tamaño y la negrita, pero no el tipo de letra:
+  sale en Arial, y se cambia en la barra si hace falta.
+- Una hoja escaneada **de lado o de cabeza** hay que girarla antes de
+  corregir su texto. Mientras el editor está abierto no se gira ni se quita
+  la hoja: esos botones vuelven al pulsar **Listo**.
 
 ### Editor avanzado (otra pestaña)
 

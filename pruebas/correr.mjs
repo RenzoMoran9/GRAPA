@@ -466,20 +466,50 @@ const PRUEBAS = {
     await page.waitForSelector('.editor-campo');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
-    // escribir en un sitio vacío
+    // «Añadir texto»: escribir en un sitio vacío
     const caja = await (await page.$('.hoja[data-indice="0"]')).boundingBox();
+    await page.click('[data-herr="texto"]');
     await page.mouse.click(caja.x + caja.width * 0.7, caja.y + 130);
     await page.waitForSelector('.editor-campo');
     await page.keyboard.type('Visto 😀 bueno');
-    await page.click('.editor-listo');
+    await page.click('#edNegrita');
+    await page.keyboard.press('Enter');
     await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 2);
     afirmar(page.context().pages().length === ventanas, 'no abrió otra pestaña');
     const s = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos);
     afirmar(s[0].tapa && Math.abs(s[0].tam - 11) <= 0.5 && !s[0].negrita, 'la corrección tapa lo viejo y sale a su tamaño', s[0]);
-    afirmar(!s[1].tapa && s[1].texto === 'Visto bueno', 'el texto nuevo no tapa nada, y el signo que no se puede escribir se quita', s[1]);
-    // lo cambiado se puede volver a pulsar
+    afirmar(!s[1].tapa && s[1].texto === 'Visto bueno' && s[1].negrita, 'el texto nuevo no tapa nada, sale en negrita, y el signo que no se puede escribir se quita', s[1]);
+    // las demás herramientas: borrador, resaltar y visto
+    const arrastrar = async (herr, fx0, fy0, fx1, fy1) => {
+      await page.click(`[data-herr="${herr}"]`);
+      await page.mouse.move(caja.x + caja.width * fx0, caja.y + fy0);
+      await page.mouse.down();
+      await page.mouse.move(caja.x + caja.width * fx1, caja.y + fy1, { steps: 4 });
+      await page.mouse.up();
+    };
+    await arrastrar('borrador', 0.1, 400, 0.5, 430);
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 3);
+    await arrastrar('resaltar', 0.1, 460, 0.5, 490);
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 4);
+    await page.click('[data-herr="check"]');
+    await page.mouse.click(caja.x + caja.width * 0.8, caja.y + 420);
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 5);
+    const tipos = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.map((x) => x.tipo));
+    afirmar(tipos.join() === 'correccion,nuevo,borrador,resalte,marca', 'cada herramienta deja lo suyo', tipos);
+    // lo puesto se mueve arrastrándolo, y lo elegido se quita con Supr
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.puesto.elegido');
+    const antes = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos[4].x);
+    const m = await (await page.$('.hoja[data-indice="0"] .trozo.puesto.elegido')).boundingBox();
+    await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(m.x + m.width / 2 - 120, m.y + m.height / 2 + 20, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForFunction((a) => window.Grapa.estado.paginas[0].sellos[4].x < a - 0.05, antes);
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.puesto.elegido');
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 4);
     await page.waitForSelector('.hoja[data-indice="0"] .trozo.puesto');
-    afirmar(await page.$$eval('.hoja[data-indice="0"] .trozo.puesto', (t) => t.length) === 2, 'los dos cambios quedan a mano');
+    afirmar(await page.$$eval('.hoja[data-indice="0"] .trozo.puesto', (t) => t.length) === 4, 'lo puesto queda a mano para cambiarlo');
     // y sale en el PDF, en su sitio
     const pdf = await page.evaluate(async () => {
       const G = window.Grapa;
@@ -494,9 +524,8 @@ const PRUEBAS = {
     afirmar(pdf.viejo && Math.abs(pdf.nuevo[0] - pdf.viejo[0]) < 1 && Math.abs(pdf.nuevo[1] - pdf.viejo[1]) < 1.5, 'el renglón nuevo cae sobre el viejo', pdf);
     // Esc apaga la herramienta sin cerrar las hojas en grande, y deshacer quita los cambios
     await page.keyboard.press('Escape');
-    afirmar(await page.evaluate(() => !document.querySelector('#lector').hidden && !document.querySelector('.capa-editar')), 'Esc apaga la herramienta y deja las hojas en grande');
-    await page.keyboard.press('Control+z');
-    await page.keyboard.press('Control+z');
+    afirmar(await page.evaluate(() => !document.querySelector('#lector').hidden && !document.querySelector('.capa-editar') && document.querySelector('#barraEditor').hidden), 'Esc cierra el editor y deja las hojas en grande');
+    for (let i = 0; i < 7; i++) await page.keyboard.press('Control+z');
     afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer quita los cambios');
   },
 
