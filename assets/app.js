@@ -4861,26 +4861,126 @@
 
   /* ---------------- hacer buscable lo escaneado ----------------
      Una hoja escaneada es una foto: el buscador no tiene letras en las que
-     buscar. El editor, que es el que sabe leer fotos, lee todas de una vez
-     y les pone el texto invisible encima; vuelven cada una a su sitio, con
-     sus folios y firmas, y se ven igual que antes. */
+     buscar. Pdflash las lee con su propio lector de escaneos, aquí mismo, y
+     les pone el texto invisible encima; cada una sigue en su sitio, con sus
+     folios y firmas, y se ve igual que antes. Antes había que mandarlas al
+     editor, en otra pestaña.                                              */
+  const lecturaEscaneos = { corriendo: null, hechas: 0, total: 0, estado: '' };
+  // hojas donde el lector no encontró letras (una foto, un plano): no se vuelven a ofrecer
+  const sinLetras = new Set();
+  const claveHoja = (p) => p.fuenteId + ':' + p.indice;
+  const escaneadasPorLeer = () => (E.paginas.length ? G.hojasSinTexto(E.paginas) : [])
+    .filter((p) => !sinLetras.has(claveHoja(p)));
+
   function pintarEscaneadas() {
-    const caja = $('#buscarEscaneadas');
-    const sin = E.paginas.length ? G.hojasSinTexto(E.paginas) : [];
+    const caja = $('#buscarEscaneadas'), boton = $('#btnHacerBuscables');
+    const tarea = lecturaEscaneos.corriendo;
+    if (tarea) {
+      caja.hidden = false;
+      $('#buscarEscaneadasTexto').textContent = lecturaEscaneos.estado
+        || (tarea.cancelada ? 'Deteniendo…'
+          : `Leyendo las hojas escaneadas: ${lecturaEscaneos.hechas} de ${lecturaEscaneos.total}. Puedes seguir trabajando.`);
+      boton.textContent = 'Detener';
+      boton.disabled = !!tarea.cancelada;
+      return;
+    }
+    boton.disabled = false;
+    const sin = escaneadasPorLeer();
     caja.hidden = !sin.length || !!busqueda.leyendo;
     if (caja.hidden) return;
     const n = sin.length;
     $('#buscarEscaneadasTexto').textContent = (n === 1
       ? 'Una hoja es escaneada: es una foto del papel y el buscador no puede leerla.'
       : `${n} hojas son escaneadas: son fotos del papel y el buscador no puede leerlas.`)
-      + ' El editor puede leerlas y dejarlas buscables, sin cambiar cómo se ven.';
-    $('#btnHacerBuscables').textContent = n === 1 ? 'Hacerla buscable' : `Hacer buscables las ${n} hojas`;
+      + ' Pdflash puede leerlas y dejarlas buscables, sin cambiar cómo se ven.';
+    boton.textContent = n === 1 ? 'Hacerla buscable' : `Hacer buscables las ${n} hojas`;
   }
 
-  function hacerBuscables() {
-    const sin = G.hojasSinTexto(E.paginas);
+  const letrasDe = (lec) => (lec.lineas || []).reduce((n, l) => n + String(l.texto || '').replace(/\s/g, '').length, 0);
+
+  async function hacerBuscables() {
+    if (lecturaEscaneos.corriendo) {          // el mismo botón, mientras lee, detiene
+      lecturaEscaneos.corriendo.cancelada = true;
+      pintarEscaneadas();
+      return;
+    }
+    const sin = escaneadasPorLeer();
     if (!sin.length) { G.aviso('No hay hojas escaneadas por leer.', 'ok'); return; }
-    editarTexto(sin, { tarea: 'buscable' });
+    const tarea = (lecturaEscaneos.corriendo = { cancelada: false });
+    const dueno = tableroActivo;              // se puede cambiar de tablero mientras lee
+    Object.assign(lecturaEscaneos, { hechas: 0, total: sin.length, estado: '' });
+    pintarEscaneadas();
+
+    const lecturas = new Map();               // uid → { lec, giro, enderezo }
+    let falladas = 0, rota = false, siguiente = 0;
+    const lector = async () => {
+      while (!tarea.cancelada && !rota) {
+        const i = siguiente++;
+        if (i >= sin.length) return;
+        const p = sin[i];
+        const giro = p.giro, enderezo = p.enderezo || 0;
+        try {
+          // una hoja que no sale en dos minutos se da por no leída y se sigue con las demás
+          const lec = await (G.conTopeOcr ? G.conTopeOcr(G.leerLineas(p), 120000, 'la hoja') : G.leerLineas(p));
+          lecturas.set(p.uid, { lec, giro, enderezo });
+        } catch (e) {
+          console.error(e);
+          falladas++;
+          if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); rota = true; }
+        }
+        lecturaEscaneos.hechas++;
+        pintarEscaneadas();
+      }
+    };
+    // mientras arranca el lector de escaneos (unos segundos la primera vez), se dice
+    const bajaEstado = G.alEstadoOcr ? G.alEstadoOcr((t) => { lecturaEscaneos.estado = t || ''; pintarEscaneadas(); }) : null;
+    try {
+      await Promise.all(Array.from({ length: G.lectoresOcr ? G.lectoresOcr() : 1 }, lector));
+    } finally {
+      if (bajaEstado) bajaEstado();
+      lecturaEscaneos.estado = '';
+    }
+
+    try {
+      // Lo leído es del tablero que lo pidió: si mientras tanto se pasó a
+      // otro, se vuelve a aquel para ponerlo, como con lo que venía del editor.
+      if (dueno !== tableroActivo) {
+        if (!tableros.includes(dueno)) return;
+        activarTablero(dueno.id, { interno: true });
+        G.aviso(`Las hojas leídas son del tablero ${numeroDe(dueno)}.`, 'ok');
+      }
+      // Solo las que siguen en el expediente y tal como se leyeron: una hoja
+      // girada o enderezada mientras tanto tendría el texto en otro sitio.
+      const listas = [];
+      let vacias = 0;
+      sin.forEach((p) => {
+        const r = lecturas.get(p.uid);
+        if (!r || !E.paginas.includes(p)) return;
+        if (p.giro !== r.giro || (p.enderezo || 0) !== r.enderezo) return;
+        if (letrasDe(r.lec) < 20) { sinLetras.add(claveHoja(p)); vacias++; return; }
+        listas.push(p);
+      });
+      if (!listas.length) {
+        G.aviso(tarea.cancelada && !vacias ? 'Detenido. No se cambió ninguna hoja.'
+          : falladas && !vacias ? 'No se pudo leer ninguna hoja.'
+          : 'En esas hojas no se reconoció ninguna palabra: parecen fotos o dibujos.', falladas ? 'error' : 'ok');
+        return;
+      }
+      lecturaEscaneos.estado = 'Poniendo el texto en las hojas…';
+      pintarEscaneadas();
+      const bytes = await G.construirPdf(paraElEditor(listas), { capaTexto: listas.map((p) => lecturas.get(p.uid).lec) });
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      await recibirDelEditor(bytes, base, 0,
+        { tarea: 'buscable', leidas: listas.length, vacias, falladas, detenido: tarea.cancelada },
+        { enviadas: listas.map((p) => p.uid), tablero: dueno.id });
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo poner el texto en las hojas: ' + e.message, 'error');
+    } finally {
+      lecturaEscaneos.corriendo = null;
+      lecturaEscaneos.estado = '';
+      pintarEscaneadas();
+    }
   }
 
   function avisarBuscables(d) {
@@ -4888,6 +4988,9 @@
     let t = leidas === 1 ? 'Listo: 1 hoja escaneada ya se puede buscar.'
       : `Listo: ${leidas} hojas escaneadas ya se pueden buscar.`;
     if (vacias) t += vacias === 1 ? ' En 1 no se reconoció ninguna palabra.' : ` En ${vacias} no se reconoció ninguna palabra.`;
+    const falladas = Number(d.falladas) || 0;
+    if (falladas) t += falladas === 1 ? ' 1 no se pudo leer.' : ` ${falladas} no se pudieron leer.`;
+    if (d.detenido) t += ' Se detuvo antes de terminar: las demás siguen como estaban.';
     // lo que hizo el editor por su cuenta, que su pestaña ya no enseña
     const enderezadas = Number(d.enderezadas) || 0;
     if (enderezadas) t += enderezadas === 1 ? ' 1 hoja estaba torcida y se enderezó.' : ` ${enderezadas} hojas estaban torcidas y se enderezaron.`;
@@ -4919,10 +5022,10 @@
       .filter(Boolean);
     if (envio) envio.enviadas = null;
 
-    G.cargando(true, 'Recogiendo lo corregido…');
+    G.cargando(true, buscable ? 'Poniendo las hojas leídas en su sitio…' : 'Recogiendo lo corregido…');
     try {
       await G.prepararMotor();
-      const archivo = new File([bytes], base + ' (texto editado).pdf', { type: 'application/pdf' });
+      const archivo = new File([bytes], base + (buscable ? ' (buscable).pdf' : ' (texto editado).pdf'), { type: 'application/pdf' });
       const r = await G.cargarArchivos([archivo], (t) => G.progreso(t));
       if (!r.paginas.length) {
         (r.errores || []).forEach((e) => G.aviso(e, 'error'));

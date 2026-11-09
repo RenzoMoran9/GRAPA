@@ -8,7 +8,9 @@
   const G = (window.Grapa = window.Grapa || {});
   const { PDFDocument, StandardFonts, degrees, rgb, PDFRawStream, PDFName, PDFDict, PDFStream,
           PDFArray, PDFRef, PDFNumber, decodePDFRawStream,
-          pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = PDFLib;
+          pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject,
+          beginText, endText, setFontAndSize, setTextRenderingMode, TextRenderingMode,
+          setCharacterSqueeze, setTextMatrix, showText } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
   const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
@@ -1079,6 +1081,52 @@
     setTimeout(fin, 60);
   });
 
+  /* ---------- texto invisible sobre una hoja escaneada ----------
+     Lo que leyó el lector de escaneos se escribe encima de la foto, palabra
+     por palabra y en su sitio, pero sin tinta (modo «invisible» del PDF): la
+     hoja se ve igual y ya se puede buscar, marcar y copiar, aquí y en
+     cualquier otro programa.
+
+     La lectura viene en fracciones de la hoja «como se leyó»: con el giro de
+     la hoja, más el giro de más que hizo falta si estaba de cabeza
+     (`girada`), y enderezada unos grados si estaba torcida (`torcida`). Se
+     deshace todo eso para que cada palabra caiga sobre la suya.            */
+  function capaDeTexto(pag, lec, fnt, clave, W, H, OX, OY, R) {
+    const Rv = G.norm(R + (lec.girada || 0));
+    const vis = G.cajaVisible(W, H, Rv);
+    const th = ((lec.torcida || 0) * Math.PI) / 180, co = Math.cos(th), si = Math.sin(th);
+    const cx = vis.w / 2, cy = vis.h / 2;
+    // hacia dónde corre el renglón en el PDF, donde los giros van contra el reloj
+    const al = ((Rv + (lec.torcida || 0)) * Math.PI) / 180, ca = Math.cos(al), sa = Math.sin(al);
+    const letras = capaDeTexto.letras || (capaDeTexto.letras = new Set(fnt.getCharacterSet()));
+    const ops = [pushGraphicsState(), beginText(), setTextRenderingMode(TextRenderingMode.Invisible)];
+    let n = 0, tamPuesto = 0;
+    (lec.lineas || []).forEach((l) => (l.palabras || []).forEach((w) => {
+      // la fuente no tiene todos los signos: los que no tiene no se escriben
+      const t = Array.from(String(w.t || '')).filter((c) => letras.has(c.codePointAt(0))).join('').trim();
+      if (!t) return;
+      const an = (w.x1 - w.x0) * vis.w, alto = (w.y1 - w.y0) * vis.h;
+      if (!(an > 0.5) || !(alto > 0.5)) return;
+      const tam = Math.round(Math.min(Math.max(alto * 0.8, 3), 96) * 10) / 10;
+      const natural = fnt.widthOfTextAtSize(t, tam);
+      if (!natural) return;
+      // la palabra, estirada o encogida hasta ocupar justo su ancho en el papel
+      const ancho = Math.min(Math.max((an / natural) * 100, 10), 1000);
+      // pie de la letra, en la hoja enderezada; de ahí a la hoja como es
+      const dx = w.x0 * vis.w - cx, dy = w.y1 * vis.h - alto * 0.2 - cy;
+      const p = G.aPuntoPdf(cx + dx * co + dy * si, cy - dx * si + dy * co, W, H, Rv);
+      if (tam !== tamPuesto) { ops.push(setFontAndSize(clave, tam)); tamPuesto = tam; }
+      ops.push(setCharacterSqueeze(Math.round(ancho * 10) / 10),
+        setTextMatrix(ca, sa, -sa, ca, p.x + OX, p.y + OY),
+        showText(fnt.encodeText(t + ' ')));
+      n++;
+    }));
+    if (!n) return 0;
+    ops.push(endText(), popGraphicsState());
+    pag.pushOperators(...ops);
+    return n;
+  }
+
   G.construirPdf = async function (paginas, opciones) {
     opciones = opciones || {};
     const salida = await PDFDocument.create();
@@ -1231,6 +1279,13 @@
         const p = G.aPuntoPdf(px, py, W, H, R);
         return { x: p.x + OX, y: p.y + OY };
       };
+
+      // lo leído de un escaneo, como texto invisible encima («Hacer buscables»)
+      const leido = opciones.capaTexto && opciones.capaTexto[i];
+      if (leido) {
+        const fnt = await pedirFuente(false);
+        capaDeTexto(pag, leido, fnt, pag.node.newFontDictionary('PdflashLeido', fnt.ref), W, H, OX, OY, R);
+      }
 
       for (const sello of est.sellos) {
         if (sello.rol === 'firma') {

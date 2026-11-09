@@ -512,7 +512,7 @@
       g = grises(r);
     }
     // PaddleOCR separa bien la letra de la raya: a él solo le hace falta la hoja derecha
-    if (soloEnderezar) return fuente;
+    if (soloEnderezar) { fuente.torcida = grados; return fuente; }
     const umbral = umbralOtsu(g);
     const borrar = rayasDe(g, W, H, umbral);
     // la raya tiene un borde gris: se borran también dos puntos a cada lado
@@ -536,6 +536,7 @@
     limpio.width = W; limpio.height = H;
     limpio.getContext('2d').putImageData(new ImageData(salida, W, H), 0, 0);
     if (fuente !== lienzo) { fuente.width = fuente.height = 0; }
+    limpio.torcida = grados;
     return limpio;
   }
   G.prepararEscaneo = prepararEscaneo;
@@ -735,14 +736,21 @@
    * los demás, parando en cuanto uno salga bien: cada lectura de más cuesta segundos.
    */
   async function leerBienOrientadaPaddle(pagina) {
-    let mejor = await G.ocrLienzo(await lienzoGirado(pagina, 0, ANCHO_HOJA, true));
+    const leer = async (grados) => {
+      const lz = await lienzoGirado(pagina, grados, ANCHO_HOJA, true);
+      const lec = await G.ocrLienzo(lz);
+      // cuánto se enderezó para leerla: hace falta para poner cada palabra en su sitio
+      lec.torcida = lz.torcida || 0;
+      return lec;
+    };
+    let mejor = await leer(0);
     let q = calidad(mejor);
     if (q >= 10) return mejor;
     const inicial = q, original = mejor;
     const sugerido = G.revisarHoja ? await G.revisarHoja(pagina).then((r) => r.giro, () => 0) : 0;
     const orden = [sugerido].concat([180, 90, 270]).filter((g, i, a) => g && a.indexOf(g) === i);
     for (const grados of orden) {
-      const alt = await G.ocrLienzo(await lienzoGirado(pagina, grados, ANCHO_HOJA, true));
+      const alt = await leer(grados);
       const qa = calidad(alt);
       if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; }
       if (q >= 10 && q >= inicial * 2) break;
@@ -769,7 +777,9 @@
       // ninguna sale claramente mejor: se deja la lectura sin girar
       if (q < 8 || q < inicial * 2) { mejor = original.lec; lienzo = original.lienzo; }
     }
-    return rellenarHuecos(lienzo, mejor, alProgreso);
+    const lec = await rellenarHuecos(lienzo, mejor, alProgreso);
+    lec.torcida = lienzo.torcida || 0;
+    return lec;
   }
 
   /* ---------- leer una hoja ---------- */
