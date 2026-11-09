@@ -229,18 +229,20 @@ Las hojas escaneadas son una foto del papel: por dentro no tienen letras, y
 el buscador no puede mirar ahí. Al abrir **Buscar**, Pdflash dice cuántas son y
 ofrece **Hacer buscables las N hojas**:
 
-1. Se abre el editor en otra pestaña y lee todas las escaneadas seguidas, con
-   su avance («Hoja 3 de 12»). Tarda unos segundos por hoja; **Detener** para
-   y devuelve lo ya leído.
-2. Al terminar, las devuelve solo y la pestaña se cierra. Cada hoja vuelve a
-   su sitio, con sus folios, firmas y giro, y **se ve igual**: lo leído va
-   como texto invisible encima de la foto.
-3. Desde ahí el buscador las encuentra, y el PDF que guardes también se puede
-   buscar y copiar en cualquier otro programa.
+1. Pdflash las lee ahí mismo, con su propio lector de escaneos, varias a la
+   vez y con su avance («3 de 12»). Tarda unos segundos por hoja y mientras
+   tanto se puede seguir trabajando; **Detener** para y deja buscables las
+   que ya leyó.
+2. Cada hoja sigue en su sitio, con sus folios, firmas y giro, y **se ve
+   igual**: lo leído va como texto invisible encima de la foto, palabra por
+   palabra, también si la hoja estaba de lado, de cabeza o torcida.
+3. Desde ahí el buscador las encuentra y resalta la palabra en su lugar, y el
+   PDF que guardes también se puede buscar y copiar en cualquier otro programa.
 
-Las hojas que ya tienen texto no viajan. Todo pasa en tu computadora, como
-**Editar texto**: en la página pública el editor se abre solo, y con Pdflash
-guardada en tu equipo hace falta `GrapaEditor.html` en la misma carpeta. El
+Las hojas que ya tienen texto no se tocan, y las que son una foto o un plano
+sin letras se dejan como están y no se vuelven a ofrecer. Todo pasa en tu
+computadora y **ya no hace falta el editor ni otra pestaña**: funciona igual
+en la web y con `Grapa.html` sin internet. `Ctrl+Z` lo deshace. El
 reconocimiento puede equivocarse en alguna letra, sobre todo en escaneos
 borrosos: lo que no lea bien, no se encontrará.
 

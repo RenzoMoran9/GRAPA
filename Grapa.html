@@ -1939,7 +1939,7 @@ body.modo-cortes .corte{right:-14px;width:26px}
         <p class="nota buscar-estado" id="buscarEstado" aria-live="polite">Busca en el texto de todas las hojas. Da igual si escribes con tildes o mayúsculas.</p>
         <div class="buscar-escaneadas" id="buscarEscaneadas" hidden>
           <p class="nota" id="buscarEscaneadasTexto"></p>
-          <button class="btn btn-primario ancho" id="btnHacerBuscables" type="button" title="El editor lee lo que dice cada hoja escaneada y le pone el texto invisible encima. Se sigue viendo igual.">Hacerlas buscables</button>
+          <button class="btn btn-primario ancho" id="btnHacerBuscables" type="button" title="Pdflash lee lo que dice cada hoja escaneada y le pone el texto invisible encima. Se sigue viendo igual.">Hacerlas buscables</button>
         </div>
         <button class="btn btn-suave ancho" id="buscarMarcar" type="button" hidden>Marcar estas hojas</button>
         <ol class="lista-hallazgos" id="listaHallazgos"></ol>
@@ -3701,7 +3701,9 @@ window.GRAPA_CONFIG = {
   const G = (window.Grapa = window.Grapa || {});
   const { PDFDocument, StandardFonts, degrees, rgb, PDFRawStream, PDFName, PDFDict, PDFStream,
           PDFArray, PDFRef, PDFNumber, decodePDFRawStream,
-          pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = PDFLib;
+          pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject,
+          beginText, endText, setFontAndSize, setTextRenderingMode, TextRenderingMode,
+          setCharacterSqueeze, setTextMatrix, showText } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
   const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
@@ -4772,6 +4774,52 @@ window.GRAPA_CONFIG = {
     setTimeout(fin, 60);
   });
 
+  /* ---------- texto invisible sobre una hoja escaneada ----------
+     Lo que leyó el lector de escaneos se escribe encima de la foto, palabra
+     por palabra y en su sitio, pero sin tinta (modo «invisible» del PDF): la
+     hoja se ve igual y ya se puede buscar, marcar y copiar, aquí y en
+     cualquier otro programa.
+
+     La lectura viene en fracciones de la hoja «como se leyó»: con el giro de
+     la hoja, más el giro de más que hizo falta si estaba de cabeza
+     (`girada`), y enderezada unos grados si estaba torcida (`torcida`). Se
+     deshace todo eso para que cada palabra caiga sobre la suya.            */
+  function capaDeTexto(pag, lec, fnt, clave, W, H, OX, OY, R) {
+    const Rv = G.norm(R + (lec.girada || 0));
+    const vis = G.cajaVisible(W, H, Rv);
+    const th = ((lec.torcida || 0) * Math.PI) / 180, co = Math.cos(th), si = Math.sin(th);
+    const cx = vis.w / 2, cy = vis.h / 2;
+    // hacia dónde corre el renglón en el PDF, donde los giros van contra el reloj
+    const al = ((Rv + (lec.torcida || 0)) * Math.PI) / 180, ca = Math.cos(al), sa = Math.sin(al);
+    const letras = capaDeTexto.letras || (capaDeTexto.letras = new Set(fnt.getCharacterSet()));
+    const ops = [pushGraphicsState(), beginText(), setTextRenderingMode(TextRenderingMode.Invisible)];
+    let n = 0, tamPuesto = 0;
+    (lec.lineas || []).forEach((l) => (l.palabras || []).forEach((w) => {
+      // la fuente no tiene todos los signos: los que no tiene no se escriben
+      const t = Array.from(String(w.t || '')).filter((c) => letras.has(c.codePointAt(0))).join('').trim();
+      if (!t) return;
+      const an = (w.x1 - w.x0) * vis.w, alto = (w.y1 - w.y0) * vis.h;
+      if (!(an > 0.5) || !(alto > 0.5)) return;
+      const tam = Math.round(Math.min(Math.max(alto * 0.8, 3), 96) * 10) / 10;
+      const natural = fnt.widthOfTextAtSize(t, tam);
+      if (!natural) return;
+      // la palabra, estirada o encogida hasta ocupar justo su ancho en el papel
+      const ancho = Math.min(Math.max((an / natural) * 100, 10), 1000);
+      // pie de la letra, en la hoja enderezada; de ahí a la hoja como es
+      const dx = w.x0 * vis.w - cx, dy = w.y1 * vis.h - alto * 0.2 - cy;
+      const p = G.aPuntoPdf(cx + dx * co + dy * si, cy - dx * si + dy * co, W, H, Rv);
+      if (tam !== tamPuesto) { ops.push(setFontAndSize(clave, tam)); tamPuesto = tam; }
+      ops.push(setCharacterSqueeze(Math.round(ancho * 10) / 10),
+        setTextMatrix(ca, sa, -sa, ca, p.x + OX, p.y + OY),
+        showText(fnt.encodeText(t + ' ')));
+      n++;
+    }));
+    if (!n) return 0;
+    ops.push(endText(), popGraphicsState());
+    pag.pushOperators(...ops);
+    return n;
+  }
+
   G.construirPdf = async function (paginas, opciones) {
     opciones = opciones || {};
     const salida = await PDFDocument.create();
@@ -4924,6 +4972,13 @@ window.GRAPA_CONFIG = {
         const p = G.aPuntoPdf(px, py, W, H, R);
         return { x: p.x + OX, y: p.y + OY };
       };
+
+      // lo leído de un escaneo, como texto invisible encima («Hacer buscables»)
+      const leido = opciones.capaTexto && opciones.capaTexto[i];
+      if (leido) {
+        const fnt = await pedirFuente(false);
+        capaDeTexto(pag, leido, fnt, pag.node.newFontDictionary('PdflashLeido', fnt.ref), W, H, OX, OY, R);
+      }
 
       for (const sello of est.sellos) {
         if (sello.rol === 'firma') {
@@ -6347,7 +6402,7 @@ window.GRAPA_CONFIG = {
       g = grises(r);
     }
     // PaddleOCR separa bien la letra de la raya: a él solo le hace falta la hoja derecha
-    if (soloEnderezar) return fuente;
+    if (soloEnderezar) { fuente.torcida = grados; return fuente; }
     const umbral = umbralOtsu(g);
     const borrar = rayasDe(g, W, H, umbral);
     // la raya tiene un borde gris: se borran también dos puntos a cada lado
@@ -6371,6 +6426,7 @@ window.GRAPA_CONFIG = {
     limpio.width = W; limpio.height = H;
     limpio.getContext('2d').putImageData(new ImageData(salida, W, H), 0, 0);
     if (fuente !== lienzo) { fuente.width = fuente.height = 0; }
+    limpio.torcida = grados;
     return limpio;
   }
   G.prepararEscaneo = prepararEscaneo;
@@ -6570,14 +6626,21 @@ window.GRAPA_CONFIG = {
    * los demás, parando en cuanto uno salga bien: cada lectura de más cuesta segundos.
    */
   async function leerBienOrientadaPaddle(pagina) {
-    let mejor = await G.ocrLienzo(await lienzoGirado(pagina, 0, ANCHO_HOJA, true));
+    const leer = async (grados) => {
+      const lz = await lienzoGirado(pagina, grados, ANCHO_HOJA, true);
+      const lec = await G.ocrLienzo(lz);
+      // cuánto se enderezó para leerla: hace falta para poner cada palabra en su sitio
+      lec.torcida = lz.torcida || 0;
+      return lec;
+    };
+    let mejor = await leer(0);
     let q = calidad(mejor);
     if (q >= 10) return mejor;
     const inicial = q, original = mejor;
     const sugerido = G.revisarHoja ? await G.revisarHoja(pagina).then((r) => r.giro, () => 0) : 0;
     const orden = [sugerido].concat([180, 90, 270]).filter((g, i, a) => g && a.indexOf(g) === i);
     for (const grados of orden) {
-      const alt = await G.ocrLienzo(await lienzoGirado(pagina, grados, ANCHO_HOJA, true));
+      const alt = await leer(grados);
       const qa = calidad(alt);
       if (qa > q) { mejor = alt; q = qa; mejor.girada = grados; }
       if (q >= 10 && q >= inicial * 2) break;
@@ -6604,7 +6667,9 @@ window.GRAPA_CONFIG = {
       // ninguna sale claramente mejor: se deja la lectura sin girar
       if (q < 8 || q < inicial * 2) { mejor = original.lec; lienzo = original.lienzo; }
     }
-    return rellenarHuecos(lienzo, mejor, alProgreso);
+    const lec = await rellenarHuecos(lienzo, mejor, alProgreso);
+    lec.torcida = lienzo.torcida || 0;
+    return lec;
   }
 
   /* ---------- leer una hoja ---------- */
@@ -14529,26 +14594,126 @@ window.GRAPA_CONFIG = {
 
   /* ---------------- hacer buscable lo escaneado ----------------
      Una hoja escaneada es una foto: el buscador no tiene letras en las que
-     buscar. El editor, que es el que sabe leer fotos, lee todas de una vez
-     y les pone el texto invisible encima; vuelven cada una a su sitio, con
-     sus folios y firmas, y se ven igual que antes. */
+     buscar. Pdflash las lee con su propio lector de escaneos, aquí mismo, y
+     les pone el texto invisible encima; cada una sigue en su sitio, con sus
+     folios y firmas, y se ve igual que antes. Antes había que mandarlas al
+     editor, en otra pestaña.                                              */
+  const lecturaEscaneos = { corriendo: null, hechas: 0, total: 0, estado: '' };
+  // hojas donde el lector no encontró letras (una foto, un plano): no se vuelven a ofrecer
+  const sinLetras = new Set();
+  const claveHoja = (p) => p.fuenteId + ':' + p.indice;
+  const escaneadasPorLeer = () => (E.paginas.length ? G.hojasSinTexto(E.paginas) : [])
+    .filter((p) => !sinLetras.has(claveHoja(p)));
+
   function pintarEscaneadas() {
-    const caja = $('#buscarEscaneadas');
-    const sin = E.paginas.length ? G.hojasSinTexto(E.paginas) : [];
+    const caja = $('#buscarEscaneadas'), boton = $('#btnHacerBuscables');
+    const tarea = lecturaEscaneos.corriendo;
+    if (tarea) {
+      caja.hidden = false;
+      $('#buscarEscaneadasTexto').textContent = lecturaEscaneos.estado
+        || (tarea.cancelada ? 'Deteniendo…'
+          : `Leyendo las hojas escaneadas: ${lecturaEscaneos.hechas} de ${lecturaEscaneos.total}. Puedes seguir trabajando.`);
+      boton.textContent = 'Detener';
+      boton.disabled = !!tarea.cancelada;
+      return;
+    }
+    boton.disabled = false;
+    const sin = escaneadasPorLeer();
     caja.hidden = !sin.length || !!busqueda.leyendo;
     if (caja.hidden) return;
     const n = sin.length;
     $('#buscarEscaneadasTexto').textContent = (n === 1
       ? 'Una hoja es escaneada: es una foto del papel y el buscador no puede leerla.'
       : `${n} hojas son escaneadas: son fotos del papel y el buscador no puede leerlas.`)
-      + ' El editor puede leerlas y dejarlas buscables, sin cambiar cómo se ven.';
-    $('#btnHacerBuscables').textContent = n === 1 ? 'Hacerla buscable' : `Hacer buscables las ${n} hojas`;
+      + ' Pdflash puede leerlas y dejarlas buscables, sin cambiar cómo se ven.';
+    boton.textContent = n === 1 ? 'Hacerla buscable' : `Hacer buscables las ${n} hojas`;
   }
 
-  function hacerBuscables() {
-    const sin = G.hojasSinTexto(E.paginas);
+  const letrasDe = (lec) => (lec.lineas || []).reduce((n, l) => n + String(l.texto || '').replace(/\s/g, '').length, 0);
+
+  async function hacerBuscables() {
+    if (lecturaEscaneos.corriendo) {          // el mismo botón, mientras lee, detiene
+      lecturaEscaneos.corriendo.cancelada = true;
+      pintarEscaneadas();
+      return;
+    }
+    const sin = escaneadasPorLeer();
     if (!sin.length) { G.aviso('No hay hojas escaneadas por leer.', 'ok'); return; }
-    editarTexto(sin, { tarea: 'buscable' });
+    const tarea = (lecturaEscaneos.corriendo = { cancelada: false });
+    const dueno = tableroActivo;              // se puede cambiar de tablero mientras lee
+    Object.assign(lecturaEscaneos, { hechas: 0, total: sin.length, estado: '' });
+    pintarEscaneadas();
+
+    const lecturas = new Map();               // uid → { lec, giro, enderezo }
+    let falladas = 0, rota = false, siguiente = 0;
+    const lector = async () => {
+      while (!tarea.cancelada && !rota) {
+        const i = siguiente++;
+        if (i >= sin.length) return;
+        const p = sin[i];
+        const giro = p.giro, enderezo = p.enderezo || 0;
+        try {
+          // una hoja que no sale en dos minutos se da por no leída y se sigue con las demás
+          const lec = await (G.conTopeOcr ? G.conTopeOcr(G.leerLineas(p), 120000, 'la hoja') : G.leerLineas(p));
+          lecturas.set(p.uid, { lec, giro, enderezo });
+        } catch (e) {
+          console.error(e);
+          falladas++;
+          if (/lector de texto|antiguo/.test(e.message)) { G.aviso(e.message, 'error'); rota = true; }
+        }
+        lecturaEscaneos.hechas++;
+        pintarEscaneadas();
+      }
+    };
+    // mientras arranca el lector de escaneos (unos segundos la primera vez), se dice
+    const bajaEstado = G.alEstadoOcr ? G.alEstadoOcr((t) => { lecturaEscaneos.estado = t || ''; pintarEscaneadas(); }) : null;
+    try {
+      await Promise.all(Array.from({ length: G.lectoresOcr ? G.lectoresOcr() : 1 }, lector));
+    } finally {
+      if (bajaEstado) bajaEstado();
+      lecturaEscaneos.estado = '';
+    }
+
+    try {
+      // Lo leído es del tablero que lo pidió: si mientras tanto se pasó a
+      // otro, se vuelve a aquel para ponerlo, como con lo que venía del editor.
+      if (dueno !== tableroActivo) {
+        if (!tableros.includes(dueno)) return;
+        activarTablero(dueno.id, { interno: true });
+        G.aviso(`Las hojas leídas son del tablero ${numeroDe(dueno)}.`, 'ok');
+      }
+      // Solo las que siguen en el expediente y tal como se leyeron: una hoja
+      // girada o enderezada mientras tanto tendría el texto en otro sitio.
+      const listas = [];
+      let vacias = 0;
+      sin.forEach((p) => {
+        const r = lecturas.get(p.uid);
+        if (!r || !E.paginas.includes(p)) return;
+        if (p.giro !== r.giro || (p.enderezo || 0) !== r.enderezo) return;
+        if (letrasDe(r.lec) < 20) { sinLetras.add(claveHoja(p)); vacias++; return; }
+        listas.push(p);
+      });
+      if (!listas.length) {
+        G.aviso(tarea.cancelada && !vacias ? 'Detenido. No se cambió ninguna hoja.'
+          : falladas && !vacias ? 'No se pudo leer ninguna hoja.'
+          : 'En esas hojas no se reconoció ninguna palabra: parecen fotos o dibujos.', falladas ? 'error' : 'ok');
+        return;
+      }
+      lecturaEscaneos.estado = 'Poniendo el texto en las hojas…';
+      pintarEscaneadas();
+      const bytes = await G.construirPdf(paraElEditor(listas), { capaTexto: listas.map((p) => lecturas.get(p.uid).lec) });
+      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      await recibirDelEditor(bytes, base, 0,
+        { tarea: 'buscable', leidas: listas.length, vacias, falladas, detenido: tarea.cancelada },
+        { enviadas: listas.map((p) => p.uid), tablero: dueno.id });
+    } catch (e) {
+      console.error(e);
+      G.aviso('No se pudo poner el texto en las hojas: ' + e.message, 'error');
+    } finally {
+      lecturaEscaneos.corriendo = null;
+      lecturaEscaneos.estado = '';
+      pintarEscaneadas();
+    }
   }
 
   function avisarBuscables(d) {
@@ -14556,6 +14721,9 @@ window.GRAPA_CONFIG = {
     let t = leidas === 1 ? 'Listo: 1 hoja escaneada ya se puede buscar.'
       : `Listo: ${leidas} hojas escaneadas ya se pueden buscar.`;
     if (vacias) t += vacias === 1 ? ' En 1 no se reconoció ninguna palabra.' : ` En ${vacias} no se reconoció ninguna palabra.`;
+    const falladas = Number(d.falladas) || 0;
+    if (falladas) t += falladas === 1 ? ' 1 no se pudo leer.' : ` ${falladas} no se pudieron leer.`;
+    if (d.detenido) t += ' Se detuvo antes de terminar: las demás siguen como estaban.';
     // lo que hizo el editor por su cuenta, que su pestaña ya no enseña
     const enderezadas = Number(d.enderezadas) || 0;
     if (enderezadas) t += enderezadas === 1 ? ' 1 hoja estaba torcida y se enderezó.' : ` ${enderezadas} hojas estaban torcidas y se enderezaron.`;
@@ -14587,10 +14755,10 @@ window.GRAPA_CONFIG = {
       .filter(Boolean);
     if (envio) envio.enviadas = null;
 
-    G.cargando(true, 'Recogiendo lo corregido…');
+    G.cargando(true, buscable ? 'Poniendo las hojas leídas en su sitio…' : 'Recogiendo lo corregido…');
     try {
       await G.prepararMotor();
-      const archivo = new File([bytes], base + ' (texto editado).pdf', { type: 'application/pdf' });
+      const archivo = new File([bytes], base + (buscable ? ' (buscable).pdf' : ' (texto editado).pdf'), { type: 'application/pdf' });
       const r = await G.cargarArchivos([archivo], (t) => G.progreso(t));
       if (!r.paginas.length) {
         (r.errores || []).forEach((e) => G.aviso(e, 'error'));

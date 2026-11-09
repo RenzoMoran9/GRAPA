@@ -405,6 +405,46 @@ const PRUEBAS = {
     afirmar(hallados >= 2, 'ubicó los formatos escaneados', { hallados, estado: await page.textContent('#formatosEstado') });
   },
 
+  async 'hacer buscables: Pdflash lee los escaneos sin abrir el editor y resalta la palabra en su sitio'({ page }) {
+    await page.setInputFiles('#entradaArchivos', [await pdfEscaneado(page)]);
+    await esperarCarga(page);
+    // una hoja de lado: el texto tiene que caer igual sobre su palabra
+    await page.evaluate(() => { const G = window.Grapa; G.estado.paginas[1].giro = 90; G.estado.paginas[0].sellos.push({ rol: 'marca', texto: 'SELLO', pos: 'ad' }); G.pintar(); });
+    await page.click('.riel-btn[data-va="buscar"]');
+    await page.waitForSelector('#buscarEscaneadas:not([hidden])');
+    afirmar(/4 hojas/.test(await page.textContent('#btnHacerBuscables')), 'ofrece leer las 4 escaneadas', await page.textContent('#btnHacerBuscables'));
+    const ventanas = page.context().pages().length;
+    await page.click('#btnHacerBuscables');
+    await page.waitForFunction(() => document.querySelector('#buscarEscaneadas').hidden && document.querySelector('#cargando').hidden
+      && window.Grapa.buscadorListo(window.Grapa.estado.paginas)
+      && !window.Grapa.hojasSinTexto(window.Grapa.estado.paginas).length, null, { timeout: 240000 });
+    afirmar(page.context().pages().length === ventanas, 'no abrió otra pestaña');
+    const r = await page.evaluate(() => {
+      const G = window.Grapa, E = G.estado;
+      const caja = (texto, i) => {
+        const h = G.buscarEnHojas(E.paginas, texto).hallazgos.filter((x) => x.pagina === E.paginas[i])[0];
+        if (!h) return null;
+        const cs = h.cajas.map((c) => G.girarCaja(c, h.pagina.giro));
+        return { x0: Math.min(...cs.map((c) => c.x0)), x1: Math.max(...cs.map((c) => c.x1)),
+                 y0: Math.min(...cs.map((c) => c.y0)), y1: Math.max(...cs.map((c) => c.y1)) };
+      };
+      return { hojas: E.paginas.length, giro: E.paginas[1].giro, sellos: E.paginas[0].sellos.length,
+               derecha: caja('informe tecnico', 3), deLado: caja('cotizacion', 1),
+               prueba: G.buscarEnHojas(E.paginas, 'escaneada para la prueba 18').total };
+    });
+    afirmar(r.hojas === 4 && r.giro === 90 && r.sellos === 1, 'cada hoja sigue en su sitio, con su giro y sus sellos', r);
+    afirmar(r.prueba === 4, 'el buscador encuentra el texto en las 4 hojas', r);
+    // el título está centrado arriba (x 0,5 · y 0,12); en la hoja de lado, a la derecha (x 0,88 · y 0,5)
+    const centro = (c) => c && [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2];
+    const cerca = (c, x, y) => !!c && Math.abs(c[0] - x) < 0.04 && Math.abs(c[1] - y) < 0.04;
+    afirmar(cerca(centro(r.derecha), 0.5, 0.115), 'resalta sobre la palabra en la hoja derecha', r.derecha);
+    afirmar(cerca(centro(r.deLado), 0.885, 0.5), 'resalta sobre la palabra en la hoja de lado', r.deLado);
+    // y se deshace
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(300);
+    afirmar(await page.evaluate(() => window.Grapa.estado.paginas.length) === 4, 'deshacer deja las 4 hojas');
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {
