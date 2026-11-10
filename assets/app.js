@@ -4710,6 +4710,8 @@
     serif: '"Times New Roman", Times, "Liberation Serif", serif',
     mono: '"Courier New", Courier, "Liberation Mono", monospace',
     signos: '"Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", "Noto Sans Symbols2", sans-serif',
+    // la gemela libre de Calibri, que es la que queda dentro del PDF
+    calibri: G.cssDeLetra('calibri'),
   };
   const NS_SVG = 'http://www.w3.org/2000/svg';
   let editando = false;
@@ -4760,6 +4762,9 @@
         svg.appendChild(r);
       }
       if (String(s.texto || '').trim()) {
+        // un expediente guardado con texto en Calibri: la letra se trae al verlo (el navegador
+        // la pone sola en cuanto llega)
+        if (G.esLetraPropia(s.familia) && !G.letraLista(s.familia)) G.cargarLetra(s.familia);
         const p = girarPunto(s.x, s.y, d);
         const t = document.createElementNS(NS_SVG, 'text');
         t.setAttribute('x', p.x * vis.w); t.setAttribute('y', p.y * vis.h);
@@ -4995,7 +5000,9 @@
       let nombre = '';
       try { nombre = String((pag.commonObjs.get(it.fontName) || {}).name || ''); } catch (e) { /* aún no se dibujó */ }
       const pista = (nombre + ' ' + (estilo.fontFamily || '')).toLowerCase();
-      if (/mono|courier|consol/.test(pista)) r.familia = 'mono';
+      const propia = G.letraPropiaDe(pista);
+      if (propia && await G.cargarLetra(propia)) r.familia = propia;
+      else if (/mono|courier|consol/.test(pista)) r.familia = 'mono';
       else if (/times|serif|roman|georgia|garamond|cambria|book/.test(pista) && !/sans/.test(pista)) r.familia = 'serif';
       if (nombre) {
         r.sabe = true;
@@ -5579,7 +5586,16 @@
     $('#edMas').addEventListener('click', () => cambiarFormato((m) => { m.tam = Math.min(96, (m.tam || 11) + 0.5); }));
     $('#edNegrita').addEventListener('click', () => cambiarFormato((m) => { m.negrita = !m.negrita; }));
     $('#edCursiva').addEventListener('click', () => cambiarFormato((m) => { m.cursiva = !m.cursiva; }));
-    $('#edFamilia').addEventListener('change', (ev) => cambiarFormato((m) => { m.familia = ev.target.value; }));
+    $('#edFamilia').addEventListener('change', async (ev) => {
+      const familia = ev.target.value;
+      // una letra propia se trae la primera vez que se pide; si no se puede, se dice y se queda la que había
+      if (G.esLetraPropia(familia) && !(await G.cargarLetra(familia))) {
+        G.aviso('No se pudo cargar esa letra. Abre Pdflash desde la web, o usa el Grapa.html completo.', 'error');
+        pintarBarraEditor();
+        return;
+      }
+      cambiarFormato((m) => { m.familia = familia; });
+    });
     $('#edColor').addEventListener('change', (ev) => cambiarFormato((m) => { m.color = ev.target.value; }));
     $('#edColor').addEventListener('input', (ev) => { if (edicion) { edicion.m.color = ev.target.value; edicion.tocado = true; acomodarEdicion(); } });
     $('#edGrosor').addEventListener('change', (ev) => cambiarFormato((m) => { m.grosor = Number(ev.target.value) || 2; }));

@@ -684,6 +684,72 @@ const PRUEBAS = {
     afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer quita las figuras');
   },
 
+  async 'editar un PDF en Calibri: lo corregido sale con su gemela, dentro del PDF y sin estirar'({ page }) {
+    // un PDF como los de Word: escrito en Calibri (aquí, con su gemela Carlito, que se llama así en el archivo)
+    const b64 = await page.evaluate(async () => {
+      const G = window.Grapa, { PDFDocument } = window.PDFLib;
+      const doc = await PDFDocument.create();
+      doc.registerFontkit(await G.motorDeLetras());
+      const f = await doc.embedFont(await G.bytesDeLetra('calibri', true, false));
+      const p = doc.addPage([595.28, 841.89]);
+      p.drawText('OXIMETRO DE PULSO', { x: 60, y: 700, size: 14, font: f });
+      p.drawText('13,500.00', { x: 400, y: 700, size: 14, font: f });
+      p.drawText('Texto de relleno para que la hoja cuente como texto de verdad', { x: 60, y: 640, size: 11, font: f });
+      const bytes = await doc.save();
+      let t = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) t += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(t);
+    });
+    await page.setInputFiles('#entradaArchivos', [{ name: 'word.pdf', mimeType: 'application/pdf', buffer: Buffer.from(b64, 'base64') }]);
+    await esperarCarga(page);
+    await page.keyboard.press('v');
+    await page.click('#lectorEditarTexto');
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.leido');
+    const i = await page.evaluate(() => document.querySelector('.hoja[data-indice="0"] .capa-editar')._trozos.findIndex((t) => /13,500/.test(t.texto)));
+    await page.click(`.hoja[data-indice="0"] .trozo[data-trozo="${i}"]`);
+    await page.waitForSelector('.editor-campo');
+    afirmar(await page.inputValue('#edFamilia') === 'calibri', 'reconoce que está en Calibri', await page.inputValue('#edFamilia'));
+    await page.fill('.editor-campo', '14,872.60');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 1);
+    const s = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos[0]);
+    afirmar(s.familia === 'calibri' && s.negrita && !s.estira, 'queda en Calibri negrita y sin estirar: ocupa lo mismo', s);
+    const r = await page.evaluate(async () => {
+      const G = window.Grapa;
+      const entera = await G.bytesDeLetra('calibri', true, false);
+      const bytes = await G.construirPdf([G.estado.paginas[0]], {});
+      const doc = await window.pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+      const pg = await doc.getPage(1), vp = pg.getViewport({ scale: 2 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      const tc = await pg.getTextContent();
+      const it = tc.items.find((x) => /14,872/.test(x.str));
+      // la tinta de cada cifra: una letra mal metida en el PDF deja huecos donde iban los números
+      const g = c.getContext('2d');
+      const x0 = it.transform[4] * 2, an = it.width * 2, y = (841.89 - it.transform[5]) * 2;
+      const tramos = [];
+      for (let k = 0; k < 9; k++) {
+        const d = g.getImageData(Math.round(x0 + (an * k) / 9), Math.round(y - 22), Math.ceil(an / 9), 26).data;
+        let n = 0;
+        for (let q = 0; q < d.length; q += 4) if (d[q] < 110) n++;
+        tramos.push(n);
+      }
+      const delgada = G.adelgazarLetra(entera, new Set([5, 20, 21, 22]));
+      const cara = await new FontFace('PruebaDelgada', delgada.buffer).load().then(() => true, () => false);
+      return { texto: it.str, x1: it.transform[4] + it.width, viejo: tc.items.some((x) => /13,500/.test(x.str)), tramos,
+               letra: Object.keys(tc.styles).map((k) => { try { return pg.commonObjs.get(k).name; } catch (e) { return ''; } }),
+               pdf: bytes.length, entera: entera.length, delgada: delgada.length, cara };
+    });
+    afirmar(r.texto === '14,872.60' && !r.viejo, 'el PDF dice lo nuevo y no lo viejo', r);
+    afirmar(r.letra.some((n) => /Carlito-Bold/.test(n)), 'escrito con Carlito negrita', r.letra);
+    // el original acababa en 400 + su ancho; un número se arrima a la derecha, así que el nuevo acaba ahí mismo
+    afirmar(Math.abs(r.x1 - 457.3) < 1.5, 'acaba donde acababa el original', r.x1);
+    afirmar(r.tramos.every((n, k) => n > 8 || k === 2 || k === 6), 'todas las cifras se dibujan (ninguna quedó hueca)', r.tramos);
+    // (el PDF de esta prueba ya traía la letra entera dentro: se mira lo que se le suma)
+    const original = Buffer.from(b64, 'base64').length;
+    afirmar(r.pdf - original < 120000 && r.delgada < r.entera / 2 && r.cara, 'la letra va adelgazada, suma poco al PDF y el navegador la acepta', { ...r, original });
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {

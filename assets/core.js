@@ -1545,7 +1545,37 @@
     };
     // el texto que se corrige o se añade en «Editar texto»: la letra más parecida de las del PDF
     const fuentesEdicion = new Map();
+    let conMotor = false;
+    // Qué se va a escribir con cada letra propia, en todo el documento: así va al PDF solo
+    // con el dibujo de esas letras, y no con el medio mega de la letra entera.
+    const textosDeLetra = new Map();
+    paginas.forEach((p) => (p.sellos || []).forEach((s) => {
+      if (s.rol !== 'texto' || s.img || !G.esLetraPropia || !G.esLetraPropia(s.familia) || !String(s.texto || '').trim()) return;
+      const k = s.familia + ':' + (s.negrita ? 1 : 0) + (s.cursiva ? 2 : 0);
+      textosDeLetra.set(k, (textosDeLetra.get(k) || '') + String(s.texto).replace(/\s+/g, ' ') + ' ');
+    }));
     const pedirFuenteEdicion = async (sello) => {
+      // Una letra propia (Carlito, la gemela de Calibri) se mete en el PDF, solo con las
+      // letras que se usen. Si no se puede cargar, se escribe con la de fábrica.
+      if (G.esLetraPropia && G.esLetraPropia(sello.familia)) {
+        const k = sello.familia + ':' + (sello.negrita ? 1 : 0) + (sello.cursiva ? 2 : 0);
+        if (!fuentesEdicion.has(k)) {
+          let f = null;
+          try {
+            const motor = await G.motorDeLetras();
+            if (!conMotor) { salida.registerFontkit(motor); conMotor = true; }
+            const entera = await G.bytesDeLetra(sello.familia, !!sello.negrita, !!sello.cursiva);
+            // los glifos que salen al componer esos textos (con sus ligaduras), no letra por letra
+            const glifos = new Set();
+            motor.create(entera).layout(textosDeLetra.get(k) || String(sello.texto || '')).glyphs.forEach((g) => glifos.add(g.id));
+            f = await salida.embedFont(G.adelgazarLetra(entera, glifos));
+          } catch (e) {
+            console.warn('No se pudo poner la letra ' + sello.familia + ' en el PDF; va con la de fábrica.', e);
+          }
+          fuentesEdicion.set(k, f);
+        }
+        if (fuentesEdicion.get(k)) return fuentesEdicion.get(k);
+      }
       const nombre = (G.FUENTES_TEXTO[sello.familia] || G.FUENTES_TEXTO.sans)[(sello.negrita ? 1 : 0) + (sello.cursiva ? 2 : 0)];
       if (!fuentesEdicion.has(nombre)) fuentesEdicion.set(nombre, await salida.embedFont(StandardFonts[nombre]));
       return fuentesEdicion.get(nombre);

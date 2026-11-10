@@ -27,6 +27,8 @@ const CREDITOS = `<!--
     · ExcelJS 4.4.0 — MIT — https://github.com/exceljs/exceljs
     · html2canvas 1.4.1 — MIT — https://github.com/niklasvh/html2canvas
     · Inter 4 — SIL OFL 1.1 — https://github.com/rsms/inter
+    · Carlito — SIL OFL 1.1 — https://github.com/googlefonts/carlito
+    · fontkit (@pdf-lib/fontkit 1.1.1) — MIT — https://github.com/Hopding/fontkit
     · tesseract-wasm 0.11 (Tesseract OCR y Leptonica) — BSD-2-Clause / Apache-2.0 — https://github.com/robertknight/tesseract-wasm
     · Modelo de idioma español «tessdata_fast» — Apache-2.0 — https://github.com/tesseract-ocr/tessdata_fast
     · ONNX Runtime Web 1.23.0 — MIT — https://github.com/microsoft/onnxruntime
@@ -39,7 +41,7 @@ const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/exceljs.min.js', 'lib/html2canvas.min.js',
   'assets/config.js', 'assets/cuentas.js',
-  'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/clonar.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
+  'assets/core.js', 'assets/fuentes.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/clonar.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
   'assets/app.js', 'assets/guia.js',
 ];
 
@@ -78,6 +80,14 @@ for (const [id, archivo] of Object.entries(OCR)) {
   const gz = gzipSync(readFileSync(RAIZ + 'lib/ocr/' + archivo), { level: 9 }).toString('base64');
   partes.push(`<script type="text/plain" id="ocr-${id}">${gz}</script>`);
 }
+
+// Carlito (la gemela libre de Calibri) y fontkit (para meterla en el PDF) van dentro igual,
+// comprimidos, y tampoco se tocan hasta que se corrige un texto escrito en Calibri.
+['Carlito-Regular.ttf', 'Carlito-Bold.ttf', 'Carlito-Italic.ttf', 'Carlito-BoldItalic.ttf'].forEach((archivo, i) => {
+  const gz = gzipSync(readFileSync(RAIZ + 'lib/fuentes/' + archivo), { level: 9 }).toString('base64');
+  partes.push(`<script type="text/plain" id="letra-calibri-${i}">${gz}</script>`);
+});
+partes.push(`<script type="text/plain" id="lib-fontkit">${gzipSync(readFileSync(RAIZ + 'lib/fontkit.umd.min.js'), { level: 9 }).toString('base64')}</script>`);
 
 const doc = partes.join('\n\n') + '\n';
 if (doc.includes('�')) throw new Error('quedaron caracteres de reemplazo sin escapar');
