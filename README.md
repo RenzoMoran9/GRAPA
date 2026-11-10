@@ -477,9 +477,23 @@ Lo que conviene saber:
   escribe en su sitio, a su tamaño, y ocupando el mismo ancho que la
   original, para que no se monte en la columna de al lado. Un número queda
   arrimado a la derecha, como en toda tabla de precios.
-- **En un escaneo no hay texto que quitar**, solo una foto: ahí lo viejo se
-  tapa con un parche del color del papel, medido sobre la propia letra, y lo
-  nuevo va encima.
+- **Un escaneo se corrige con su propia letra.** Ahí no hay texto que
+  quitar, solo una foto: tinta gris, algo borrosa, sobre un papel con grano.
+  Escribirle encima con una letra de computadora se nota siempre. Por eso
+  Pdflash rehace el renglón con lo que ya hay en la hoja:
+  - lo que no cambias se queda como está, punto por punto;
+  - cada letra nueva **se copia de una letra igual de la misma hoja** (primero
+    del mismo renglón): misma tinta, mismo grosor, mismo desenfoque;
+  - lo que venía detrás se corre a su sitio, y el hueco se rellena con el
+    papel de al lado, con su grano;
+  - un número se mantiene arrimado a la derecha, y si lo nuevo no cabe antes
+    de la raya o de la columna de al lado, se estrecha lo justo.
+
+  Solo si una letra no existe en toda la hoja se dibuja, con la letra de la
+  computadora que más se parece a las del papel, su color y su desenfoque.
+  Tarda un instante: primero ves el texto escrito y enseguida se sustituye
+  por el renglón rehecho. Si le cambias a mano la letra, el tamaño o el color
+  en la barra, se respeta lo que elegiste y se escribe con eso.
 - En una tabla, dos celdas vecinas que parecen un solo renglón se separan
   por la raya que pasa entre ellas: cada dato se corrige por su lado.
 - Si en un PDF concreto no es seguro quitar un texto de raíz (está escrito
@@ -493,8 +507,9 @@ Lo que conviene saber:
 - Las letras son las que todo PDF trae (Arial/Helvetica, Times y Courier, con
   sus negritas y cursivas). Escriben el español completo; un signo raro (un
   emoji, letras de otro alfabeto) no se puede poner, y Pdflash lo avisa.
-- En un escaneo se reconoce el tamaño y la negrita, pero no el tipo de letra:
-  sale en Arial, y se cambia en la barra si hace falta.
+- En un escaneo muy sucio, torcido o con las letras muy pegadas puede que no
+  se logre separar las letras del renglón: entonces el texto se queda escrito
+  con letra de computadora (reconociendo tamaño y negrita), como antes.
 - Una hoja escaneada **de lado o de cabeza** hay que girarla antes de
   corregir su texto. Mientras el editor está abierto no se gira ni se quita
   la hoja: esos botones vuelven al pulsar **Listo**.
@@ -678,6 +693,7 @@ assets/
   styles.css          tema claro y oscuro
   core.js             estado, lectura de PDF, miniaturas, geometría y armado final
   buscar.js           el texto de cada hoja: qué palabra está dónde
+  clonar.js           corregir un escaneo copiando las letras de la propia hoja
   ocr.js              leer una hoja: texto de verdad o reconocimiento de un escaneo
   ofertas.js          reconocer cada hoja: Formato 1, Formato 5, cotización, correo
   revisar.js          hojas en blanco, de lado, de cabeza o torcidas

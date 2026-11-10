@@ -4408,6 +4408,24 @@
     pagina.sellos.forEach((s) => {
       ctx.save();
       ctx.globalAlpha = s.opacidad == null ? 1 : s.opacidad;
+      if (s.rol === 'texto' && s.img && s.cajaImg) {
+        const q = s.cajaImg, d = giroDeMas(pagina, s), p0 = girarPunto(q.x, q.y, d);
+        const img = new window.Image();
+        pendientes.push(new Promise((listo) => {
+          img.onload = () => {
+            ctx.save();
+            ctx.translate(p0.x * W, p0.y * H);
+            if (d) ctx.rotate((d * Math.PI) / 180);
+            ctx.drawImage(img, 0, 0, q.w * (d % 180 ? H : W), q.h * (d % 180 ? W : H));
+            ctx.restore();
+            listo();
+          };
+          img.onerror = () => listo();
+          img.src = s.img;
+        }));
+        ctx.restore();
+        return;
+      }
       if (s.rol === 'texto') { dibujarTextoEn(ctx, pagina, s, W, H); ctx.restore(); return; }
       if (s.rol === 'firma') {
         const firma = G.firmaPorId(s.firmaId);
@@ -4691,6 +4709,17 @@
     svg.setAttribute('preserveAspectRatio', 'none');
     textos.forEach((s) => {
       const d = giroDeMas(pagina, s);
+      if (s.img && s.cajaImg) {
+        // un renglón de escaneo rehecho con su propia letra: es una foto, y se pone tal cual
+        const q = s.cajaImg, im = document.createElementNS(NS_SVG, 'image');
+        im.setAttribute('href', s.img);
+        im.setAttribute('preserveAspectRatio', 'none');
+        im.setAttribute('width', q.w * (d % 180 ? vis.h : vis.w)); im.setAttribute('height', q.h * (d % 180 ? vis.w : vis.h));
+        const p0 = girarPunto(q.x, q.y, d);
+        im.setAttribute('transform', `translate(${p0.x * vis.w} ${p0.y * vis.h}) rotate(${d})`);
+        svg.appendChild(im);
+        return;
+      }
       if (s.tapa) {
         const c = G.girarCaja(cajaDeTapa(s.tapa), d);
         const r = document.createElementNS(NS_SVG, 'rect');
@@ -5078,6 +5107,7 @@
 
   /** Dónde cae en la hoja algo ya puesto, para poder pulsarlo y moverlo. */
   function cajaDeSello(pagina, s) {
+    if (s.img && s.cajaImg) return { x0: s.cajaImg.x, x1: s.cajaImg.x + s.cajaImg.w, y0: s.cajaImg.y, y1: s.cajaImg.y + s.cajaImg.h };
     const cajas = [];
     if (s.tapa) cajas.push(cajaDeTapa(s.tapa));
     if (String(s.texto || '').trim()) {
@@ -5171,7 +5201,8 @@
         // algo ya puesto: si se arrastra, se mueve; si solo se pulsa, se abre o se elige
         ev.preventDefault();
         if (edicion) cerrarEdicion(true);
-        arrastre = { tipo: 'mover', hoja, pagina, nodo: b, indice: Number(b.dataset.sello), p0: p, movido: false };
+        const fijo = !!(pagina.sellos[Number(b.dataset.sello)] || {}).img;   // un renglón rehecho no se mueve: es parte de la foto
+        arrastre = { tipo: 'mover', hoja, pagina, nodo: b, indice: Number(b.dataset.sello), p0: p, movido: false, fijo };
       } else if (!b && (herramienta === 'borrador' || herramienta === 'resaltar')) {
         ev.preventDefault();
         if (edicion) cerrarEdicion(true);
@@ -5210,7 +5241,7 @@
         return;
       }
       const dx = p.x - a.p0.x, dy = p.y - a.p0.y;
-      if (!a.movido && Math.hypot(dx * r.width, dy * r.height) < 4) return;
+      if (a.fijo || (!a.movido && Math.hypot(dx * r.width, dy * r.height) < 4)) return;
       a.movido = true; a.dx = dx; a.dy = dy;
       a.nodo.classList.add('moviendo');
       a.nodo.style.transform = `translate(${dx * r.width}px, ${dy * r.height}px)`;
@@ -5422,6 +5453,7 @@
       const s = pagina.sellos[que.sello];
       if (!s) return;
       m = Object.assign({ indice: que.sello, original: s.texto || '' }, JSON.parse(JSON.stringify(s)));
+      delete m.img; delete m.cajaImg;
     } else if (que.trozo) {
       const t = que.trozo;
       const col = coloresEn(hoja, t);
@@ -5464,6 +5496,8 @@
         derecha: /^[\s\d.,:%$S/+-]+$/.test(t.texto) && /\d/.test(t.texto) ? (t.origen === 'texto' ? t.x1 : tinta.x1) : null,
         // en un PDF con texto, lo viejo se quita del propio archivo al exportar: aquí, dónde está
         quita: t.origen === 'texto' ? { x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0 } : null,
+        // en un escaneo, el renglón tal como estaba: con él se rehace copiando su propia letra
+        de: t.origen === 'texto' ? null : { x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1, texto: t.texto },
         familia: letra.familia, negrita: letra.negrita, cursiva: letra.cursiva,
         tapa: { x: tinta.x0 - ax, y: tinta.y0 - ay, w: (tinta.x1 - tinta.x0) + 2 * ax, h: (tinta.y1 - tinta.y0) + 2 * ay, color: col.papel },
       };
@@ -5553,6 +5587,9 @@
       sello.x = m.derecha - (anchoTexto(texto, sello) * sello.tam * (sello.estira || 1)) / visDe(pagina).w;
     }
     if (m.quita) sello.quita = m.quita;
+    if (m.de) sello.de = m.de;
+    // si se le cambió la letra a mano, se respeta: se escribe con esa y no con la del papel
+    if (m.aMano || ed.tocado) sello.aMano = true;
     if (m.indice >= 0) {
       const previo = pagina.sellos[m.indice];
       if (!previo) return;
@@ -5570,8 +5607,46 @@
     // el texto nuevo que se escriba después sale como el último que se escribió, no como un título corregido
     if (texto && !sello.tapa) ultimoEstilo = { tam: sello.tam, color: sello.color, familia: sello.familia, negrita: sello.negrita, cursiva: sello.cursiva };
     pintarSinSaltar();
+    if (sello.de && !sello.aMano && texto && pagina.sellos.includes(sello)) conLaLetraDeLaHoja(pagina, sello);
     if (sinSigno.length) {
       G.aviso(`No se pudo escribir «${Array.from(new Set(sinSigno)).join(' ')}»: ese signo no está en las letras del PDF. Lo demás quedó puesto.`, 'error');
+    }
+  }
+
+  /* ---------- un escaneo se corrige con su propia letra ---------- */
+
+  // la hoja dibujada en grande, para copiar de ella: se guarda la última, que pesa
+  let hojaEnGrande = { clave: '', lienzo: null };
+  async function lienzoParaCopiar(pagina) {
+    const k = claveTrozos(pagina);
+    if (hojaEnGrande.clave === k && hojaEnGrande.lienzo) return hojaEnGrande.lienzo;
+    const lienzo = await G.renderGrande(pagina, 2600);
+    hojaEnGrande = { clave: k, lienzo };
+    return lienzo;
+  }
+
+  /**
+   * Lo recién corregido en un escaneo queda primero escrito con letra de
+   * computadora; enseguida se rehace copiando las letras de la propia hoja y,
+   * si sale, lo sustituye. Si no se puede, se queda como estaba.
+   */
+  async function conLaLetraDeLaHoja(pagina, sello) {
+    if (!G.corregirConSuLetra) return;
+    try {
+      const [lienzo, leido] = await Promise.all([lienzoParaCopiar(pagina), trozosDe(pagina)]);
+      const d = sello.de;
+      const otros = leido.trozos
+        .filter((t) => t.origen !== 'texto' && !(Math.abs(t.x0 - d.x0) < 1e-6 && Math.abs(t.y0 - d.y0) < 1e-6))
+        // primero los renglones de cerca: son los que más se le parecen
+        .sort((a, b) => Math.abs(a.y0 - d.y0) - Math.abs(b.y0 - d.y0))
+        .map((t) => ({ caja: t, texto: t.texto }));
+      const r = G.corregirConSuLetra(lienzo, d, d.texto, sello.texto, otros);
+      const i = pagina.sellos.indexOf(sello);
+      if (!r || i < 0 || !E.paginas.includes(pagina) || G.norm(pagina.giro) !== sello.giroAl) return;
+      pagina.sellos[i] = Object.assign({}, sello, { img: r.url, cajaImg: r.caja });
+      pintarSinSaltar();
+    } catch (e) {
+      console.warn('No se pudo copiar la letra de la hoja', e);
     }
   }
 
