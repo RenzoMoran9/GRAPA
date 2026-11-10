@@ -39,7 +39,7 @@ const GUIONES = [
   'lib/pdf-lib.min.js', 'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'lib/jszip.min.js',
   'lib/docx-preview.min.js', 'lib/xlsx.core.min.js', 'lib/exceljs.min.js', 'lib/html2canvas.min.js',
   'assets/config.js', 'assets/cuentas.js',
-  'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
+  'assets/core.js', 'assets/buscar.js', 'assets/revisar.js', 'assets/ocr.js', 'assets/clonar.js', 'assets/ofertas.js', 'assets/expedientes.js', 'assets/firmas.js', 'assets/office.js',
   'assets/app.js', 'assets/guia.js',
 ];
 

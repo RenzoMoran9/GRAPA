@@ -533,6 +533,38 @@ const PRUEBAS = {
     afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer quita los cambios');
   },
 
+  async 'editar un escaneo: el renglón se rehace con las letras de la propia hoja'({ page }) {
+    await page.setInputFiles('#entradaArchivos', [await pdfEscaneado(page)]);
+    await esperarCarga(page);
+    await page.keyboard.press('v');
+    await page.click('#lectorEditarTexto');
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.leido', { timeout: 240000 });
+    const i = await page.evaluate(() => document.querySelector('.hoja[data-indice="0"] .capa-editar')
+      ._trozos.findIndex((t) => /prueba 3$/.test(t.texto)));
+    afirmar(i >= 0, 'leyó el renglón del escaneo');
+    await page.locator(`.hoja[data-indice="0"] .trozo[data-trozo="${i}"]`).scrollIntoViewIfNeeded();
+    await page.click(`.hoja[data-indice="0"] .trozo[data-trozo="${i}"]`);
+    await page.waitForSelector('.editor-campo');
+    const dice = await page.inputValue('.editor-campo');
+    await page.fill('.editor-campo', dice.replace(/escaneada/, 'corregida').replace(/3$/, '18'));
+    await page.keyboard.press('Enter');
+    // primero queda escrito; enseguida se sustituye por el renglón rehecho con su letra
+    await page.waitForFunction(() => { const s = window.Grapa.estado.paginas[0].sellos[0]; return s && s.img && s.cajaImg; }, null, { timeout: 30000 });
+    const r = await page.evaluate(async () => {
+      const G = window.Grapa, s = G.estado.paginas[0].sellos[0];
+      const im = new Image(); im.src = s.img; await im.decode();
+      const bytes = await G.construirPdf([G.estado.paginas[0]], {});
+      return { texto: s.texto, an: im.width, al: im.height, caja: s.cajaImg, de: s.de, kb: bytes.length };
+    });
+    afirmar(/corregida para la prueba 18$/.test(r.texto), 'guarda lo que dice ahora', r.texto);
+    // el recorte tapa el cambio y lo que venía detrás, a la altura del renglón, y no la hoja entera
+    afirmar(r.an > 100 && r.al > 10 && r.caja.h < 0.05 && r.caja.w < 0.8, 'el recorte es del tamaño del renglón', r);
+    afirmar(Math.abs(r.caja.y - r.de.y0) < 0.02 && r.caja.x + r.caja.w > r.de.x0, 'y va en su sitio', r);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+z');
+    afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer lo quita');
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {

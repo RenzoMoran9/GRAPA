@@ -1636,6 +1636,14 @@
             const p = G.aPuntoPdf(fx * v0.w, fy * v0.h, W, H, R0);
             return { x: p.x + OX, y: p.y + OY };
           };
+          if (sello.img && sello.cajaImg) {
+            // un renglón de escaneo rehecho con su propia letra: se pone la foto, en su sitio
+            const q = sello.cajaImg;
+            const foto = await salida.embedPng(G.dataUrlABytes(sello.img));
+            const ancla = en0(q.x, q.y + q.h);
+            pag.drawImage(foto, { x: ancla.x, y: ancla.y, width: q.w * v0.w, height: q.h * v0.h, rotate: degrees(R0) });
+            continue;
+          }
           const t = sinParche.has(sello) ? null : sello.tapa;
           if (t) {
             // el parche del color del papel que tapa lo que había escrito
