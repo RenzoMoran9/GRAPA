@@ -10,7 +10,9 @@
           PDFArray, PDFRef, PDFNumber, decodePDFRawStream,
           pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject,
           beginText, endText, setFontAndSize, setTextRenderingMode, TextRenderingMode,
-          setCharacterSqueeze, setTextMatrix, showText, setFillingColor } = PDFLib;
+          setCharacterSqueeze, setTextMatrix, showText, setFillingColor,
+          setStrokingColor, setLineWidth, setLineCap, setLineJoin, LineCapStyle, LineJoinStyle,
+          moveTo, lineTo, stroke } = PDFLib;
 
   /* ---------- configuración de pdf.js ---------- */
   const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
@@ -1636,6 +1638,30 @@
             const p = G.aPuntoPdf(fx * v0.w, fy * v0.h, W, H, R0);
             return { x: p.x + OX, y: p.y + OY };
           };
+          if (/^(trazo|linea|rect|elipse)$/.test(sello.tipo || '')) {
+            // formas y dibujo a mano: trazos de verdad, en su sitio del papel
+            const col = G.aColorPdf(sello.color || '#d0021b'), g = sello.grosor || 2;
+            if (sello.tipo === 'trazo') {
+              const ps = (sello.puntos || []).map(([fx, fy]) => en0(fx, fy));
+              if (ps.length > 1) {
+                pag.pushOperators(pushGraphicsState(), setStrokingColor(col), setLineWidth(g),
+                  setLineCap(LineCapStyle.Round), setLineJoin(LineJoinStyle.Round),
+                  moveTo(ps[0].x, ps[0].y), ...ps.slice(1).map((q) => lineTo(q.x, q.y)), stroke(), popGraphicsState());
+              }
+            } else if (sello.tipo === 'linea') {
+              pag.drawLine({ start: en0(sello.a.x, sello.a.y), end: en0(sello.b.x, sello.b.y), thickness: g, color: col, lineCap: LineCapStyle.Round });
+            } else {
+              const p = en0(sello.a.x, sello.a.y), q = en0(sello.b.x, sello.b.y);
+              const op = { borderColor: col, borderWidth: g, borderOpacity: 1 };
+              if (sello.relleno) { op.color = col; op.opacity = 0.18; }
+              if (sello.tipo === 'rect') {
+                pag.drawRectangle(Object.assign(op, { x: Math.min(p.x, q.x), y: Math.min(p.y, q.y), width: Math.abs(p.x - q.x), height: Math.abs(p.y - q.y) }));
+              } else {
+                pag.drawEllipse(Object.assign(op, { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, xScale: Math.abs(p.x - q.x) / 2, yScale: Math.abs(p.y - q.y) / 2 }));
+              }
+            }
+            continue;
+          }
           if (sello.img && sello.cajaImg) {
             // un renglón de escaneo rehecho con su propia letra: se pone la foto, en su sitio
             const q = sello.cajaImg;

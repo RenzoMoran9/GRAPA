@@ -458,10 +458,19 @@ derecha:
 | **Borrador** | Arrastra sobre lo que quieras tapar: lo cubre con el color del papel. |
 | **Resaltar** | Arrastra y queda resaltado en amarillo, dejando ver lo de debajo. |
 | **Visto / Equis** | Pulsa donde va la marca: ✔ o ✘. |
+| **Lápiz** | Dibuja a mano alzada: un «OK», un «falta firma», una flecha. |
+| **Línea** | Para subrayar o tachar. Con `Mayús` sale recta. |
+| **Recuadro** | Para encerrar un monto, un RUC o un párrafo al revisar ofertas. |
+| **Círculo** | Para rodear un dato. |
 
 - **Formato:** tipo de letra (Arial, Times, Courier), tamaño (A− / A+),
   negrita, cursiva y color. Se aplica a lo que estás escribiendo, a lo que
   tengas elegido o, si no hay nada, a lo próximo que escribas.
+- **Formas y lápiz** salen en rojo de revisión. En la barra eliges el
+  **grosor** (fino, medio, grueso, muy grueso), el **color** y, en el recuadro
+  y el círculo, **Relleno**: el mismo color, transparente, para que se lea lo
+  de debajo. Lo que cambias queda para las siguientes. En el PDF salen como
+  trazos de verdad, no como imagen, y siguen a la hoja si la giras.
 - **Mover:** todo lo que pones se arrastra a otro sitio. **Quitar** (o `Supr`)
   lo borra; en un texto corregido, «Dejar como estaba» devuelve el original.
 - `Enter` deja lo escrito, `Esc` lo cancela, y `Ctrl+Z` deshace cada paso.

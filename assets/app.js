@@ -4738,6 +4738,7 @@
     svg.setAttribute('preserveAspectRatio', 'none');
     textos.forEach((s) => {
       const d = giroDeMas(pagina, s);
+      if (esFigura(s)) { svg.appendChild(elementoFigura(s, vis, d)); return; }
       if (s.img && s.cajaImg) {
         // un renglón de escaneo rehecho con su propia letra: es una foto, y se pone tal cual
         const q = s.cajaImg, im = document.createElementNS(NS_SVG, 'image');
@@ -4780,8 +4781,56 @@
     return svg;
   }
 
+  /** Una figura como elemento SVG, en las medidas de la hoja vista (`d`: giro de más desde que se puso). */
+  function elementoFigura(s, vis, d) {
+    const ps = puntosDeFigura(s).map((q) => girarPunto(q.x, q.y, d)).map((q) => ({ x: q.x * vis.w, y: q.y * vis.h }));
+    let el;
+    if (s.tipo === 'trazo') {
+      el = document.createElementNS(NS_SVG, 'path');
+      el.setAttribute('d', ps.map((q, i) => (i ? 'L' : 'M') + q.x.toFixed(2) + ' ' + q.y.toFixed(2)).join(' '));
+    } else if (s.tipo === 'linea') {
+      el = document.createElementNS(NS_SVG, 'line');
+      el.setAttribute('x1', ps[0].x); el.setAttribute('y1', ps[0].y); el.setAttribute('x2', ps[1].x); el.setAttribute('y2', ps[1].y);
+    } else {
+      const x0 = Math.min(ps[0].x, ps[1].x), x1 = Math.max(ps[0].x, ps[1].x), y0 = Math.min(ps[0].y, ps[1].y), y1 = Math.max(ps[0].y, ps[1].y);
+      if (s.tipo === 'rect') {
+        el = document.createElementNS(NS_SVG, 'rect');
+        el.setAttribute('x', x0); el.setAttribute('y', y0); el.setAttribute('width', x1 - x0); el.setAttribute('height', y1 - y0);
+      } else {
+        el = document.createElementNS(NS_SVG, 'ellipse');
+        el.setAttribute('cx', (x0 + x1) / 2); el.setAttribute('cy', (y0 + y1) / 2);
+        el.setAttribute('rx', (x1 - x0) / 2); el.setAttribute('ry', (y1 - y0) / 2);
+      }
+    }
+    el.setAttribute('stroke', s.color || '#d0021b');
+    el.setAttribute('stroke-width', s.grosor || 2);
+    el.setAttribute('stroke-linecap', 'round');
+    el.setAttribute('stroke-linejoin', 'round');
+    if (s.relleno && (s.tipo === 'rect' || s.tipo === 'elipse')) { el.setAttribute('fill', s.color || '#d0021b'); el.setAttribute('fill-opacity', '0.18'); }
+    else el.setAttribute('fill', 'none');
+    return el;
+  }
+
   /** Lo mismo, pintado en un lienzo (las capturas). */
+  function dibujarFiguraEn(ctx, pagina, s, W, H) {
+    const vis = visDe(pagina), d = giroDeMas(pagina, s);
+    const ps = puntosDeFigura(s).map((q) => girarPunto(q.x, q.y, d)).map((q) => ({ x: q.x * W, y: q.y * H }));
+    ctx.strokeStyle = ctx.fillStyle = s.color || '#d0021b';
+    ctx.lineWidth = (s.grosor || 2) * (W / vis.w);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (s.tipo === 'trazo' || s.tipo === 'linea') ps.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+    else {
+      const x0 = Math.min(ps[0].x, ps[1].x), x1 = Math.max(ps[0].x, ps[1].x), y0 = Math.min(ps[0].y, ps[1].y), y1 = Math.max(ps[0].y, ps[1].y);
+      if (s.tipo === 'rect') ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      else ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2, 0, 0, Math.PI * 2);
+      if (s.relleno) { ctx.save(); ctx.globalAlpha = 0.18; ctx.fill(); ctx.restore(); }
+    }
+    ctx.stroke();
+  }
+
   function dibujarTextoEn(ctx, pagina, s, W, H) {
+    if (esFigura(s)) { dibujarFiguraEn(ctx, pagina, s, W, H); return; }
     const vis = visDe(pagina), k = W / vis.w, d = giroDeMas(pagina, s);
     if (s.tapa) {
       const c = G.girarCaja(cajaDeTapa(s.tapa), d);
@@ -5129,13 +5178,41 @@
     resaltar: 'Arrastra sobre lo que quieras resaltar.',
     check: 'Pulsa donde va el visto.',
     cruz: 'Pulsa donde va la equis.',
+    lapiz: 'Dibuja a mano: arrastra sobre la hoja.',
+    linea: 'Arrastra para trazar una línea. Con Mayús sale recta.',
+    rect: 'Arrastra para dibujar un recuadro alrededor de lo que quieras marcar.',
+    elipse: 'Arrastra para rodear algo con un círculo.',
   };
+  /* Formas y dibujo a mano: para marcar al revisar (encerrar un monto, rodear
+     un RUC, subrayar un plazo, anotar «falta firma»). Se guardan como un sello
+     más de la hoja, con sus puntos en fracciones de la hoja, y en el PDF salen
+     como trazos de verdad, no como imagen. */
+  const FIGURAS = new Set(['lapiz', 'linea', 'rect', 'elipse']);
+  const TIPO_DE = { lapiz: 'trazo', linea: 'linea', rect: 'rect', elipse: 'elipse' };
+  const esFigura = (s) => !!s && (s.tipo === 'trazo' || s.tipo === 'linea' || s.tipo === 'rect' || s.tipo === 'elipse');
+  // rojo de revisión, como el bolígrafo de quien corrige
+  let estiloFigura = { color: '#d0021b', grosor: 2, relleno: false };
   let herramienta = 'editar';
   let elegido = null;             // lo seleccionado: { uid, indice }
   let arrastre = null;            // mover algo ya puesto, o marcar un recuadro
 
   /** Dónde cae en la hoja algo ya puesto, para poder pulsarlo y moverlo. */
+  /** Los puntos de una figura, como se guardaron. */
+  const puntosDeFigura = (s) => (s.tipo === 'trazo' ? (s.puntos || []).map(([x, y]) => ({ x, y })) : [s.a, s.b]);
+  function moverFigura(n, dx, dy) {
+    if (n.tipo === 'trazo') n.puntos = n.puntos.map(([x, y]) => [x + dx, y + dy]);
+    else { n.a = { x: n.a.x + dx, y: n.a.y + dy }; n.b = { x: n.b.x + dx, y: n.b.y + dy }; }
+    n.x += dx; n.y += dy;
+  }
+
   function cajaDeSello(pagina, s) {
+    if (esFigura(s)) {
+      const ps = puntosDeFigura(s), vis = visDe(pagina);
+      // con un poco de aire: una línea recta no tiene alto, y hay que poder pulsarla
+      const ax = ((s.grosor || 2) / 2 + 4) / vis.w, ay = ((s.grosor || 2) / 2 + 4) / vis.h;
+      return { x0: Math.min(...ps.map((q) => q.x)) - ax, x1: Math.max(...ps.map((q) => q.x)) + ax,
+               y0: Math.min(...ps.map((q) => q.y)) - ay, y1: Math.max(...ps.map((q) => q.y)) + ay };
+    }
     if (s.img && s.cajaImg) return { x0: s.cajaImg.x, x1: s.cajaImg.x + s.cajaImg.w, y0: s.cajaImg.y, y1: s.cajaImg.y + s.cajaImg.h };
     const cajas = [];
     if (s.tapa) cajas.push(cajaDeTapa(s.tapa));
@@ -5232,6 +5309,16 @@
         if (edicion) cerrarEdicion(true);
         const fijo = !!(pagina.sellos[Number(b.dataset.sello)] || {}).img;   // un renglón rehecho no se mueve: es parte de la foto
         arrastre = { tipo: 'mover', hoja, pagina, nodo: b, indice: Number(b.dataset.sello), p0: p, movido: false, fijo };
+      } else if (!b && FIGURAS.has(herramienta)) {
+        ev.preventDefault();
+        if (edicion) cerrarEdicion(true);
+        const vis = visDe(pagina);
+        const vivo = document.createElementNS(NS_SVG, 'svg');
+        vivo.setAttribute('class', 'sellos-texto figura-viva');
+        vivo.setAttribute('viewBox', `0 0 ${vis.w} ${vis.h}`);
+        vivo.setAttribute('preserveAspectRatio', 'none');
+        capa.appendChild(vivo);
+        arrastre = { tipo: 'figura', hoja, pagina, nodo: vivo, vis, p0: p, p1: p, pts: [[p.x, p.y]] };
       } else if (!b && (herramienta === 'borrador' || herramienta === 'resaltar')) {
         ev.preventDefault();
         if (edicion) cerrarEdicion(true);
@@ -5263,6 +5350,21 @@
       if (!a) return;
       const r = a.hoja.getBoundingClientRect();
       const p = { x: Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)) };
+      if (a.tipo === 'figura') {
+        if (herramienta === 'lapiz') {
+          // un punto cada par de píxeles: más no se nota, y el expediente no engorda
+          const u = a.pts[a.pts.length - 1];
+          if (Math.hypot((p.x - u[0]) * r.width, (p.y - u[1]) * r.height) < 2) return;
+          a.pts.push([p.x, p.y]);
+        } else if (herramienta === 'linea' && ev.shiftKey) {
+          // con Mayús, recta: horizontal o vertical, la que esté más cerca
+          if (Math.abs(p.x - a.p0.x) * r.width >= Math.abs(p.y - a.p0.y) * r.height) p.y = a.p0.y; else p.x = a.p0.x;
+        }
+        a.p1 = p;
+        a.nodo.textContent = '';
+        a.nodo.appendChild(elementoFigura(figuraDe(a), a.vis, 0));
+        return;
+      }
       if (a.tipo === 'marco') {
         a.p1 = p;
         a.nodo.style.left = Math.min(a.p0.x, p.x) * 100 + '%'; a.nodo.style.top = Math.min(a.p0.y, p.y) * 100 + '%';
@@ -5280,6 +5382,22 @@
       if (!a) return;
       arrastre = null;
       const capa = a.hoja.querySelector('.capa-editar');
+      if (a.tipo === 'figura') {
+        a.nodo.remove();
+        if (capa) capa._recienArrastrado = true;
+        const f = figuraDe(a);
+        const c = cajaDeSello(a.pagina, f), aire = ((f.grosor || 2) / 2 + 4);
+        // un clic suelto no deja una figura de nada
+        const an = (c.x1 - c.x0) * a.hoja.clientWidth - 2 * aire * (a.hoja.clientWidth / a.vis.w);
+        const al = (c.y1 - c.y0) * a.hoja.clientHeight - 2 * aire * (a.hoja.clientHeight / a.vis.h);
+        if (Math.max(an, al) < 6 || (f.tipo === 'trazo' && f.puntos.length < 2)) return;
+        if ((f.tipo === 'rect' || f.tipo === 'elipse') && Math.min(an, al) < 4) return;
+        marcar();
+        a.pagina.sellos.push(f);
+        elegido = { uid: a.pagina.uid, indice: a.pagina.sellos.length - 1 };
+        pintarSinSaltar();
+        return;
+      }
       if (a.tipo === 'marco') {
         a.nodo.remove();
         if (capa) capa._recienArrastrado = true;
@@ -5312,13 +5430,28 @@
       if (capa) capa._recienArrastrado = true;
       marcar();
       const n = JSON.parse(JSON.stringify(s));
-      // de una corrección se mueve lo escrito; el parche se queda tapando lo viejo
-      if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; delete n.derecha; }
-      if (n.tapa && n.tipo !== 'correccion' && n.tipo) { n.tapa.x += a.dx; n.tapa.y += a.dy; if (!String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; } }
+      if (esFigura(n)) moverFigura(n, a.dx, a.dy);
+      else {
+        // de una corrección se mueve lo escrito; el parche se queda tapando lo viejo
+        if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; delete n.derecha; }
+        if (n.tapa && n.tipo !== 'correccion' && n.tipo) { n.tapa.x += a.dx; n.tapa.y += a.dy; if (!String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; } }
+      }
       a.pagina.sellos[a.indice] = n;
       elegido = { uid: a.pagina.uid, indice: a.indice };
       pintarSinSaltar();
     });
+  }
+
+  /** La figura que se está dibujando, como el sello que va a quedar. */
+  function figuraDe(a) {
+    const tipo = TIPO_DE[herramienta];
+    const f = { rol: 'texto', tipo, texto: '', color: estiloFigura.color, grosor: estiloFigura.grosor,
+                relleno: !!estiloFigura.relleno && (tipo === 'rect' || tipo === 'elipse'), giroAl: G.norm(a.pagina.giro) };
+    if (tipo === 'trazo') f.puntos = a.pts.map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5]);
+    else { f.a = { x: a.p0.x, y: a.p0.y }; f.b = { x: a.p1.x, y: a.p1.y }; }
+    const ps = puntosDeFigura(f);
+    f.x = Math.min(...ps.map((q) => q.x)); f.y = Math.max(...ps.map((q) => q.y)); f.tam = 11;
+    return f;
   }
 
   /** El color del papel justo alrededor de un recuadro (para el borrador). */
@@ -5354,7 +5487,8 @@
   function destinoFormato() {
     if (edicion) return { m: edicion.m, abierta: true };
     const e = selloElegido();
-    if (e && String(e.sello.texto || '').trim()) return { m: e.sello, elegida: e };
+    if (e && (String(e.sello.texto || '').trim() || esFigura(e.sello))) return { m: e.sello, elegida: e };
+    if (FIGURAS.has(herramienta)) return { m: estiloFigura };
     return { m: ultimoEstilo };
   }
 
@@ -5367,6 +5501,16 @@
       b.setAttribute('aria-pressed', String(b.dataset.herr === herramienta));
     });
     const { m } = destinoFormato();
+    // con una figura, la barra enseña grosor y relleno en vez de la letra
+    const figura = !edicion && (selloElegido() ? esFigura(selloElegido().sello) : FIGURAS.has(herramienta));
+    $('#edLetra').hidden = figura;
+    $('#edFigura').hidden = !figura;
+    if (figura) {
+      $('#edGrosor').value = String(m.grosor || 2);
+      $('#edRelleno').classList.toggle('activo', !!m.relleno);
+      const conRelleno = selloElegido() ? /^(rect|elipse)$/.test(selloElegido().sello.tipo) : /^(rect|elipse)$/.test(herramienta);
+      $('#edRelleno').disabled = !conRelleno;
+    }
     const signo = m.familia === 'signos';
     $('#edFamilia').value = signo ? 'sans' : (m.familia || 'sans');
     $('#edFamilia').disabled = signo;
@@ -5374,7 +5518,7 @@
     $('#edNegrita').classList.toggle('activo', !!m.negrita);
     $('#edCursiva').classList.toggle('activo', !!m.cursiva);
     $('#edNegrita').disabled = $('#edCursiva').disabled = signo;
-    $('#edColor').value = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '#111111';
+    $('#edColor').value = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : (figura ? '#d0021b' : '#111111');
     const hay = !!edicion || !!selloElegido();
     $('#edQuitar').disabled = !hay;
     const ed = edicion && edicion.m;
@@ -5405,8 +5549,10 @@
       const n = JSON.parse(JSON.stringify(d.m));
       cambio(n);
       d.elegida.pagina.sellos[elegido.indice] = n;
+      // lo que se le cambia a una figura queda para las siguientes
+      if (esFigura(n)) cambio(estiloFigura);
       pintarSinSaltar();
-    } else cambio(ultimoEstilo);
+    } else cambio(d.m);
     pintarBarraEditor();
   }
 
@@ -5436,6 +5582,8 @@
     $('#edFamilia').addEventListener('change', (ev) => cambiarFormato((m) => { m.familia = ev.target.value; }));
     $('#edColor').addEventListener('change', (ev) => cambiarFormato((m) => { m.color = ev.target.value; }));
     $('#edColor').addEventListener('input', (ev) => { if (edicion) { edicion.m.color = ev.target.value; edicion.tocado = true; acomodarEdicion(); } });
+    $('#edGrosor').addEventListener('change', (ev) => cambiarFormato((m) => { m.grosor = Number(ev.target.value) || 2; }));
+    $('#edRelleno').addEventListener('click', () => cambiarFormato((m) => { m.relleno = !m.relleno; }));
     $('#edQuitar').addEventListener('click', quitarDelEditor);
     $('#edListo').addEventListener('click', () => alternarEdicion(false));
     conectarArrastreEditor();

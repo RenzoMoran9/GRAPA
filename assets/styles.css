@@ -1766,3 +1766,11 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
 .modal-cuerpo.ajustes{display:flex;flex-direction:column;gap:10px}
 .vacio{overflow:auto;justify-content:safe center}
 .vacio-arte svg{width:84px;height:68px}
+
+/* formas y dibujo a mano */
+.ed-sub{display:flex;align-items:center;gap:4px}
+.ed-sub[hidden]{display:none}
+.ed-sep{width:1px;height:22px;background:var(--borde);margin:0 4px}
+.ed-herr.ed-icono{padding:0 8px}
+.capa-editar.herr-lapiz,.capa-editar.herr-linea,.capa-editar.herr-rect,.capa-editar.herr-elipse{cursor:crosshair}
+.figura-viva{pointer-events:none;z-index:4}
