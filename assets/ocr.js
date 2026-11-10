@@ -179,7 +179,11 @@
       const t = w.trabajo;
       w.trabajo = null;
       if (t) {
-        if (e.data.tipo === 'leida') { if (G.depurarOcr) console.info('paddle', JSON.stringify(e.data.ms)); t.ok(e.data.palabras); }
+        if (e.data.tipo === 'leida') {
+          if (G.depurarOcr) console.info('paddle', JSON.stringify(e.data.ms));
+          paddle.caidas = 0;             // lee: las caídas de antes fueron un tropiezo, no que no sirva
+          t.ok(e.data.palabras);
+        }
         else t.mal(new Error(e.data.mensaje || 'falló la lectura'));
       }
       paddle.libres.push(w);
@@ -205,7 +209,8 @@
     console.warn('PaddleOCR:', err.message);
     if (t) t.mal(err);
     paddle.caidas++;
-    if (paddle.uno && paddle.caidas <= 4) {
+    // tres seguidas sin leer ni una hoja: no es un tropiezo, es que aquí no funciona
+    if (paddle.uno && paddle.caidas <= 2) {
       paddle.reponiendo++;
       paddle.uno().then(sumarLector, (e) => console.warn('No se pudo reponer el lector', e))
         .finally(() => { paddle.reponiendo--; sinLectores(); });
@@ -576,7 +581,15 @@
 
   /** Lee un lienzo con el lector que esté disponible (PaddleOCR o, si no, Tesseract). */
   G.ocrLienzo = async function (lienzo, alProgreso, opciones) {
-    if (await usaPaddle()) return paddleLienzo(lienzo, opciones);
+    if (await usaPaddle()) {
+      try {
+        return await paddleLienzo(lienzo, opciones);
+      } catch (e) {
+        // PaddleOCR se cayó o se colgó con esta hoja: no por eso se queda sin leer. Antes la
+        // hoja fallaba y solo tras muchas caídas se pasaba al de respaldo, para las siguientes.
+        console.warn('PaddleOCR no pudo con esta hoja; la lee el lector de respaldo.', e && e.message);
+      }
+    }
     return tesseractLienzo(lienzo, alProgreso);
   };
 

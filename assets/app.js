@@ -1600,6 +1600,28 @@
   // Cuando se pulsa el «＋» de un paquete, lo que se cargue va dentro de él
   let destinoCarga = null;
 
+  /* La pantalla de inicio pregunta qué se quiere hacer. Se abre el archivo y,
+     en cuanto carga, se va a la herramienta de esa tarea con una frase que
+     dice el paso siguiente: quien llega por primera vez no tiene que
+     adivinar en qué botón está cada cosa. */
+  let tareaPedida = null;
+  const TAREAS = {
+    unir: ['docs', 'Arrastra las hojas para ordenarlas. Puedes abrir más archivos. Al terminar, «Exportar PDF».'],
+    editar: [null, ''],
+    firmar: ['firmas', 'Crea tu firma una vez (desde un escaneo, una imagen o dibujándola) y colócala con el botón de firma de cada hoja.'],
+    foliar: ['foliar', 'Elige el formato del número y pulsa «Foliar».'],
+    comprimir: ['salida', 'Elige el peso del archivo, o escribe el máximo permitido y pulsa «¿Cabe?». Luego, «Exportar PDF».'],
+    separar: ['dividir', 'Elige qué hojas sacar; antes de descargar te dice qué va a salir.'],
+    buscar: ['buscar', 'Si hay hojas escaneadas, pulsa «Hacerlas buscables» y luego escribe lo que buscas.'],
+    revisar: ['revisar', 'Pulsa «Revisar las hojas»: te lista las blancas y las torcidas, y no cambia nada hasta que lo pidas.'],
+  };
+  function irATarea(cual) {
+    if (!E.paginas.length || !TAREAS[cual]) return;
+    if (cual === 'editar') { editarTextoAqui(hojasVisibles()[0]); return; }
+    irASeccion(TAREAS[cual][0]);
+    G.aviso(TAREAS[cual][1], '');
+  }
+
   async function anadir(files, indice) {
     const lote = Array.from(files || []);   // copia inmediata: la FileList puede vaciarse
     const pedido = destinoCarga;            // el «＋» de un paquete
@@ -1646,7 +1668,10 @@
         if (!paq) paq = nuevoPaquete(r.fuentes[0] ? r.fuentes[0].nombre : 'Paquete');
         r.paginas.forEach((p) => { p.paqueteId = paq.id; });
         E.paginas.splice(donde, 0, ...r.paginas);
-        E.seleccion = new Set(r.paginas.map((p) => p.uid));
+        // Lo que se añade a un expediente que ya tenía hojas queda marcado, para verlo de un
+        // vistazo. En un tablero vacío no: antes todo salía marcado nada más abrir, sin
+        // que nadie hubiera marcado nada.
+        E.seleccion = total ? new Set(r.paginas.map((p) => p.uid)) : new Set();
         // La vista de paquetes se enciende sola al llegar el SEGUNDO documento.
         // Después se respeta la que se eligió: antes, cada archivo nuevo sacaba
         // de la vista de hojas aunque se estuviera trabajando en ella.
@@ -1659,6 +1684,10 @@
         } else {
           cargaReciente = { paginas: r.paginas.length, archivos: r.fuentes.length, mando: null };
         }
+        // se venía de «¿Qué quieres hacer?»: directo a esa herramienta
+        const tarea = tareaPedida;
+        tareaPedida = null;
+        if (tarea) setTimeout(() => irATarea(tarea), 0);
         const t = `Se añadieron ${cargaReciente.paginas} página(s) de ${cargaReciente.archivos} archivo(s).`;
         if (cargaReciente.mando && cargaReciente.mando.vivo()) cargaReciente.mando.cambiar(t);
         else cargaReciente.mando = G.aviso(t, 'ok');
@@ -4318,7 +4347,7 @@
     btn.title = donde
       ? `Guarda el PDF en Descargas y abre ${donde} en otra pestaña para que lo subas ahí. `
         + 'Lo que subas sale de tu computadora.'
-      : 'Escribe primero la dirección de esa web en «Archivo de salida»';
+      : 'Escribe primero la dirección de esa web en «Archivo ▸ Ajustes»';
   }
 
   /**
@@ -4334,7 +4363,7 @@
     let bien = true;
     try { new URL(destino); } catch (e) { bien = false; }
     if (!bien) {
-      G.aviso('La dirección del editor no es válida. Revísala en «Archivo de salida».', 'error');
+      G.aviso('La dirección del editor no es válida. Revísala en «Archivo ▸ Ajustes».', 'error');
       return;
     }
     window.open(destino, '_blank', 'noopener,noreferrer');
@@ -5799,7 +5828,7 @@
         }
         G.aviso((enBlanco ? 'Ahí no hay ningún editor, así que cerré la pestaña. ' : 'La pestaña del editor no responde. ')
           + 'Guarda «GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
-          + 'en «Archivo de salida» → «Editor avanzado».', 'error');
+          + 'en «Archivo ▸ Ajustes» → «Editor avanzado».', 'error');
       }, 12000);
     }
 
@@ -7522,7 +7551,11 @@
       entrada.value = '';
       anadir(lote);
     });
-    ['#btnAbrir', '#btnAbrir2', '#zonaSoltar'].forEach((s) => $(s).addEventListener('click', () => entrada.click()));
+    ['#btnAbrir', '#btnAbrir2', '#zonaSoltar'].forEach((s) => $(s).addEventListener('click', () => { tareaPedida = null; entrada.click(); }));
+    $$('#vacioTareas .tarea').forEach((b) => b.addEventListener('click', () => { tareaPedida = b.dataset.tarea; entrada.click(); }));
+    // Ajustes: lo que casi nunca se toca, fuera del panel de exportar
+    $$('[data-abre-ajustes]').forEach((b) => b.addEventListener('click', () => { $('#modalAjustes').hidden = false; }));
+    $$('[data-clic-panel]').forEach((b) => b.addEventListener('click', () => $(b.dataset.clicPanel).click()));
     // pegar con Ctrl+V: los archivos copiados entran igual que si se soltaran
     document.addEventListener('paste', (ev) => {
       const archivos = Array.from((ev.clipboardData && ev.clipboardData.files) || []);
