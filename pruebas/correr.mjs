@@ -592,6 +592,98 @@ const PRUEBAS = {
     afirmar(await page.isVisible('#modalAjustes #editorTextoUrl'), 'Ajustes se abre desde el panel');
   },
 
+  async 'editor: formas y dibujo a mano salen en su sitio del PDF, también con la hoja girada'({ page }) {
+    await abrir(page, ['Cotizacion', 1]);
+    await page.keyboard.press('v');
+    await page.click('#lectorEditarTexto');
+    await page.waitForSelector('#barraEditor:not([hidden])');
+    // la hoja entera a la vista: se dibuja en toda ella
+    await page.evaluate(() => { const z = document.querySelector('#lectorZoom'); z.value = 45; z.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.waitForTimeout(700);
+    await page.evaluate(() => document.querySelector('.hoja[data-indice="0"]').scrollIntoView({ block: 'start' }));
+    await page.waitForSelector('.hoja[data-indice="0"] .capa-editar');
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.waitForTimeout(400);
+    const caja = await (await page.$('.hoja[data-indice="0"]')).boundingBox();
+    afirmar(caja.y + caja.height < 1080, 'la hoja cabe en la pantalla', caja);
+    const en = (fx, fy) => [caja.x + caja.width * fx, caja.y + caja.height * fy];
+    const arrastrar = async (herr, a, b, pasos = 6, ondas = false) => {
+      await page.click(`[data-herr="${herr}"]`);
+      // tras cada cambio la hoja se vuelve a dibujar: se espera a que esté su capa
+      await page.waitForSelector('.hoja[data-indice="0"] .capa-editar');
+      await page.mouse.move(...en(...a));
+      await page.mouse.down();
+      for (let k = 1; k <= pasos; k++) {
+        const t = k / pasos;
+        const y = a[1] + (b[1] - a[1]) * t + (ondas ? Math.sin(t * Math.PI * 4) * 0.01 : 0);
+        await page.mouse.move(...en(a[0] + (b[0] - a[0]) * t, y));
+      }
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    };
+    // la barra cambia: con una figura enseña grosor y relleno, no la letra
+    await page.click('[data-herr="rect"]');
+    afirmar(await page.isVisible('#edGrosor') && await page.isHidden('#edFamilia'), 'con el recuadro la barra enseña el grosor');
+    await page.selectOption('#edGrosor', '3.5');
+    await arrastrar('rect', [0.15, 0.30], [0.55, 0.40]);
+    await arrastrar('linea', [0.15, 0.50], [0.65, 0.50]);
+    await arrastrar('elipse', [0.60, 0.65], [0.85, 0.75]);
+    await arrastrar('lapiz', [0.15, 0.85], [0.50, 0.85], 24, true);
+    // un clic suelto no deja nada
+    await page.click('[data-herr="rect"]');
+    await page.waitForSelector('.hoja[data-indice="0"] .capa-editar');
+    await page.mouse.click(...en(0.8, 0.2));
+    await page.waitForTimeout(200);
+    const s = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.map((x) => ({ tipo: x.tipo, g: x.grosor, n: (x.puntos || []).length })));
+    afirmar(s.map((x) => x.tipo).join() === 'rect,linea,elipse,trazo', 'quedan las cuatro figuras, y el clic suelto no dejó nada', s);
+    afirmar(s.every((x) => x.g === 3.5) && s[3].n > 10, 'con el grosor elegido, y el trazo con sus puntos', s);
+    // la elegida se mueve arrastrándola
+    const antes = await page.evaluate(() => window.Grapa.estado.paginas[0].sellos[3].puntos[0][0]);
+    await page.click('[data-herr="lapiz"]');
+    await page.click(`.hoja[data-indice="0"] .trozo.puesto[data-sello="3"]`);
+    await page.waitForSelector('.hoja[data-indice="0"] .trozo.puesto.elegido');
+    const m = await (await page.$('.hoja[data-indice="0"] .trozo.puesto.elegido')).boundingBox();
+    await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(m.x + m.width / 2 + caja.width * 0.1, m.y + m.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForFunction((a) => window.Grapa.estado.paginas[0].sellos[3].puntos[0][0] > a + 0.08, antes);
+    // en el PDF: rojo donde va cada cosa, también girando la hoja después
+    const muestra = (giro) => page.evaluate(async (giro) => {
+      const G = window.Grapa, pg = G.estado.paginas[0];
+      pg.giro = giro;
+      const bytes = await G.construirPdf([pg], {});
+      const doc = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+      const hoja = await doc.getPage(1), vp = hoja.getViewport({ scale: 1.5 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await hoja.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      const g = c.getContext('2d');
+      // un punto del papel, como se ve con la hoja girada
+      const rojo = (x, y) => {
+        const v = giro === 90 ? [1 - y, x] : [x, y];
+        let n = 0;
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+          const d = g.getImageData(Math.round(v[0] * c.width) + dx, Math.round(v[1] * c.height) + dy, 1, 1).data;
+          if (d[0] > 150 && d[1] < 90 && d[2] < 90) n++;
+        }
+        return n > 0;
+      };
+      pg.giro = 0;
+      return { linea: rojo(0.40, 0.50), rect: rojo(0.15, 0.35), elipse: rojo(0.725, 0.65), dentroRect: rojo(0.35, 0.35), vacio: rojo(0.9, 0.1) };
+    }, giro);
+    const r0 = await muestra(0), r90 = await muestra(90);
+    [['derecha', r0], ['girada', r90]].forEach(([nombre, r]) => {
+      afirmar(r.linea && r.rect && r.elipse, `en el PDF (${nombre}) están la línea, el recuadro y el círculo`, r);
+      afirmar(!r.dentroRect && !r.vacio, `y nada donde no va (${nombre})`, r);
+    });
+    // Supr quita la elegida y Ctrl+Z deshace todo
+    await page.keyboard.press('Delete');
+    afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 3, 'Supr quita la figura elegida');
+    await page.keyboard.press('Escape');
+    for (let i = 0; i < 6; i++) await page.keyboard.press('Control+z');
+    afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer quita las figuras');
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {
