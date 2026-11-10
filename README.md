@@ -463,7 +463,7 @@ derecha:
 | **Recuadro** | Para encerrar un monto, un RUC o un párrafo al revisar ofertas. |
 | **Círculo** | Para rodear un dato. |
 
-- **Formato:** tipo de letra (Arial, Times, Courier), tamaño (A− / A+),
+- **Formato:** tipo de letra (Arial, Calibri, Times, Courier), tamaño (A− / A+),
   negrita, cursiva y color. Se aplica a lo que estás escribiendo, a lo que
   tengas elegido o, si no hay nada, a lo próximo que escribas.
 - **Formas y lápiz** salen en rojo de revisión. En la barra eliges el
@@ -520,9 +520,20 @@ Lo que conviene saber:
 - Se corrige **renglón por renglón**: si el texto nuevo es más largo, no
   empuja los renglones de abajo. Para rehacer un párrafo entero está el
   editor avanzado.
-- Las letras son las que todo PDF trae (Arial/Helvetica, Times y Courier, con
-  sus negritas y cursivas). Escriben el español completo; un signo raro (un
-  emoji, letras de otro alfabeto) no se puede poner, y Pdflash lo avisa.
+- **Letras.** Un PDF trae solo las letras que usó, así que para escribir lo
+  nuevo hace falta una letra completa:
+  - **Calibri** —la letra por defecto de Word, la de casi todo formato— se
+    escribe con **Carlito**, su gemela libre: misma forma y exactamente el
+    mismo ancho, letra por letra. Pdflash reconoce sola que el texto está en
+    Calibri, y Carlito queda guardada dentro del PDF (solo el dibujo de las
+    letras usadas: suma unos 50 KB), así que se ve igual en cualquier equipo.
+  - **Arial/Helvetica, Times y Courier** son las de fábrica de todo PDF, con
+    sus negritas y cursivas.
+  - Cualquier otra letra se escribe con la más parecida de esas, ajustada de
+    ancho para ocupar lo mismo que el original.
+
+  Escriben el español completo; un signo raro (un emoji, letras de otro
+  alfabeto) no se puede poner, y Pdflash lo avisa.
 - En un escaneo muy sucio, torcido o con las letras muy pegadas puede que no
   se logre separar las letras del renglón: entonces el texto se queda escrito
   con letra de computadora (reconociendo tamaño y negrita), como antes.
@@ -708,6 +719,7 @@ index.html            estructura de la interfaz
 assets/
   styles.css          tema claro y oscuro
   core.js             estado, lectura de PDF, miniaturas, geometría y armado final
+  fuentes.js          letras propias para el texto corregido (Carlito, la gemela de Calibri)
   buscar.js           el texto de cada hoja: qué palabra está dónde
   clonar.js           corregir un escaneo copiando las letras de la propia hoja
   ocr.js              leer una hoja: texto de verdad o reconocimiento de un escaneo
@@ -721,6 +733,7 @@ assets/
   cuentas.js          inicio de sesión, permisos por función y panel de control
 supabase/esquema.sql  tabla de perfiles y reglas de seguridad para Supabase
 lib/                  pdf-lib, pdf.js y JSZip incluidos (ver lib/LICENCIAS.md)
+lib/fuentes/          Carlito, para corregir texto escrito en Calibri (con fontkit, que la mete en el PDF)
 lib/ocr/              el lector de escaneos: PaddleOCR (ONNX Runtime y sus modelos)
                       y, de respaldo, tesseract-wasm con el idioma español
 construir.mjs         arma Grapa.html, el archivo único
