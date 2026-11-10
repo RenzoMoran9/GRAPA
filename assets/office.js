@@ -209,7 +209,11 @@
   }
 
   /** Arregla lo que docx-preview no sabe dibujar, tocando solo una copia del archivo. */
+  // Por parte del documento, si cada imagen flotante va detrás del texto (en el orden en que aparecen).
+  // docx-preview lee ese dato y lo descarta; aquí se apunta para ponerlas detrás después.
+  let detrasDelTexto = {};
   async function prepararDocx(buffer) {
+    detrasDelTexto = {};
     if (typeof JSZip === 'undefined') return buffer;
     try {
       const zip = await JSZip.loadAsync(buffer);
@@ -217,6 +221,8 @@
       let cambio = false;
       for (const n of partes) {
         const xml = await zip.file(n).async('string');
+        detrasDelTexto[n.replace(/^word\/|\.xml$/g, '').replace(/\d+$/, '')] = (detrasDelTexto[n.replace(/^word\/|\.xml$/g, '').replace(/\d+$/, '')] || [])
+          .concat((xml.match(/<wp:anchor\b[^>]*>/g) || []).map((a) => /behindDoc="(1|true)"/.test(a)));
         const nuevo = gruposATablas(xml);
         if (nuevo !== xml) { zip.file(n, nuevo); cambio = true; }
       }
@@ -228,6 +234,50 @@
   }
 
   /* ---- repartir en hojas ---- */
+
+  /**
+   * Una imagen «flotante» de Word (delante o detrás del texto: un membrete de
+   * hoja entera, un sello, una firma) no ocupa sitio entre los renglones.
+   * docx-preview la deja en una cajita de 0 × 0 dentro del renglón, pero la
+   * imagen seguía contando para el alto de ese renglón: un membrete de hoja
+   * entera puesto en el encabezado lo volvía tan alto como la hoja, el texto
+   * «ya no cabía» y cada párrafo se iba a una hoja propia (un Word de 6 hojas
+   * salía en 157). Aquí la imagen se saca del renglón: se queda en su sitio,
+   * pero flotando, como en Word.
+   */
+  function flotantesFueraDelRenglon(caja) {
+    const flotante = (d) => d.style.position === 'relative' && parseFloat(d.style.width) === 0 && parseFloat(d.style.height) === 0;
+    // Una firma o un sello que en Word va «detrás del texto» se dibuja debajo de las letras: si no,
+    // tapa el «Firma, Nombres y Apellidos» que lleva encima. Se reconocen por su orden en cada parte.
+    caja.querySelectorAll('.gdocx-wrapper > section').forEach((sec) => {
+      [['article', 'document'], ['header', 'header'], ['footer', 'footer']].forEach(([sel, parte]) => {
+        const lista = detrasDelTexto[parte] || [];
+        const zona = sec.querySelector(':scope > ' + sel);
+        if (!zona || !lista.length) return;
+        Array.from(zona.querySelectorAll('div')).filter(flotante).forEach((d, i) => { if (lista[i]) d.dataset.detras = '1'; });
+      });
+    });
+    caja.querySelectorAll('.gdocx-wrapper div').forEach((d) => {
+      const e = d.style;
+      if (!flotante(d)) return;
+      e.verticalAlign = 'top';
+      if (d.dataset.detras) e.zIndex = '-1';
+      Array.from(d.children).forEach((h) => {
+        if (h.style.position === 'relative' || !h.style.position) h.style.position = 'absolute';
+        // una imagen no debe encogerse por caber en una caja de ancho cero
+        h.style.maxWidth = 'none';
+      });
+    });
+    // En Word, el encabezado y el pie van siempre POR DEBAJO del cuerpo de la hoja: un membrete
+    // de hoja entera puesto ahí queda de fondo, con el texto encima. Sin esto lo tapaba.
+    caja.querySelectorAll('.gdocx-wrapper > section').forEach((s) => {
+      Array.from(s.children).forEach((ch) => {
+        const fondo = ch.tagName === 'HEADER' || ch.tagName === 'FOOTER';
+        if (!ch.style.position) ch.style.position = 'relative';
+        ch.style.zIndex = fondo ? '0' : '1';
+      });
+    });
+  }
 
   /**
    * docx-preview solo corta donde el documento tiene un salto de página
@@ -243,6 +293,27 @@
       s = nueva || s.nextElementSibling;
       while (s && s.tagName !== 'SECTION') s = s.nextElementSibling;
     }
+  }
+
+  /** Un renglón suelto, corto y en negrita o en mayúsculas: tiene pinta de título. */
+  function esTitulo(el) {
+    if (el.tagName !== 'P' && !/^H\d$/.test(el.tagName)) return false;
+    const t = el.textContent.replace(/\s+/g, ' ').trim();
+    if (!t || t.length > 90) return false;
+    const r = el.getBoundingClientRect();
+    const linea = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.3 || 16;
+    if (r.height > linea * 2.2) return false;
+    if (/^H\d$/.test(el.tagName)) return true;
+    const letras = t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, '');
+    const negrita = Array.from(el.querySelectorAll('*')).concat(el).some((x) => x.textContent.trim() && parseInt(getComputedStyle(x).fontWeight, 10) >= 600);
+    return negrita || (letras.length >= 4 && letras === letras.toUpperCase());
+  }
+
+  /** Un párrafo de un solo renglón. */
+  function renglonCorto(el) {
+    if (el.tagName !== 'P') return false;
+    const linea = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.3 || 16;
+    return el.getBoundingClientRect().height <= linea * 1.6 && el.textContent.trim().length <= 90;
   }
 
   const vacio = (el) => !el.textContent.trim() && !el.querySelector('img, svg, table, canvas, div[style*="position"]');
@@ -280,6 +351,21 @@
       }
       corte = k;
       break;
+    }
+    // Un título no se queda solo al pie de una hoja con su contenido en la siguiente: se pasa
+    // con él. Word lo hace con «conservar con el siguiente»; muchos formatos no lo marcan y el
+    // título cae en la hoja siguiente solo porque allí la letra ocupa algo más.
+    // Lo mismo si tras el título solo alcanzan a entrar un par de renglones cortos (un
+    // subtítulo, «Señores»): el título se lleva consigo ese arranque.
+    if (corte > 1) {
+      let titulo = -1;
+      for (let k = corte - 1, cortos = 0; k > 0 && cortos <= 3; k--) {
+        if (vacio(hijos[k])) continue;
+        if (esTitulo(hijos[k])) titulo = k;
+        else if (!renglonCorto(hijos[k])) break;
+        cortos++;
+      }
+      if (titulo > 0) corte = titulo;
     }
     if (corte === 0) corte = 1;               // algo más alto que una hoja: va solo en la suya
     if (corte < 1 || corte >= hijos.length) return null;
@@ -370,6 +456,7 @@
       });
       completarFuentes(caja);
       cuadrosDeTextoADiv(caja);
+      flotantesFueraDelRenglon(caja);
       // con las fuentes ya puestas, se espera a que carguen antes de medir
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       ajustarTablas(caja);
