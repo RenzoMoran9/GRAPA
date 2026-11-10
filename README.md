@@ -70,6 +70,12 @@ Funciona en Chrome, Edge y Firefox actuales.
     cada una; las tablas y listas largas se parten entre hojas, los cuadros de
     texto del membrete (el pie con dirección y web) se ven, y si falta una fuente
     se usa la más parecida en vez de una con serifa. Las notas al pie van al final.
+    Un **membrete de hoja entera** puesto en el encabezado (la imagen con el
+    marco, el logo y los datos de la empresa) queda de fondo, como en Word, y
+    ya no reparte cada párrafo en una hoja aparte (un formato de 6 hojas salía
+    en 157). Las **firmas y sellos «detrás del texto»** van detrás, sin tapar
+    el «Firma, Nombres y Apellidos». Y un **título** que quedaría solo al pie
+    de una hoja pasa a la siguiente con su contenido.
   - **Excel (`.xlsx`):** sale como lo imprime Excel: área de impresión,
     orientación, márgenes, «ajustar a una página», anchos y altos, celdas
     combinadas, rellenos, bordes, fuentes, formatos de número, logos y filas de

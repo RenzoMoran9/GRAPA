@@ -750,6 +750,42 @@ const PRUEBAS = {
     afirmar(r.pdf - original < 120000 && r.delgada < r.entera / 2 && r.cara, 'la letra va adelgazada, suma poco al PDF y el navegador la acepta', { ...r, original });
   },
 
+  async 'word: un membrete de hoja entera en el encabezado no reparte cada párrafo en su hoja'({ page }) {
+    // Como el formato que lo destapó: el membrete es una imagen flotante del tamaño de la hoja,
+    // puesta en el encabezado, y la firma va «detrás del texto». Salían 157 hojas en vez de 6.
+    const r = await page.evaluate(async () => {
+      const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const NS = `xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
+      const c = document.createElement('canvas'); c.width = 60; c.height = 80;
+      const g = c.getContext('2d'); g.fillStyle = '#eef'; g.fillRect(0, 0, 60, 80); g.strokeStyle = '#336'; g.strokeRect(2, 2, 56, 76);
+      const png = await new Promise((ok) => c.toBlob(ok, 'image/png'));
+      const flotante = (rid, cx, cy, detras, dx, dy) => `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="${detras ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>${dx}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>${dy}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="${rid.length}" name="img"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>`;
+      const p = (t, extra = '') => `<w:p>${extra}<w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+      let cuerpo = '';
+      for (let f = 1; f <= 3; f++) {
+        cuerpo += p(`FORMATO N° ${f}`, '<w:pPr><w:jc w:val="center"/></w:pPr>'.replace('</w:pPr>', '<w:rPr><w:b/></w:rPr></w:pPr>'));
+        for (let k = 0; k < 6; k++) cuerpo += p(`Declaración ${f}.${k + 1}: texto de la declaración jurada con el largo de un renglón corriente.`);
+        cuerpo += `<w:p>${flotante('rIdFirma', 1200000, 1400000, true, 2000000, 0)}<w:r><w:t>Firma, Nombres y Apellidos del Representante</w:t></w:r></w:p>`;
+        if (f < 3) cuerpo += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+      }
+      const zip = new JSZip();
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdCab" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/><Relationship Id="rIdFirma" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/firma.png"/></Relationships>');
+      zip.file('word/_rels/header1.xml.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdMembrete" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/membrete.png"/></Relationships>');
+      zip.file('word/media/membrete.png', png);
+      zip.file('word/media/firma.png', png);
+      // el membrete: del tamaño de la hoja A4 (7,5 × 10,6 millones de EMU), corrido hacia arriba y la izquierda
+      zip.file('word/header1.xml', `<?xml version="1.0" encoding="UTF-8"?><w:hdr ${NS}><w:p>${flotante('rIdMembrete', 7505700, 10629900, false, -862329, -350520)}</w:p></w:hdr>`);
+      zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8"?><w:document ${NS}><w:body>${cuerpo}<w:sectPr><w:headerReference w:type="default" r:id="rIdCab"/><w:pgSz w:w="11907" w:h="16839"/><w:pgMar w:top="2552" w:right="1418" w:bottom="1701" w:left="1418" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>`);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const archivo = new File([blob], 'membrete.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const pdf = await window.pdfjsLib.getDocument({ data: await window.Grapa.officeAPdf(archivo) }).promise;
+      return { hojas: pdf.numPages };
+    });
+    afirmar(r.hojas === 3, 'tres formatos, tres hojas', r);
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {
