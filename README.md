@@ -34,9 +34,11 @@ Funciona en Chrome, Edge y Firefox actuales.
 ## Lo que hace
 
 ### Primeros pasos
-- **La pantalla de inicio dice qué hacer** en tres pasos (abrir, ordenar,
-  foliar y firmar, exportar), con **Abrir archivos** y **Probar con un
-  ejemplo**.
+- **La pantalla de inicio pregunta qué quieres hacer:** unir y ordenar,
+  editar texto, firmar y sellar, foliar, bajar el peso, separar hojas, buscar
+  en un escaneo o limpiarlo. Eliges la tarea, abres tu archivo y Pdflash te
+  deja en esa herramienta, con una frase que dice el paso siguiente. También
+  están **Solo abrir archivos** y **Probar con un ejemplo**.
 - **Recorrido guiado:** la primera vez, un recorrido de un minuto señala
   dónde está cada cosa. Vuelve desde *Ayuda ▸ Recorrido guiado*.
 - **Expediente de ejemplo:** seis hojas de práctica (requerimiento,
@@ -45,6 +47,12 @@ Funciona en Chrome, Edge y Firefox actuales.
   ejemplo*.
 - **Una herramienta a la vez:** el riel de la izquierda elige la herramienta
   y el panel enseña solo esa, con una línea que dice para qué sirve.
+- Al abrir archivos en un tablero vacío **no queda nada marcado** (antes
+  salían todas las hojas marcadas, con su borde naranja, sin haber marcado
+  ninguna). Lo que añades después a un expediente sí queda marcado, para
+  verlo de un vistazo.
+- Lo que casi nunca se toca —las direcciones del editor avanzado y de «Subir
+  a otra web»— está en **Archivo ▸ Ajustes**, no en el panel de exportar.
 - La barra de arriba lleva lo de siempre (Abrir, Imprimir, Guardar, Exportar
   PDF); *Editar texto* está en *Archivo* y en «Ver en grande», y el tema
   claro/oscuro en *Ver*.
@@ -162,8 +170,7 @@ guardar») y el paso siguiente, en naranja.
 hay hojas sin folio), si no lleva ninguna firma, o si quedan hojas en blanco
 o torcidas sin corregir. Si falta algo, lo dice y deja elegir entre
 **Exportar igual** y **Corregir primero**, que te lleva a esa herramienta.
-«No numerar la primera página» no cuenta como falta. Se apaga en *Archivo de
-salida*.
+«No numerar la primera página» no cuenta como falta. Se apaga en *Opciones*.
 
 Al terminar, si el expediente no está guardado en Pdflash, lo recuerda con un
 botón **Guardar expediente**: el PDF exportado no sirve para retomar el trabajo
@@ -280,7 +287,7 @@ Qué no hace todavía:
 
 ### Bajarle el peso al PDF
 
-En **Archivo de salida · Peso del archivo**, cuatro maneras:
+En **Opciones · Peso del archivo**, cuatro maneras:
 
 | | Qué hace | Una cotización escaneada de 1,2 MB |
 |---|---|---|
@@ -429,7 +436,7 @@ Es solo una forma de ver y trabajar: la foliación y el PDF final salen igual.
   expediente terminado, no para una hoja que se saca de paso.
 - **↗ Subir a…** guarda lo que tengas (o la selección, o el paquete abierto)
   como «… - para editar.pdf» en Descargas y abre en otra pestaña el editor que
-  configures en *Archivo de salida*. Viene puesto PDF Guru, pero se cambia por
+  configures en *Archivo ▸ Ajustes*. Viene puesto PDF Guru, pero se cambia por
   el que quieras y el botón se renombra solo.
 
   Un enlace no puede entregarle el archivo a otra web: por eso Pdflash lo guarda y

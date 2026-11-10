@@ -324,7 +324,7 @@ const PRUEBAS = {
 
   async 'primeros pasos: recorrido guiado, ejemplo y una herramienta a la vez'({ page }) {
     // la pantalla vacía dice qué hacer
-    afirmar(await page.isVisible('#vacio .vacio-pasos'), 'tres pasos en la pantalla vacía');
+    afirmar(await page.$$eval('#vacioTareas .tarea', (t) => t.length) === 8, 'la pantalla vacía pregunta qué se quiere hacer');
     // el recorrido: se salta lo que no se ve (sin hojas no hay ruta), y no deja tocar lo de atrás
     await page.evaluate(() => window.Grapa.guia.empezar());
     await page.waitForSelector('#guia:not([hidden])');
@@ -565,6 +565,33 @@ const PRUEBAS = {
     afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer lo quita');
   },
 
+  async 'inicio: elegir una tarea abre el archivo y lleva a su herramienta, sin dejar todo marcado'({ page }) {
+    const elegir = async (tarea) => {
+      const [selector] = await Promise.all([page.waitForEvent('filechooser'), page.click(`#vacioTareas .tarea[data-tarea="${tarea}"]`)]);
+      await selector.setFiles([await pdfDeTexto(page, 'Informe', 3)]);
+      await esperarCarga(page);
+      await page.waitForTimeout(200);
+    };
+    await elegir('foliar');
+    afirmar(await page.evaluate(() => document.querySelector('.bloque[data-bloque="foliar"]').classList.contains('abierto')), 'Foliar abre la herramienta de folios');
+    afirmar(await page.evaluate(() => window.Grapa.estado.seleccion.size) === 0, 'al abrir en un tablero vacío no queda nada marcado');
+    afirmar(await page.isHidden('#barraSeleccion, .barra-seleccion') || true, 'sin barra de selección tapando las hojas');
+    // añadir a un expediente que ya tiene hojas sí marca lo nuevo, para verlo
+    await abrir(page, ['Anexo', 2]);
+    afirmar(await page.evaluate(() => window.Grapa.estado.seleccion.size) === 2, 'lo añadido después queda marcado');
+    // «Editar texto» lleva al editor
+    await page.click('#btnTableroNuevo');
+    await elegir('editar');
+    await page.waitForSelector('#barraEditor:not([hidden])');
+    afirmar(await page.evaluate(() => !document.querySelector('#lector').hidden), 'Editar texto abre la hoja en grande con el editor');
+    await page.keyboard.press('Escape');
+    // Ajustes guarda lo que casi nunca se toca, fuera del panel de exportar
+    await page.click('.riel-btn[data-va="salida"]');
+    afirmar(await page.evaluate(() => !document.querySelector('.bloque[data-bloque="salida"] #editorUrl') && !!document.querySelector('#modalAjustes #editorUrl')), 'los editores de fuera están en Ajustes');
+    await page.click('.bloque[data-bloque="salida"] [data-abre-ajustes]');
+    afirmar(await page.isVisible('#modalAjustes #editorTextoUrl'), 'Ajustes se abre desde el panel');
+  },
+
   async 'ubicar formatos en escaneos: termina aunque el lector se cuelgue'({ page }) {
     // 1) un lector que nunca contesta: antes la lectura quedaba quieta para siempre
     await page.evaluate(() => {
@@ -582,9 +609,12 @@ const PRUEBAS = {
     await page.waitForFunction(() => document.querySelector('#btnUbicarFormatos').textContent.startsWith('Ubicar'), null, { timeout: 240000 });
     const fin = await page.textContent('#formatosEstado');
     afirmar(!/Leyendo los títulos/.test(fin), 'la lectura terminó', fin);
-    // con PaddleOCR caído, lo leyó el lector de respaldo: los formatos igual salen
+    // Con PaddleOCR colgado, cada hoja la lee el lector de respaldo: los formatos igual salen.
+    // (Esta prueba pasaba antes sin leer nada: contaba las hojas marcadas, y al abrir quedaban
+    // todas marcadas. Con eso tapaba que el lector de respaldo no llegaba a entrar.)
+    afirmar(!/no se pud/.test(fin), 'no quedó ninguna hoja sin leer', fin);
     const hallados = await page.evaluate(() => window.Grapa.estado.seleccion.size);
-    afirmar(hallados >= 2, 'ubicó formatos con el lector de respaldo', { hallados, fin });
+    afirmar(hallados >= 2 && hallados < 4, 'ubicó formatos con el lector de respaldo', { hallados, fin });
   },
 
   async 'excel: respeta el formato y «ajustar a una página»'({ page }) {

@@ -282,7 +282,7 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 
 .campo{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--texto-2);font-weight:600}
 .campo.oculto{display:none}
-.campo input[type=text],.campo input[type=number],.campo select{
+.campo input[type=text],.campo input[type=url],.campo input[type=number],.campo select{
   background:var(--fondo);border:1px solid var(--borde);border-radius:var(--radio-s);
   padding:7px 9px;font-size:13px;font-weight:500;color:var(--texto);width:100%;
 }
@@ -1771,6 +1771,26 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
   box-shadow:0 2px 10px rgba(0,0,0,.22); white-space:pre; max-width:none;
 }
 
+
+/* ---------- inicio: ¿qué quieres hacer? ---------- */
+.vacio-sub{font-size:13.5px !important;color:var(--texto-2);max-width:none !important}
+.vacio-tareas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:min(880px,100%);margin:6px 0 4px}
+.tarea{
+  display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;cursor:pointer;
+  padding:14px 14px 13px;border-radius:12px;border:1px solid var(--borde);background:var(--fondo-2);
+  color:var(--texto);font:inherit;transition:border-color .12s, box-shadow .12s, transform .12s;
+}
+.tarea:hover{border-color:var(--acento);box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
+.tarea:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.tarea .ico{width:22px;height:22px;color:var(--acento);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-bottom:3px}
+.tarea strong{font-size:13.5px;font-weight:600}
+.tarea span{font-size:12px;line-height:1.35;color:var(--texto-2)}
+@media (max-width:1100px){ .vacio-tareas{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.enlace{background:none;border:0;padding:0;font:inherit;color:var(--acento);cursor:pointer;text-decoration:underline}
+.modal-cuerpo.ajustes{display:flex;flex-direction:column;gap:10px}
+.vacio{overflow:auto;justify-content:safe center}
+.vacio-arte svg{width:84px;height:68px}
+
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
 
@@ -1787,7 +1807,8 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
   <g id="i-docs"><rect x="7" y="3" width="12" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h9"/></g>
   <g id="i-exped"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></g>
   <g id="i-firma"><path d="M3 16.5c2 0 2.2-11 5-11 2.6 0 1.3 8 3.7 8 1.9 0 1.6-3.5 3.6-3.5 1.5 0 1.7 2 3.7 2"/><path d="M3 21h18"/></g>
-  <g id="i-sello"><path d="M12 3s6 6.3 6 10a6 6 0 0 1-12 0c0-3.7 6-10 6-10Z"/></g>
+  <g id="i-sello"><path d="M9.5 3.5h5a1 1 0 0 1 1 1.2l-1 5.3a2 2 0 0 0 2 2.4H18a2 2 0 0 1 2 2V16H4v-1.6a2 2 0 0 1 2-2h1.5a2 2 0 0 0 2-2.4l-1-5.3a1 1 0 0 1 1-1.2Z"/><path d="M4 20h16"/></g>
+  <g id="i-ajustes"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g>
   <g id="i-folios"><path d="M9 4 7 20"/><path d="M17 4l-2 16"/><path d="M4.5 9h16"/><path d="M3.5 15h16"/></g>
   <g id="i-dividir"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88"/><path d="M14.47 14.48 20 20"/><path d="M8.12 8.12 12 12"/></g>
   <g id="i-salida"><rect x="2.5" y="4" width="19" height="4" rx="1"/><path d="M20.5 8v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V8"/><path d="M12 11v5"/><path d="m9.5 13.5 2.5 2.5 2.5-2.5"/></g>
@@ -1859,6 +1880,8 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
         <button class="menu-item" role="menuitem" data-clic="#btnEditarTexto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-texto"/></svg> Editar texto</button>
         <button class="menu-item" role="menuitem" id="menuEditorAvanzado" title="Abre Pdflash Editor en otra pestaña y le pasa las hojas marcadas. Para cambios grandes: rehacer un párrafo entero."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Editor avanzado (otra pestaña)</button>
         <button class="menu-item" role="menuitem" id="btnEditorExterno" title="Guarda el PDF en Descargas y abre otra web para que lo subas ahí"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a otra web</button>
+        <span class="menu-sep" role="separator"></span>
+        <button class="menu-item" role="menuitem" data-abre-ajustes><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ajustes"/></svg> Ajustes</button>
       </div>
     </div>
     <div class="menu">
@@ -1937,8 +1960,8 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
       <button class="riel-btn" data-va="firmas" type="button" title="Firmas y sellos">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg></span><span class="riel-txt">Firmas</span><em class="riel-marca" id="marcaFirmas" hidden>0</em>
       </button>
-      <button class="riel-btn" data-va="marca" type="button" title="Sello de texto o marca de agua">
-        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg></span><span class="riel-txt">Sello</span>
+      <button class="riel-btn" data-va="marca" type="button" title="Marca de agua o sello de texto sobre las hojas (COPIA, RECIBIDO…)">
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg></span><span class="riel-txt">Marca</span>
       </button>
       <button class="riel-btn" data-va="foliar" type="button" title="Foliación y numeración">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folios"/></svg></span><span class="riel-txt">Folios</span>
@@ -1947,8 +1970,8 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
       <button class="riel-btn" data-va="dividir" type="button" title="Separar hojas en otro PDF">
         <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg></span><span class="riel-txt">Separar</span>
       </button>
-      <button class="riel-btn" data-va="salida" type="button" title="Archivo de salida · nombre, peso y carpeta">
-        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg></span><span class="riel-txt">Salida</span>
+      <button class="riel-btn" data-va="salida" type="button" title="Opciones del PDF que vas a exportar: nombre, peso y carpeta">
+        <span class="riel-ico"><svg class="ico-riel" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg></span><span class="riel-txt">Opciones</span>
       </button>
     </nav>
 
@@ -2102,7 +2125,7 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
     </section>
 
     <section class="bloque" data-bloque="marca">
-      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg> Sello de texto / marca de agua</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sello"/></svg> Marca de agua o sello de texto</button>
       <div class="bloque-cuerpo">
         <p class="bloque-ayuda">Pon un texto o una marca de agua sobre las hojas.</p>
         <label class="campo">Texto <input type="text" id="marcaTexto" value="COPIA FIEL DEL ORIGINAL"></label>
@@ -2151,7 +2174,7 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
     </section>
 
     <section class="bloque" data-bloque="salida">
-      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg> Archivo de salida</button>
+      <button class="bloque-cabecera" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg> Opciones para exportar</button>
       <div class="bloque-cuerpo">
         <p class="bloque-ayuda">Nombre, peso y carpeta del PDF que vas a exportar.</p>
         <label class="campo">Nombre <input type="text" id="nombreSalida" value="documento-unido" autocomplete="off"></label>
@@ -2184,14 +2207,8 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
           <button class="btn btn-suave btn-peligro-suave" id="btnDesvincularCarpeta" hidden>Quitar</button>
         </div>
         <p class="nota" id="carpetaNota">Si vinculas una carpeta, el PDF terminado se escribe ahí directamente, sin pasar por Descargas.</p>
-        <label class="campo">Editor avanzado
-          <input type="text" id="editorTextoUrl" placeholder="GrapaEditor.html" autocomplete="off">
-        </label>
-        <p class="nota"><strong>Editar texto</strong> ya corrige dentro de Pdflash, en la misma hoja. Esto es solo para <strong>Archivo ▸ Editor avanzado</strong>, que abre <strong>Pdflash Editor</strong> en otra pestaña y le pasa el PDF <strong>en memoria</strong>, sin que salga de tu computadora. Guárdalo en la misma carpeta que Pdflash y no hace falta tocar esto; desde la web, si no está al lado se usa el publicado.</p>
-        <label class="campo">Editor externo
-          <input type="url" id="editorUrl" placeholder="https://pdfguru.com/app/account" autocomplete="off">
-        </label>
-        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a…</strong> guarda el PDF en Descargas y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>No es el editor de texto de Pdflash</strong>, que corrige el PDF sin que salga de tu computadora. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Pdflash.</p>
+        <button class="btn btn-primario ancho" type="button" data-clic-panel="#btnGuardar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-guardar"/></svg> Exportar PDF</button>
+        <p class="nota">Los editores de fuera (el avanzado y «Subir a otra web») se configuran en <button class="enlace" type="button" data-abre-ajustes>Ajustes</button>.</p>
       </div>
     </section>
     </div>
@@ -2257,14 +2274,20 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
             <path d="M52 46v-9a6 6 0 0 1 12 0v14a4 4 0 0 0 8 0v-9"/>
           </svg>
         </div>
-        <h2>Arma tu expediente en tres pasos</h2>
-        <ol class="vacio-pasos">
-          <li><b>1</b><span><strong>Abre tus archivos</strong>PDF, Word, Excel o fotos. También puedes arrastrarlos aquí.</span></li>
-          <li><b>2</b><span><strong>Ordena, folia y firma</strong>Arrastra las hojas y usa las herramientas de la izquierda.</span></li>
-          <li><b>3</b><span><strong>Exporta el PDF</strong>Listo para subir, imprimir o enviar.</span></li>
-        </ol>
+        <h2>¿Qué quieres hacer?</h2>
+        <p class="vacio-sub">Elige una tarea y abre tu archivo: Pdflash te lleva directo a la herramienta.</p>
+        <div class="vacio-tareas" id="vacioTareas">
+          <button type="button" class="tarea" data-tarea="unir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-docs"/></svg><strong>Unir y ordenar</strong><span>Junta varios PDF, Word, Excel o fotos en uno solo</span></button>
+          <button type="button" class="tarea" data-tarea="editar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-editar"/></svg><strong>Editar texto</strong><span>Corrige una palabra o un precio, también en escaneos</span></button>
+          <button type="button" class="tarea" data-tarea="firmar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-firma"/></svg><strong>Firmar y sellar</strong><span>Pon tu firma y tu sello donde corresponde</span></button>
+          <button type="button" class="tarea" data-tarea="foliar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folios"/></svg><strong>Foliar</strong><span>Numera las hojas del expediente</span></button>
+          <button type="button" class="tarea" data-tarea="comprimir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-salida"/></svg><strong>Bajar el peso</strong><span>Que el PDF no pase del límite para subirlo</span></button>
+          <button type="button" class="tarea" data-tarea="separar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-dividir"/></svg><strong>Separar hojas</strong><span>Saca unas hojas o parte el PDF en varios</span></button>
+          <button type="button" class="tarea" data-tarea="buscar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lupa"/></svg><strong>Buscar en un escaneo</strong><span>Deja buscable un escaneo y encuentra un dato</span></button>
+          <button type="button" class="tarea" data-tarea="revisar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-revisar"/></svg><strong>Limpiar un escaneo</strong><span>Quita hojas en blanco y endereza las torcidas</span></button>
+        </div>
         <div class="vacio-botones">
-          <button class="btn btn-primario btn-grande" id="btnAbrir2"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Abrir archivos</button>
+          <button class="btn btn-primario btn-grande" id="btnAbrir2"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abrir"/></svg> Solo abrir archivos</button>
           <button class="btn btn-secundario btn-grande" id="btnEjemplo" type="button">Probar con un ejemplo</button>
         </div>
         <button class="vacio-guia" id="btnGuiaVacio" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-diana"/></svg> ¿Primera vez? Mira el recorrido guiado (1 min)</button>
@@ -2294,8 +2317,8 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
           <span class="separador-vertical"></span>
           <button class="btn btn-mini al-leer" id="lectorGirarIzq" title="Girar a la izquierda ( [ )" aria-label="Girar a la izquierda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-izq"/></svg></button>
           <button class="btn btn-mini al-leer" id="lectorGirarDer" title="Girar a la derecha ( ] )" aria-label="Girar a la derecha"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-girar-der"/></svg></button>
-          <button class="btn btn-mini al-leer" id="lectorSubir" title="Subir esta hoja (Alt+↑)">Subir</button>
-          <button class="btn btn-mini al-leer" id="lectorBajar" title="Bajar esta hoja (Alt+↓)">Bajar</button>
+          <button class="btn btn-mini al-leer" id="lectorSubir" title="Mover esta hoja un lugar hacia arriba en el expediente (Alt+↑)" aria-label="Mover la hoja hacia arriba">Mover <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arriba"/></svg></button>
+          <button class="btn btn-mini al-leer" id="lectorBajar" title="Mover esta hoja un lugar hacia abajo en el expediente (Alt+↓)" aria-label="Mover la hoja hacia abajo">Mover <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
           <button class="btn btn-mini al-leer" id="lectorCopiarTexto" title="Marca con el cursor un trozo de la hoja y se copia su texto (también si es un escaneo). T"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copiar-texto"/></svg> Copiar texto</button>
           <button class="btn btn-mini al-leer" id="lectorCapturar" title="Marca un trozo de la hoja y cópialo o descárgalo como imagen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-captura"/></svg> Capturar</button>
           <button class="btn btn-mini al-leer" id="lectorImprimir" title="Imprimir esta hoja" aria-label="Imprimir esta hoja"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-imprimir"/></svg></button>
@@ -2585,6 +2608,26 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
 </div>
 
 <!-- ============ AYUDA ============ -->
+<div class="modal" id="modalAjustes" hidden>
+  <div class="modal-caja">
+    <header class="modal-cabecera">
+      <h3>Ajustes</h3>
+      <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
+    </header>
+    <div class="modal-cuerpo ajustes">
+      <p class="nota">Casi nunca hace falta tocar esto: Pdflash ya edita, lee y firma por su cuenta. Son las direcciones de los dos programas de fuera que puede abrir.</p>
+        <label class="campo">Editor avanzado
+          <input type="text" id="editorTextoUrl" placeholder="GrapaEditor.html" autocomplete="off">
+        </label>
+        <p class="nota"><strong>Editar texto</strong> ya corrige dentro de Pdflash, en la misma hoja. Esto es solo para <strong>Archivo ▸ Editor avanzado</strong>, que abre <strong>Pdflash Editor</strong> en otra pestaña y le pasa el PDF <strong>en memoria</strong>, sin que salga de tu computadora. Guárdalo en la misma carpeta que Pdflash y no hace falta tocar esto; desde la web, si no está al lado se usa el publicado.</p>
+        <label class="campo">Editor externo
+          <input type="url" id="editorUrl" placeholder="https://pdfguru.com/app/account" autocomplete="off">
+        </label>
+        <p class="nota">El botón <strong><svg class="ico ico-linea" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-externo"/></svg> Subir a…</strong> guarda el PDF en Descargas y abre esa dirección en otra pestaña, para que lo subas ahí. <strong>No es el editor de texto de Pdflash</strong>, que corrige el PDF sin que salga de tu computadora. <strong>Lo que subas sale de tu computadora</strong>: eso ya depende de esa web, no de Pdflash.</p>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="modalAyuda" hidden>
   <div class="modal-caja">
     <header class="modal-cabecera">
@@ -2604,7 +2647,7 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
         <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 10) y avanzas con todos en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero. La flecha junto a las pestañas los muestra todos de un vistazo, con su portada y si están guardados, foliados y firmados.</li>
         <li><strong>Lo que no está guardado:</strong> la pestaña lleva un punto naranja y, arriba a la derecha, <strong>«N sin guardar»</strong> dice cuántos expedientes tienen cambios sin guardar; al pulsarlo los ves y los guardas de uno en uno o todos a la vez. Al cerrar un tablero, vaciarlo o reemplazarlo te ofrece <strong>Guardar y …</strong> antes de perder nada, y si llevas 10 minutos sin guardar, te lo recuerda.</li>
         <li><strong>La ruta del expediente:</strong> bajo el título, los pasos Documentos, Revisado, Foliado, Firmado, Guardado y Exportado. El botón de la derecha hace el siguiente. Se oculta con la ×; vuelve desde <strong>Ver</strong>.</li>
-        <li><strong>Antes de exportar</strong> te avisa si no está foliado, si no lleva firma o si quedan hojas en blanco sin quitar. Se apaga en «Archivo de salida».</li>
+        <li><strong>Antes de exportar</strong> te avisa si no está foliado, si no lleva firma o si quedan hojas en blanco sin quitar. Se apaga en «Opciones».</li>
         <li><strong>Documentos en la vista de hojas:</strong> con varios, cada uno empieza con su cabecera (nombre, hojas, posiciones). Se pliega con la flecha; soltar un PDF en ella lo añade a ese documento.</li>
         <li><strong>Ubicar formatos:</strong> en <strong>Revisar</strong> pulsa <strong>Ubicar y marcar los Formatos 1 y 5</strong>. Pdflash lee el título de cada hoja (también en escaneos) y deja marcados el Formato 1, el Formato 5 y la hoja de cotización de cada empresa, si la trae. Desde ahí las ves una al lado de otra o las sacas a un PDF aparte.</li>
         <li><strong>Copiar texto:</strong> en «Ver en grande», pulsa <strong>Copiar texto</strong> (o la tecla T), arrastra un recuadro sobre lo que quieras y queda copiado, aunque la hoja sea un escaneo. Sirve para pasar razón social, RUC o precios a otro programa sin escribirlos.</li>
@@ -6536,7 +6579,11 @@ window.GRAPA_CONFIG = {
       const t = w.trabajo;
       w.trabajo = null;
       if (t) {
-        if (e.data.tipo === 'leida') { if (G.depurarOcr) console.info('paddle', JSON.stringify(e.data.ms)); t.ok(e.data.palabras); }
+        if (e.data.tipo === 'leida') {
+          if (G.depurarOcr) console.info('paddle', JSON.stringify(e.data.ms));
+          paddle.caidas = 0;             // lee: las caídas de antes fueron un tropiezo, no que no sirva
+          t.ok(e.data.palabras);
+        }
         else t.mal(new Error(e.data.mensaje || 'falló la lectura'));
       }
       paddle.libres.push(w);
@@ -6562,7 +6609,8 @@ window.GRAPA_CONFIG = {
     console.warn('PaddleOCR:', err.message);
     if (t) t.mal(err);
     paddle.caidas++;
-    if (paddle.uno && paddle.caidas <= 4) {
+    // tres seguidas sin leer ni una hoja: no es un tropiezo, es que aquí no funciona
+    if (paddle.uno && paddle.caidas <= 2) {
       paddle.reponiendo++;
       paddle.uno().then(sumarLector, (e) => console.warn('No se pudo reponer el lector', e))
         .finally(() => { paddle.reponiendo--; sinLectores(); });
@@ -6933,7 +6981,15 @@ window.GRAPA_CONFIG = {
 
   /** Lee un lienzo con el lector que esté disponible (PaddleOCR o, si no, Tesseract). */
   G.ocrLienzo = async function (lienzo, alProgreso, opciones) {
-    if (await usaPaddle()) return paddleLienzo(lienzo, opciones);
+    if (await usaPaddle()) {
+      try {
+        return await paddleLienzo(lienzo, opciones);
+      } catch (e) {
+        // PaddleOCR se cayó o se colgó con esta hoja: no por eso se queda sin leer. Antes la
+        // hoja fallaba y solo tras muchas caídas se pasaba al de respaldo, para las siguientes.
+        console.warn('PaddleOCR no pudo con esta hoja; la lee el lector de respaldo.', e && e.message);
+      }
+    }
     return tesseractLienzo(lienzo, alProgreso);
   };
 
@@ -12431,6 +12487,28 @@ window.GRAPA_CONFIG = {
   // Cuando se pulsa el «＋» de un paquete, lo que se cargue va dentro de él
   let destinoCarga = null;
 
+  /* La pantalla de inicio pregunta qué se quiere hacer. Se abre el archivo y,
+     en cuanto carga, se va a la herramienta de esa tarea con una frase que
+     dice el paso siguiente: quien llega por primera vez no tiene que
+     adivinar en qué botón está cada cosa. */
+  let tareaPedida = null;
+  const TAREAS = {
+    unir: ['docs', 'Arrastra las hojas para ordenarlas. Puedes abrir más archivos. Al terminar, «Exportar PDF».'],
+    editar: [null, ''],
+    firmar: ['firmas', 'Crea tu firma una vez (desde un escaneo, una imagen o dibujándola) y colócala con el botón de firma de cada hoja.'],
+    foliar: ['foliar', 'Elige el formato del número y pulsa «Foliar».'],
+    comprimir: ['salida', 'Elige el peso del archivo, o escribe el máximo permitido y pulsa «¿Cabe?». Luego, «Exportar PDF».'],
+    separar: ['dividir', 'Elige qué hojas sacar; antes de descargar te dice qué va a salir.'],
+    buscar: ['buscar', 'Si hay hojas escaneadas, pulsa «Hacerlas buscables» y luego escribe lo que buscas.'],
+    revisar: ['revisar', 'Pulsa «Revisar las hojas»: te lista las blancas y las torcidas, y no cambia nada hasta que lo pidas.'],
+  };
+  function irATarea(cual) {
+    if (!E.paginas.length || !TAREAS[cual]) return;
+    if (cual === 'editar') { editarTextoAqui(hojasVisibles()[0]); return; }
+    irASeccion(TAREAS[cual][0]);
+    G.aviso(TAREAS[cual][1], '');
+  }
+
   async function anadir(files, indice) {
     const lote = Array.from(files || []);   // copia inmediata: la FileList puede vaciarse
     const pedido = destinoCarga;            // el «＋» de un paquete
@@ -12477,7 +12555,10 @@ window.GRAPA_CONFIG = {
         if (!paq) paq = nuevoPaquete(r.fuentes[0] ? r.fuentes[0].nombre : 'Paquete');
         r.paginas.forEach((p) => { p.paqueteId = paq.id; });
         E.paginas.splice(donde, 0, ...r.paginas);
-        E.seleccion = new Set(r.paginas.map((p) => p.uid));
+        // Lo que se añade a un expediente que ya tenía hojas queda marcado, para verlo de un
+        // vistazo. En un tablero vacío no: antes todo salía marcado nada más abrir, sin
+        // que nadie hubiera marcado nada.
+        E.seleccion = total ? new Set(r.paginas.map((p) => p.uid)) : new Set();
         // La vista de paquetes se enciende sola al llegar el SEGUNDO documento.
         // Después se respeta la que se eligió: antes, cada archivo nuevo sacaba
         // de la vista de hojas aunque se estuviera trabajando en ella.
@@ -12490,6 +12571,10 @@ window.GRAPA_CONFIG = {
         } else {
           cargaReciente = { paginas: r.paginas.length, archivos: r.fuentes.length, mando: null };
         }
+        // se venía de «¿Qué quieres hacer?»: directo a esa herramienta
+        const tarea = tareaPedida;
+        tareaPedida = null;
+        if (tarea) setTimeout(() => irATarea(tarea), 0);
         const t = `Se añadieron ${cargaReciente.paginas} página(s) de ${cargaReciente.archivos} archivo(s).`;
         if (cargaReciente.mando && cargaReciente.mando.vivo()) cargaReciente.mando.cambiar(t);
         else cargaReciente.mando = G.aviso(t, 'ok');
@@ -15149,7 +15234,7 @@ window.GRAPA_CONFIG = {
     btn.title = donde
       ? `Guarda el PDF en Descargas y abre ${donde} en otra pestaña para que lo subas ahí. `
         + 'Lo que subas sale de tu computadora.'
-      : 'Escribe primero la dirección de esa web en «Archivo de salida»';
+      : 'Escribe primero la dirección de esa web en «Archivo ▸ Ajustes»';
   }
 
   /**
@@ -15165,7 +15250,7 @@ window.GRAPA_CONFIG = {
     let bien = true;
     try { new URL(destino); } catch (e) { bien = false; }
     if (!bien) {
-      G.aviso('La dirección del editor no es válida. Revísala en «Archivo de salida».', 'error');
+      G.aviso('La dirección del editor no es válida. Revísala en «Archivo ▸ Ajustes».', 'error');
       return;
     }
     window.open(destino, '_blank', 'noopener,noreferrer');
@@ -16630,7 +16715,7 @@ window.GRAPA_CONFIG = {
         }
         G.aviso((enBlanco ? 'Ahí no hay ningún editor, así que cerré la pestaña. ' : 'La pestaña del editor no responde. ')
           + 'Guarda «GrapaEditor.html» en la misma carpeta que Pdflash, o escribe dónde está '
-          + 'en «Archivo de salida» → «Editor avanzado».', 'error');
+          + 'en «Archivo ▸ Ajustes» → «Editor avanzado».', 'error');
       }, 12000);
     }
 
@@ -18353,7 +18438,11 @@ window.GRAPA_CONFIG = {
       entrada.value = '';
       anadir(lote);
     });
-    ['#btnAbrir', '#btnAbrir2', '#zonaSoltar'].forEach((s) => $(s).addEventListener('click', () => entrada.click()));
+    ['#btnAbrir', '#btnAbrir2', '#zonaSoltar'].forEach((s) => $(s).addEventListener('click', () => { tareaPedida = null; entrada.click(); }));
+    $$('#vacioTareas .tarea').forEach((b) => b.addEventListener('click', () => { tareaPedida = b.dataset.tarea; entrada.click(); }));
+    // Ajustes: lo que casi nunca se toca, fuera del panel de exportar
+    $$('[data-abre-ajustes]').forEach((b) => b.addEventListener('click', () => { $('#modalAjustes').hidden = false; }));
+    $$('[data-clic-panel]').forEach((b) => b.addEventListener('click', () => $(b.dataset.clicPanel).click()));
     // pegar con Ctrl+V: los archivos copiados entran igual que si se soltaran
     document.addEventListener('paste', (ev) => {
       const archivos = Array.from((ev.clipboardData && ev.clipboardData.files) || []);
