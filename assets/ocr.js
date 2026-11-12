@@ -795,6 +795,171 @@
     return lec;
   }
 
+  /* ---------- la tinta que nadie leyó ----------
+     Para corregir una hoja hace falta poder pulsar TODO lo que se ve, y no
+     todo lo que se ve es texto. Un PDF puede traer las letras dibujadas
+     (convertidas a curvas: se ven igual, pero ya no son letras), o un texto
+     pegado como foto, o signos que ningún lector entiende, como la fila de
+     asteriscos de una celda vacía. Y al lector de escaneos se le escapan
+     palabras sueltas y cortas, como el «SI» de una casilla.
+
+     Aquí no se lee nada: se mira la hoja dibujada y se busca la tinta que no
+     quedó dentro de ninguna palabra ya conocida. Se quitan las rayas (los
+     trazos largos y seguidos de las tablas), se juntan las manchas vecinas
+     del mismo renglón en un solo trozo —sin cruzar nunca una raya, para que
+     cada celda vaya por su lado— y se devuelve dónde está cada uno. Qué dice
+     se averigua después, solo del que se pulse (`leerRecorte`).            */
+
+  /**
+   * `lienzo`: la hoja dibujada. `cubiertas`: lo que ya se conoce ({x0,y0,x1,y1},
+   * fracciones de la hoja). `ppt`: píxeles del lienzo por punto de la hoja.
+   * Devuelve los trozos de tinta sin dueño, en fracciones: {x0,y0,x1,y1,n}.
+   */
+  G.tintaSuelta = function (lienzo, cubiertas, ppt) {
+    const W = lienzo.width, H = lienzo.height;
+    const g = grises(lienzo);
+    const umbral = umbralOtsu(g);
+    // 1 = tinta, 2 = raya, 0 = papel (o ya conocido)
+    const m = new Uint8Array(W * H);
+    for (let i = 0; i < m.length; i++) if (g[i] < umbral) m[i] = 1;
+    const largo = Math.max(40, Math.round(28 * ppt));
+    for (let y = 0; y < H; y++) {
+      let ini = -1;
+      for (let x = 0; x <= W; x++) {
+        const t = x < W && m[y * W + x];
+        if (t) { if (ini < 0) ini = x; } else if (ini >= 0) {
+          if (x - ini >= largo) for (let k = ini; k < x; k++) m[y * W + k] = 2;
+          ini = -1;
+        }
+      }
+    }
+    for (let x = 0; x < W; x++) {
+      let ini = -1;
+      for (let y = 0; y <= H; y++) {
+        const t = y < H && m[y * W + x];
+        if (t) { if (ini < 0) ini = y; } else if (ini >= 0) {
+          if (y - ini >= largo) for (let k = ini; k < y; k++) m[k * W + x] = 2;
+          ini = -1;
+        }
+      }
+    }
+    // lo que ya tiene dueño no se ofrece dos veces
+    (cubiertas || []).forEach((c) => {
+      const aire = Math.max(2, (c.y1 - c.y0) * H * 0.18);
+      const x0 = Math.max(0, Math.floor(c.x0 * W - aire)), x1 = Math.min(W - 1, Math.ceil(c.x1 * W + aire));
+      const y0 = Math.max(0, Math.floor(c.y0 * H - aire)), y1 = Math.min(H - 1, Math.ceil(c.y1 * H + aire));
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (m[y * W + x] === 1) m[y * W + x] = 0;
+    });
+
+    // las manchas: cada grupo de puntos de tinta que se tocan
+    const manchas = [];
+    const pila = new Int32Array(W * H > 4e6 ? 4e6 : W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (m[y * W + x] !== 1) continue;
+      let n = 0, tope = 0, x0 = x, x1 = x, y0 = y, y1 = y, roto = false;
+      pila[tope++] = y * W + x; m[y * W + x] = 3;
+      while (tope) {
+        const p = pila[--tope], px = p % W, py = (p - px) / W;
+        n++;
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const qx = px + dx, qy = py + dy;
+          if (qx < 0 || qy < 0 || qx >= W || qy >= H) continue;
+          const q = qy * W + qx;
+          if (m[q] !== 1) continue;
+          if (tope >= pila.length) { roto = true; continue; }
+          m[q] = 3; pila[tope++] = q;
+        }
+      }
+      if (roto) continue;                       // una mancha enorme: una foto, no una letra
+      const w = x1 - x0 + 1, h = y1 - y0 + 1;
+      if (n < 3 || w > 70 * ppt || h > 34 * ppt) continue;          // una mota, o un dibujo
+      if (w <= 1.3 * ppt && h > 15 * ppt) continue;                 // una raya corta, de arriba abajo
+      if (h <= 1.3 * ppt && w > 6 * ppt) continue;                  // un subrayado
+      // puntos, comas, tildes y guiones: solo cuentan pegados a una letra
+      const menuda = (w < 1.15 * ppt && h < 4 * ppt) || (h < 1.15 * ppt && w < 4 * ppt);
+      manchas.push({ x0, x1, y0, y1, n, w, h, menuda });
+    }
+    if (!manchas.length || manchas.length > 6000) return [];
+
+    // de manchas a trozos: las vecinas del mismo renglón van juntas
+    manchas.sort((a, b) => a.x0 - b.x0);
+    const jefe = manchas.map((_, i) => i);
+    const de = (i) => { while (jefe[i] !== i) { jefe[i] = jefe[jefe[i]]; i = jefe[i]; } return i; };
+    const hayRaya = (xa, xb, ya, yb) => {
+      const ym = (ya + yb) >> 1;
+      for (const y of [ya, ym, yb]) for (let x = xa; x <= xb; x++) if (m[y * W + x] === 2) return true;
+      return false;
+    };
+    const lejos = 0.8 * 34 * ppt;
+    for (let i = 0; i < manchas.length; i++) {
+      const a = manchas[i];
+      for (let j = i + 1; j < manchas.length; j++) {
+        const b = manchas[j];
+        const hueco = b.x0 - a.x1 - 1;
+        if (hueco > lejos) break;
+        const alto = Math.max(a.h, b.h), bajo = Math.min(a.h, b.h);
+        const solape = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + 1;
+        let juntas;
+        if (a.menuda || b.menuda) {
+          // la tilde de encima, el punto o la coma de al lado
+          juntas = solape > -alto * 0.5 && hueco <= Math.max(alto * 0.8, ppt);
+        } else {
+          // letras del mismo renglón y de un tamaño parecido
+          juntas = solape >= bajo * 0.4 && alto <= bajo * 3.2 && hueco <= Math.max(alto * 0.8, ppt);
+        }
+        if (!juntas) continue;
+        if (hueco > 0 && hayRaya(a.x1 + 1, b.x0 - 1, Math.max(0, Math.min(a.y0, b.y0)), Math.min(H - 1, Math.max(a.y1, b.y1)))) continue;
+        jefe[de(i)] = de(j);
+      }
+    }
+    const grupos = new Map();
+    manchas.forEach((b, i) => {
+      const k = de(i);
+      const t = grupos.get(k) || { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1, n: 0, alta: 0 };
+      t.x0 = Math.min(t.x0, b.x0); t.x1 = Math.max(t.x1, b.x1); t.y0 = Math.min(t.y0, b.y0); t.y1 = Math.max(t.y1, b.y1);
+      if (!b.menuda) { t.n++; t.alta = Math.max(t.alta, b.h); }
+      grupos.set(k, t);
+    });
+    const sueltas = [];
+    grupos.forEach((t) => {
+      if (!t.n) return;                                       // solo puntos: una línea de puntos para escribir encima
+      if (t.n === 1 && t.alta < 2.6 * ppt) return;            // una mota sola
+      sueltas.push({ x0: t.x0 / W, x1: (t.x1 + 1) / W, y0: t.y0 / H, y1: (t.y1 + 1) / H, n: t.n });
+    });
+    return sueltas.length > 900 ? [] : sueltas;               // una hoja llena de ruido: no se ofrece nada
+  };
+
+  /**
+   * Lee un recorte chico (una palabra, una celda): lo agranda y lo pone sobre
+   * blanco con aire, que es como mejor se lee. Devuelve { texto, seguro }.
+   */
+  G.leerRecorte = async function (recorte) {
+    const alto = Math.max(1, recorte.height);
+    const f = Math.min(6, Math.max(1, 56 / alto));
+    const margen = 28;
+    const c = document.createElement('canvas');
+    c.width = Math.round(recorte.width * f) + margen * 2;
+    c.height = Math.round(alto * f) + margen * 2;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(recorte, 0, 0, recorte.width, alto, margen, margen, c.width - margen * 2, c.height - margen * 2);
+    const junta = (lec) => {
+      let n = 0, conf = 0;
+      lec.lineas.forEach((l) => l.palabras.forEach((w) => { n++; conf += w.c == null ? 1 : w.c; }));
+      return { texto: unir(lec.lineas, true), seguro: n ? conf / n : 0 };
+    };
+    let r = { texto: '', seguro: 0 };
+    try { r = junta(await G.ocrLienzo(c)); } catch (e) { /* se prueba con el otro lector */ }
+    if (!r.texto.trim() && (await usaPaddle().catch(() => false))) {
+      // a PaddleOCR se le escapa una palabra de dos letras sola: el de respaldo sí la ve
+      try { r = junta(await tesseractLienzo(c)); } catch (e) { /* se queda sin leer */ }
+    }
+    return r;
+  };
+
   /* ---------- leer una hoja ---------- */
 
   const cache = new Map();

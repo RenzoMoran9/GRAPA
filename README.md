@@ -459,7 +459,7 @@ derecha:
 
 | Herramienta | Qué hace |
 |---|---|
-| **Editar texto** | Cada trozo de texto de la hoja queda marcado con una línea punteada. Púlsalo y cámbialo ahí mismo; sale con su tamaño, su color y su negrita. |
+| **Editar texto** | Cada trozo de texto de la hoja queda marcado con una línea punteada —también lo que no es texto pero se ve: letras dibujadas, la fila de asteriscos de una celda vacía—. Púlsalo y cámbialo ahí mismo; sale con su tamaño, su color y su negrita. |
 | **Añadir texto** | Pulsa en cualquier sitio y escribe: una fecha, un número, llenar un formato. |
 | **Borrador** | Arrastra sobre lo que quieras tapar: lo cubre con el color del papel. |
 | **Resaltar** | Arrastra y queda resaltado en amarillo, dejando ver lo de debajo. |
@@ -486,6 +486,23 @@ derecha:
   solo la palabra, sin tocar las rayas de la tabla.
 - En una tabla, cada columna va por su lado: corregir un precio no arrastra
   la descripción de al lado.
+- **Todo lo que se ve se puede pulsar**, sea texto o no. Un PDF puede traer
+  las letras *dibujadas* (convertidas a curvas: se ven igual, pero ya no son
+  letras), un texto pegado como foto, o signos que ningún lector entiende,
+  como la fila de asteriscos de una celda vacía. Antes eso no se podía
+  corregir: solo se ofrecía lo que el PDF traía como texto o lo que el lector
+  de escaneos sabía leer. Ahora Pdflash busca en la hoja **la tinta que no
+  quedó en ningún trozo** y la ofrece también, con su borde de puntos, celda
+  por celda. Qué dice se averigua al pulsarla: ese trozo se vuelve a dibujar
+  en grande y se lee ahí, que es como mejor se lee una palabra de dos letras
+  o una letra de cinco puntos.
+- **Cuadros de «SI» y «NO».** En un cuadro de validación cada celda lleva su
+  dato o un relleno (`********`). Al pulsar un relleno, Pdflash lo reconoce
+  como tal —varias manchas iguales en fila— y lo que escribas sale **como los
+  demás datos del cuadro**: con la letra y el tamaño del dato más cercano de
+  su columna o de su fila (no con los del relleno, ni con los del título de
+  la columna), y **centrado en la celda**. Lo que estaba centrado sigue
+  centrado tenga las letras que tenga: cambiar «SI» por «NO» no lo descuadra.
 - Los cambios **viajan con la hoja**, como una firma: se guardan con el
   expediente, siguen a la hoja si la giras o la mueves, y al exportar quedan
   escritos en el PDF como texto de verdad.
@@ -518,6 +535,24 @@ Lo que conviene saber:
   en la barra, se respeta lo que elegiste y se escribe con eso.
 - En una tabla, dos celdas vecinas que parecen un solo renglón se separan
   por la raya que pasa entre ellas: cada dato se corrige por su lado.
+- **Las letras dibujadas también se quitan de raíz.** No hay texto que
+  quitar, pero sí las órdenes que dibujan cada letra: al exportar se quitan
+  del contenido los contornos que caen en el recuadro corregido, y solo esos.
+  Lo nuevo se escribe con letra de verdad (ya se puede buscar y copiar), del
+  tamaño que tenía el dibujo —medido en grande, con décimas de punto— y con
+  la letra de la computadora que más se le parece. Si en ese recuadro hay
+  algo más que no se puede quitar (una foto, un formulario), se deja además
+  el parche. Un dibujo claro nunca se quita: suele ser el parche blanco con
+  que otro programa tapó lo de debajo, y quitarlo lo destaparía.
+- Lo que se quita de raíz **ya no queda guardado dentro del archivo**: el
+  contenido viejo de la hoja se tira, así que el PDF no engorda y lo quitado
+  no se puede recuperar abriéndolo con otro programa.
+- Lo que está en una **foto** (un escaneo, un logo) se sigue corrigiendo con
+  su propia letra, como se explica abajo. Pdflash sabe cuál es cuál mirando
+  dónde pone el PDF sus imágenes.
+- Un PDF con **firma digital** deja de validar en cuanto se corrige, con
+  Pdflash o con cualquier otro programa: la firma certifica que el archivo no
+  cambió. Lo que queda es su dibujo en la hoja.
 - Si en un PDF concreto no es seguro quitar un texto de raíz (está escrito
   de una manera que no permite saber dónde cae, o va dentro de un dibujo
   reutilizado), Pdflash no arriesga la hoja: lo tapa con el parche.

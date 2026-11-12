@@ -1754,6 +1754,10 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
 .capa-editar .trozo{ position:absolute; box-sizing:content-box; margin:-2px; padding:2px; border-radius:3px; }
 .capa-editar .trozo.leido{ cursor:text; outline:1px dashed rgba(47,111,237,.38); }
 .capa-editar .trozo.leido:hover{ outline:2px solid #2f6fed; background:rgba(47,111,237,.10); }
+/* lo que se ve pero no es texto (letras dibujadas, una foto, un relleno): se pulsa igual */
+.capa-editar .trozo.leido.suelto{ outline:1px dotted rgba(47,111,237,.45); }
+.capa-editar .trozo.leido.suelto:hover{ outline:2px solid #2f6fed; }
+.capa-editar .trozo.leido.fino{ margin:-5px -2px; padding:5px 2px; }
 .capa-editar .trozo.puesto{ cursor:move; }
 .capa-editar .trozo.puesto:hover{ outline:1px solid rgba(224,83,47,.7); }
 .capa-editar .trozo.puesto.elegido{ outline:2px solid #e0532f; }
@@ -4344,6 +4348,29 @@ window.GRAPA_CONFIG = {
     return lienzo;
   };
 
+  /**
+   * Un trozo de la hoja dibujado en grande: `f` ({x0,y0,x1,y1}, fracciones de
+   * la hoja como se ve) a `escala` píxeles por punto. Un PDF dibujado (no una
+   * foto) sale nítido a cualquier tamaño, así que una letra de 5 puntos se
+   * puede mirar como si fuera de 40.
+   */
+  G.renderZona = async function (pagina, f, escala) {
+    const fuente = G.estado.fuentes.get(pagina.fuenteId);
+    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    const giro = G.norm(pagina.giro);
+    const base = pag.getViewport({ scale: 1, rotation: giro });
+    const x = Math.floor(f.x0 * base.width * escala), y = Math.floor(f.y0 * base.height * escala);
+    const lienzo = document.createElement('canvas');
+    lienzo.width = Math.max(1, Math.min(4000, Math.ceil(f.x1 * base.width * escala) - x));
+    lienzo.height = Math.max(1, Math.min(4000, Math.ceil(f.y1 * base.height * escala) - y));
+    const ctx = lienzo.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+    const vp = pag.getViewport({ scale: escala, rotation: giro, offsetX: -x, offsetY: -y });
+    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    return lienzo;
+  };
+
   /* ---------- posiciones 3x3 ---------- */
   // códigos: [a|c|b][i|c|d]  (arriba/centro/abajo  ·  izquierda/centro/derecha)
   G.CODIGOS_POS = ['ai', 'ac', 'ad', 'ci', 'cc', 'cd', 'bi', 'bc', 'bd'];
@@ -4366,7 +4393,7 @@ window.GRAPA_CONFIG = {
     cacheDocsPdfLib.set(fuenteId, d);
     return d;
   }
-  G.olvidarDocs = () => cacheDocsPdfLib.clear();
+  G.olvidarDocs = () => { cacheDocsPdfLib.clear(); cacheFotos.clear(); };
 
   /* =========================================================
      ALIGERAR · bajar el peso del PDF sin perder hojas
@@ -4734,6 +4761,72 @@ window.GRAPA_CONFIG = {
     return usos;
   }
 
+  /**
+   * Dónde hay fotos en una hoja: las cajas que ocupan sus imágenes, en
+   * fracciones de la hoja como se ve. El editor lo usa para saber si lo que
+   * se corrige está en una foto (un escaneo: se rehace con su propia letra)
+   * o dibujado (letras hechas curvas: se escribe encima, nítido).
+   */
+  const cacheFotos = new Map();
+  G.fotosDeHoja = async function (pagina) {
+    const k = pagina.fuenteId + ':' + pagina.indice;
+    if (!cacheFotos.has(k)) {
+      cacheFotos.set(k, (async () => {
+        const src = await docPdfLib(pagina.fuenteId);
+        const context = src.context, hoja = src.getPage(pagina.indice);
+        const cajas = [];
+        const visitar = (contenidos, recursos, ctm0, prof) => {
+          if (prof > 12) return;
+          const res = context.lookup(recursos);
+          const xo = res instanceof PDFDict ? context.lookup(res.get(PDFName.of('XObject'))) : null;
+          let ctm = ctm0.slice();
+          const pila = [];
+          for (const bytes of contenidos) {
+            leerOrdenes(bytes, (op, a) => {
+              if (op === 'q') pila.push(ctm);
+              else if (op === 'Q') ctm = pila.length ? pila.pop() : ctm0.slice();
+              else if (op === 'cm' && a.length >= 6 && a.slice(-6).every((x) => typeof x === 'number')) ctm = porMatriz(a.slice(-6), ctm);
+              else if (op === 'Do' && a.length && a[a.length - 1] && a[a.length - 1].nombre && xo instanceof PDFDict) {
+                const obj = context.lookup(xo.get(PDFName.of(a[a.length - 1].nombre)));
+                if (!(obj instanceof PDFStream)) return;
+                const tipo = obj.dict.get(PDFName.of('Subtype'));
+                if (tipo === PDFName.of('Image')) {
+                  // la foto ocupa el cuadrado de lado 1, llevado a su sitio por la matriz
+                  const ps = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [x * ctm[0] + y * ctm[2] + ctm[4], x * ctm[1] + y * ctm[3] + ctm[5]]);
+                  cajas.push({ x0: Math.min(...ps.map((p) => p[0])), x1: Math.max(...ps.map((p) => p[0])),
+                               y0: Math.min(...ps.map((p) => p[1])), y1: Math.max(...ps.map((p) => p[1])) });
+                } else if (tipo === PDFName.of('Form')) {
+                  const mat = context.lookup(obj.dict.get(PDFName.of('Matrix')));
+                  const m = mat instanceof PDFArray && mat.size() === 6
+                    ? [0, 1, 2, 3, 4, 5].map((i) => { const v = context.lookup(mat.get(i)); return v instanceof PDFNumber ? v.asNumber() : 0; })
+                    : [1, 0, 0, 1, 0, 0];
+                  let bytes = null;
+                  try { bytes = bytesDeFlujo(obj); } catch (e) { bytes = null; }
+                  if (bytes) visitar([bytes], obj.dict.get(PDFName.of('Resources')) || recursos, porMatriz(m, ctm), prof + 1);
+                }
+              }
+            });
+          }
+        };
+        const c = hoja.node.Contents();
+        const flujos = c instanceof PDFArray ? c.asArray().map((r) => context.lookup(r)) : [c];
+        const contenidos = [];
+        for (const f of flujos) { try { if (f) contenidos.push(bytesDeFlujo(f)); } catch (e) { /* ilegible: se salta */ } }
+        visitar(contenidos, hoja.node.Resources(), [1, 0, 0, 1, 0, 0], 0);
+        const caja = hoja.getCropBox ? hoja.getCropBox() : { x: 0, y: 0, width: hoja.getWidth(), height: hoja.getHeight() };
+        return { cajas, W: caja.width, H: caja.height, OX: caja.x, OY: caja.y };
+      })().catch(() => null));
+    }
+    const r = await cacheFotos.get(k);
+    if (!r) return [];
+    const R = G.norm(pagina.giro), vis = G.cajaVisible(r.W, r.H, R);
+    const aVista = (x, y) => (R === 90 ? [y, x] : R === 180 ? [r.W - x, y] : R === 270 ? [r.H - y, r.W - x] : [x, r.H - y]);
+    return r.cajas.map((c) => {
+      const a = aVista(c.x0 - r.OX, c.y0 - r.OY), b = aVista(c.x1 - r.OX, c.y1 - r.OY);
+      return { x0: Math.min(a[0], b[0]) / vis.w, x1: Math.max(a[0], b[0]) / vis.w, y0: Math.min(a[1], b[1]) / vis.h, y1: Math.max(a[1], b[1]) / vis.h };
+    });
+  };
+
   const nombreDe = (v) => (v instanceof PDFName ? v.asString().replace(/^\//, '') : null);
   const numeroDe = (context, v) => { const x = context.lookup(v); return x instanceof PDFNumber ? x.asNumber() : null; };
 
@@ -5074,6 +5167,30 @@ window.GRAPA_CONFIG = {
   }
 
   /**
+   * Cambia el contenido de una hoja por otro y tira el viejo. Sin tirarlo, lo
+   * quitado seguiría guardado dentro del archivo (sin verse, pero ahí) y el
+   * PDF pesaría el doble. Un contenido que también use otra hoja no se tira.
+   */
+  function ponerContenido(salida, pag, nuevo) {
+    const context = salida.context;
+    const viejo = pag.node.get(PDFName.of('Contents'));
+    const refs = viejo instanceof PDFRef ? [viejo] : [];
+    const dentro = context.lookup(viejo);
+    if (dentro instanceof PDFArray) dentro.asArray().forEach((r) => { if (r instanceof PDFRef) refs.push(r); });
+    pag.node.set(PDFName.of('Contents'), context.register(context.flateStream(nuevo)));
+    if (!refs.length) return;
+    const enUso = new Set();
+    salida.getPages().forEach((otra) => {
+      if (otra.node === pag.node) return;
+      const c = otra.node.get(PDFName.of('Contents'));
+      if (c instanceof PDFRef) enUso.add(c.toString());
+      const d = context.lookup(c);
+      if (d instanceof PDFArray) d.asArray().forEach((r) => { if (r instanceof PDFRef) enUso.add(r.toString()); });
+    });
+    refs.forEach((r) => { if (!enUso.has(r.toString())) context.delete(r); });
+  }
+
+  /**
    * Quita de la hoja el texto que cae en cada recuadro (`cajas`: {x0,y0,x1,y1}
    * en puntos del PDF). Devuelve, por recuadro, si se pudo.
    */
@@ -5210,10 +5327,151 @@ window.GRAPA_CONFIG = {
       const nuevo = new Uint8Array(largo);
       o = 0;
       partes.forEach((p) => { nuevo.set(p, o); o += p.length; });
-      pag.node.set(PDFName.of('Contents'), context.register(context.flateStream(nuevo)));
+      ponerContenido(salida, pag, nuevo);
       return hecho;
     } catch (e) {
       console.warn('No se pudo quitar el texto de raíz; se tapa con un parche', e);
+      return cajas.map(() => false);
+    }
+  }
+
+  /* ---------- quitar de raíz unas letras dibujadas ----------
+     Un PDF puede traer el texto «hecho curvas»: cada letra es un dibujo
+     relleno, no una letra. Se ve igual, pero no hay texto que quitar. Lo que
+     sí hay son las órdenes que dibujan cada una, y se quitan esas: el
+     contorno de cada letra que cae dentro del recuadro corregido. Las rayas
+     de la tabla, el fondo de la celda y todo lo demás quedan como estaban.
+
+     Solo se da por hecho (y entonces no hace falta el parche) si en ese
+     recuadro no queda nada más: una foto, un formulario, un dibujo que solo
+     pasa en parte. Y nunca se quita un dibujo claro: suele ser el parche
+     blanco con que otro programa tapó lo de debajo, y quitarlo lo
+     destaparía.                                                           */
+
+  /** `cajas`: {x0,y0,x1,y1} en puntos del PDF. Devuelve, por recuadro, si quedó limpio. */
+  function quitarDibujoDeRaiz(salida, pag, cajas) {
+    const hecho = cajas.map(() => false);
+    try {
+      const context = salida.context;
+      const cont = pag.node.Contents();
+      if (!cont) return hecho;
+      const flujos = cont instanceof PDFArray ? cont.asArray().map((r) => context.lookup(r)) : [cont];
+      const trozos = flujos.map(bytesDeFlujo);
+      const b = new Uint8Array(trozos.reduce((s, t) => s + t.length + 1, 0));
+      let o = 0;
+      trozos.forEach((t) => { b.set(t, o); o += t.length; b[o++] = 10; });
+      const recursos = pag.node.Resources();
+      const xo = recursos ? context.lookup(recursos.get(PDFName.of('XObject'))) : null;
+
+      const ordenes = ordenesConSitio(b);
+      const ID = [1, 0, 0, 1, 0, 0];
+      // lo claro que es un color (0 negro, 1 blanco); null si no se sabe (un motivo, un degradado)
+      const claro = (a) => {
+        const v = a.filter((x) => x.t === 'x').map((x) => x.v);
+        if (v.length !== a.length || !v.length) return null;
+        if (v.length === 1) return v[0];
+        if (v.length === 3) return 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2];
+        if (v.length === 4) return 1 - Math.min(1, 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2] + v[3]);
+        return null;
+      };
+      let e = { ctm: ID, relleno: 0, trazo: 0 };
+      const pila = [];
+      let camino = null;
+      const quitar = [], dudas = cajas.map(() => false), quitados = cajas.map(() => 0);
+      const punto = (x, y) => {
+        const px = x * e.ctm[0] + y * e.ctm[2] + e.ctm[4], py = x * e.ctm[1] + y * e.ctm[3] + e.ctm[5];
+        if (px < camino.x0) camino.x0 = px; if (px > camino.x1) camino.x1 = px;
+        if (py < camino.y0) camino.y0 = py; if (py > camino.y1) camino.y1 = py;
+      };
+      const abrir = (d) => { if (!camino) camino = { ini: d.ini, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, recorte: false }; };
+      const num = (a, k) => (a[k] && a[k].t === 'x' ? a[k].v : 0);
+      const toca = (q, c, m) => q.x1 > c.x0 + m && q.x0 < c.x1 - m && q.y1 > c.y0 + m && q.y0 < c.y1 - m;
+      const cuadro = (m) => {                       // el cuadrado de lado 1, llevado a su sitio
+        const ps = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [x * m[0] + y * m[2] + m[4], x * m[1] + y * m[3] + m[5]]);
+        return { x0: Math.min(...ps.map((p) => p[0])), x1: Math.max(...ps.map((p) => p[0])), y0: Math.min(...ps.map((p) => p[1])), y1: Math.max(...ps.map((p) => p[1])) };
+      };
+      for (const d of ordenes) {
+        const a = d.args;
+        switch (d.op) {
+          case 'q': pila.push(Object.assign({}, e)); break;
+          case 'Q': if (pila.length) e = pila.pop(); break;
+          case 'cm': e.ctm = porMatriz([0, 1, 2, 3, 4, 5].map((k) => num(a, k)), e.ctm); break;
+          case 'g': case 'rg': case 'k': case 'sc': case 'scn': e.relleno = claro(a); break;
+          case 'G': case 'RG': case 'K': case 'SC': case 'SCN': e.trazo = claro(a); break;
+          case 'cs': e.relleno = 0; break;
+          case 'CS': e.trazo = 0; break;
+          case 'm': case 'l': abrir(d); punto(num(a, 0), num(a, 1)); break;
+          case 'c': abrir(d); punto(num(a, 0), num(a, 1)); punto(num(a, 2), num(a, 3)); punto(num(a, 4), num(a, 5)); break;
+          case 'v': case 'y': abrir(d); punto(num(a, 0), num(a, 1)); punto(num(a, 2), num(a, 3)); break;
+          case 're': {
+            abrir(d);
+            const x = num(a, 0), y = num(a, 1), w = num(a, 2), h = num(a, 3);
+            punto(x, y); punto(x + w, y); punto(x, y + h); punto(x + w, y + h);
+            break;
+          }
+          case 'h': abrir(d); break;
+          case 'W': case 'W*': if (camino) camino.recorte = true; break;
+          case 'f': case 'F': case 'f*': case 'B': case 'B*': case 'b': case 'b*': case 'S': case 's': case 'n': {
+            const q = camino;
+            camino = null;
+            if (!q || d.op === 'n' || !(q.x1 >= q.x0)) break;
+            const conRelleno = !/^[Ss]$/.test(d.op), conTrazo = /^[BbSs]/.test(d.op);
+            const tono = Math.max(conRelleno ? (e.relleno == null ? 2 : e.relleno) : 0, conTrazo ? (e.trazo == null ? 2 : e.trazo) : 0);
+            const an = q.x1 - q.x0, al = q.y1 - q.y0, cx = (q.x0 + q.x1) / 2, cy = (q.y0 + q.y1) / 2;
+            let mio = -1;
+            cajas.forEach((c, ci) => {
+              const m = Math.max(0.8, (c.y1 - c.y0) * 0.15);
+              const dentro = cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1 &&
+                q.x0 >= c.x0 - m && q.x1 <= c.x1 + m && q.y0 >= c.y0 - m && q.y1 <= c.y1 + m;
+              if (dentro && !q.recorte && tono < 0.85) { if (mio < 0) mio = ci; return; }
+              if (!toca(q, c, 0.4)) return;
+              // lo que pasa por el recuadro sin ser suyo: el fondo de la celda o una raya no estorban
+              const fondo = q.x0 <= c.x0 && q.x1 >= c.x1 && q.y0 <= c.y0 && q.y1 >= c.y1;
+              const raya = Math.min(an, al) < 1.5 && Math.max(an, al) > Math.max(c.x1 - c.x0, c.y1 - c.y0);
+              if (!fondo && !raya && !(dentro && tono >= 0.85)) dudas[ci] = true;
+            });
+            if (mio >= 0) { quitar.push({ ini: q.ini, fin: d.fin }); quitados[mio]++; }
+            break;
+          }
+          case 'Do': {
+            // una foto o un formulario encima del recuadro: lo que lleve dentro no se puede quitar aquí
+            let caja = null;
+            try {
+              const obj = xo instanceof PDFDict && a[0] && a[0].t === 'n' ? context.lookup(xo.get(PDFName.of(a[0].v))) : null;
+              if (obj instanceof PDFStream && obj.dict.get(PDFName.of('Subtype')) === PDFName.of('Image')) caja = cuadro(e.ctm);
+              else if (obj instanceof PDFStream) {
+                // un formulario: lo que ocupa es su caja, llevada a su sitio por su matriz y la de la hoja
+                const lista = (k) => { const v = context.lookup(obj.dict.get(PDFName.of(k))); return v instanceof PDFArray ? v.asArray().map((x) => { const y = context.lookup(x); return y instanceof PDFNumber ? y.asNumber() : 0; }) : null; };
+                const bb = lista('BBox'), mat = lista('Matrix');
+                if (bb && bb.length === 4) {
+                  const m = porMatriz(mat && mat.length === 6 ? mat : ID, e.ctm);
+                  caja = cuadro(porMatriz([bb[2] - bb[0], 0, 0, bb[3] - bb[1], bb[0], bb[1]], m));
+                }
+              }
+            } catch (err) { caja = null; }
+            cajas.forEach((c, ci) => { if (!caja || toca(caja, c, 0.4)) dudas[ci] = true; });
+            break;
+          }
+          case 'sh': cajas.forEach((c, ci) => { dudas[ci] = true; }); break;
+          default: break;
+        }
+      }
+      if (!quitar.length) return hecho;
+      const partes = [];
+      let desde = 0;
+      quitar.sort((p, q) => p.ini - q.ini).forEach((t) => {
+        if (t.ini < desde) return;
+        partes.push(b.subarray(desde, t.ini));
+        desde = t.fin;
+      });
+      partes.push(b.subarray(desde));
+      const nuevo = new Uint8Array(partes.reduce((s, p) => s + p.length + 1, 0));
+      o = 0;
+      partes.forEach((p) => { nuevo.set(p, o); o += p.length; nuevo[o++] = 32; });
+      ponerContenido(salida, pag, nuevo);
+      return cajas.map((c, ci) => quitados[ci] > 0 && !dudas[ci]);
+    } catch (e) {
+      console.warn('No se pudieron quitar las letras dibujadas; se tapan con un parche', e);
       return cajas.map(() => false);
     }
   }
@@ -5484,6 +5742,18 @@ window.GRAPA_CONFIG = {
         });
         quitarTextoDeRaiz(salida, pag, cajas).forEach((ok, k) => { if (ok) sinParche.add(deRaiz[k]); });
         if (opciones.alQuitarDeRaiz) opciones.alQuitarDeRaiz(i, deRaiz.length, sinParche.size);
+      }
+
+      // y las letras dibujadas (hechas curvas) que se corrigieron: se quitan sus trazos
+      const dibujos = aligerar.has(i) ? [] : est.sellos.filter((s) => s.rol === 'texto' && s.dibujo && s.tapa);
+      if (dibujos.length) {
+        const cajas = dibujos.map((s) => {
+          const R0 = G.norm(s.giroAl == null ? R : s.giroAl), v0 = G.cajaVisible(W, H, R0), q = s.dibujo;
+          const a = G.aPuntoPdf(q.x * v0.w, q.y * v0.h, W, H, R0), b = G.aPuntoPdf((q.x + q.w) * v0.w, (q.y + q.h) * v0.h, W, H, R0);
+          return { x0: Math.min(a.x, b.x) + OX, x1: Math.max(a.x, b.x) + OX, y0: Math.min(a.y, b.y) + OY, y1: Math.max(a.y, b.y) + OY };
+        });
+        quitarDibujoDeRaiz(salida, pag, cajas).forEach((ok, k) => { if (ok) sinParche.add(dibujos[k]); });
+        if (opciones.alQuitarDeRaiz) opciones.alQuitarDeRaiz(i, dibujos.length, dibujos.filter((s) => sinParche.has(s)).length);
       }
 
       // lo leído de un escaneo, como texto invisible encima («Hacer buscables»)
@@ -7494,6 +7764,171 @@ window.GRAPA_CONFIG = {
     return lec;
   }
 
+  /* ---------- la tinta que nadie leyó ----------
+     Para corregir una hoja hace falta poder pulsar TODO lo que se ve, y no
+     todo lo que se ve es texto. Un PDF puede traer las letras dibujadas
+     (convertidas a curvas: se ven igual, pero ya no son letras), o un texto
+     pegado como foto, o signos que ningún lector entiende, como la fila de
+     asteriscos de una celda vacía. Y al lector de escaneos se le escapan
+     palabras sueltas y cortas, como el «SI» de una casilla.
+
+     Aquí no se lee nada: se mira la hoja dibujada y se busca la tinta que no
+     quedó dentro de ninguna palabra ya conocida. Se quitan las rayas (los
+     trazos largos y seguidos de las tablas), se juntan las manchas vecinas
+     del mismo renglón en un solo trozo —sin cruzar nunca una raya, para que
+     cada celda vaya por su lado— y se devuelve dónde está cada uno. Qué dice
+     se averigua después, solo del que se pulse (`leerRecorte`).            */
+
+  /**
+   * `lienzo`: la hoja dibujada. `cubiertas`: lo que ya se conoce ({x0,y0,x1,y1},
+   * fracciones de la hoja). `ppt`: píxeles del lienzo por punto de la hoja.
+   * Devuelve los trozos de tinta sin dueño, en fracciones: {x0,y0,x1,y1,n}.
+   */
+  G.tintaSuelta = function (lienzo, cubiertas, ppt) {
+    const W = lienzo.width, H = lienzo.height;
+    const g = grises(lienzo);
+    const umbral = umbralOtsu(g);
+    // 1 = tinta, 2 = raya, 0 = papel (o ya conocido)
+    const m = new Uint8Array(W * H);
+    for (let i = 0; i < m.length; i++) if (g[i] < umbral) m[i] = 1;
+    const largo = Math.max(40, Math.round(28 * ppt));
+    for (let y = 0; y < H; y++) {
+      let ini = -1;
+      for (let x = 0; x <= W; x++) {
+        const t = x < W && m[y * W + x];
+        if (t) { if (ini < 0) ini = x; } else if (ini >= 0) {
+          if (x - ini >= largo) for (let k = ini; k < x; k++) m[y * W + k] = 2;
+          ini = -1;
+        }
+      }
+    }
+    for (let x = 0; x < W; x++) {
+      let ini = -1;
+      for (let y = 0; y <= H; y++) {
+        const t = y < H && m[y * W + x];
+        if (t) { if (ini < 0) ini = y; } else if (ini >= 0) {
+          if (y - ini >= largo) for (let k = ini; k < y; k++) m[k * W + x] = 2;
+          ini = -1;
+        }
+      }
+    }
+    // lo que ya tiene dueño no se ofrece dos veces
+    (cubiertas || []).forEach((c) => {
+      const aire = Math.max(2, (c.y1 - c.y0) * H * 0.18);
+      const x0 = Math.max(0, Math.floor(c.x0 * W - aire)), x1 = Math.min(W - 1, Math.ceil(c.x1 * W + aire));
+      const y0 = Math.max(0, Math.floor(c.y0 * H - aire)), y1 = Math.min(H - 1, Math.ceil(c.y1 * H + aire));
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (m[y * W + x] === 1) m[y * W + x] = 0;
+    });
+
+    // las manchas: cada grupo de puntos de tinta que se tocan
+    const manchas = [];
+    const pila = new Int32Array(W * H > 4e6 ? 4e6 : W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (m[y * W + x] !== 1) continue;
+      let n = 0, tope = 0, x0 = x, x1 = x, y0 = y, y1 = y, roto = false;
+      pila[tope++] = y * W + x; m[y * W + x] = 3;
+      while (tope) {
+        const p = pila[--tope], px = p % W, py = (p - px) / W;
+        n++;
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const qx = px + dx, qy = py + dy;
+          if (qx < 0 || qy < 0 || qx >= W || qy >= H) continue;
+          const q = qy * W + qx;
+          if (m[q] !== 1) continue;
+          if (tope >= pila.length) { roto = true; continue; }
+          m[q] = 3; pila[tope++] = q;
+        }
+      }
+      if (roto) continue;                       // una mancha enorme: una foto, no una letra
+      const w = x1 - x0 + 1, h = y1 - y0 + 1;
+      if (n < 3 || w > 70 * ppt || h > 34 * ppt) continue;          // una mota, o un dibujo
+      if (w <= 1.3 * ppt && h > 15 * ppt) continue;                 // una raya corta, de arriba abajo
+      if (h <= 1.3 * ppt && w > 6 * ppt) continue;                  // un subrayado
+      // puntos, comas, tildes y guiones: solo cuentan pegados a una letra
+      const menuda = (w < 1.15 * ppt && h < 4 * ppt) || (h < 1.15 * ppt && w < 4 * ppt);
+      manchas.push({ x0, x1, y0, y1, n, w, h, menuda });
+    }
+    if (!manchas.length || manchas.length > 6000) return [];
+
+    // de manchas a trozos: las vecinas del mismo renglón van juntas
+    manchas.sort((a, b) => a.x0 - b.x0);
+    const jefe = manchas.map((_, i) => i);
+    const de = (i) => { while (jefe[i] !== i) { jefe[i] = jefe[jefe[i]]; i = jefe[i]; } return i; };
+    const hayRaya = (xa, xb, ya, yb) => {
+      const ym = (ya + yb) >> 1;
+      for (const y of [ya, ym, yb]) for (let x = xa; x <= xb; x++) if (m[y * W + x] === 2) return true;
+      return false;
+    };
+    const lejos = 0.8 * 34 * ppt;
+    for (let i = 0; i < manchas.length; i++) {
+      const a = manchas[i];
+      for (let j = i + 1; j < manchas.length; j++) {
+        const b = manchas[j];
+        const hueco = b.x0 - a.x1 - 1;
+        if (hueco > lejos) break;
+        const alto = Math.max(a.h, b.h), bajo = Math.min(a.h, b.h);
+        const solape = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + 1;
+        let juntas;
+        if (a.menuda || b.menuda) {
+          // la tilde de encima, el punto o la coma de al lado
+          juntas = solape > -alto * 0.5 && hueco <= Math.max(alto * 0.8, ppt);
+        } else {
+          // letras del mismo renglón y de un tamaño parecido
+          juntas = solape >= bajo * 0.4 && alto <= bajo * 3.2 && hueco <= Math.max(alto * 0.8, ppt);
+        }
+        if (!juntas) continue;
+        if (hueco > 0 && hayRaya(a.x1 + 1, b.x0 - 1, Math.max(0, Math.min(a.y0, b.y0)), Math.min(H - 1, Math.max(a.y1, b.y1)))) continue;
+        jefe[de(i)] = de(j);
+      }
+    }
+    const grupos = new Map();
+    manchas.forEach((b, i) => {
+      const k = de(i);
+      const t = grupos.get(k) || { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1, n: 0, alta: 0 };
+      t.x0 = Math.min(t.x0, b.x0); t.x1 = Math.max(t.x1, b.x1); t.y0 = Math.min(t.y0, b.y0); t.y1 = Math.max(t.y1, b.y1);
+      if (!b.menuda) { t.n++; t.alta = Math.max(t.alta, b.h); }
+      grupos.set(k, t);
+    });
+    const sueltas = [];
+    grupos.forEach((t) => {
+      if (!t.n) return;                                       // solo puntos: una línea de puntos para escribir encima
+      if (t.n === 1 && t.alta < 2.6 * ppt) return;            // una mota sola
+      sueltas.push({ x0: t.x0 / W, x1: (t.x1 + 1) / W, y0: t.y0 / H, y1: (t.y1 + 1) / H, n: t.n });
+    });
+    return sueltas.length > 900 ? [] : sueltas;               // una hoja llena de ruido: no se ofrece nada
+  };
+
+  /**
+   * Lee un recorte chico (una palabra, una celda): lo agranda y lo pone sobre
+   * blanco con aire, que es como mejor se lee. Devuelve { texto, seguro }.
+   */
+  G.leerRecorte = async function (recorte) {
+    const alto = Math.max(1, recorte.height);
+    const f = Math.min(6, Math.max(1, 56 / alto));
+    const margen = 28;
+    const c = document.createElement('canvas');
+    c.width = Math.round(recorte.width * f) + margen * 2;
+    c.height = Math.round(alto * f) + margen * 2;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(recorte, 0, 0, recorte.width, alto, margen, margen, c.width - margen * 2, c.height - margen * 2);
+    const junta = (lec) => {
+      let n = 0, conf = 0;
+      lec.lineas.forEach((l) => l.palabras.forEach((w) => { n++; conf += w.c == null ? 1 : w.c; }));
+      return { texto: unir(lec.lineas, true), seguro: n ? conf / n : 0 };
+    };
+    let r = { texto: '', seguro: 0 };
+    try { r = junta(await G.ocrLienzo(c)); } catch (e) { /* se prueba con el otro lector */ }
+    if (!r.texto.trim() && (await usaPaddle().catch(() => false))) {
+      // a PaddleOCR se le escapa una palabra de dos letras sola: el de respaldo sí la ve
+      try { r = junta(await tesseractLienzo(c)); } catch (e) { /* se queda sin leer */ }
+    }
+    return r;
+  };
+
   /* ---------- leer una hoja ---------- */
 
   const cache = new Map();
@@ -7969,9 +8404,9 @@ window.GRAPA_CONFIG = {
   }
 
   /** De las letras de la computadora, la que más se parece a las muestras del papel. */
-  function letraQueSeParece(muestras) {
+  function letraQueSeParece(muestras, minimo) {
     const usar = muestras.filter((q) => /[A-Za-z0-9]/.test(q.ch)).slice(0, 14);
-    if (usar.length < 3) return null;
+    if (usar.length < (minimo || 3)) return null;
     let mejor = null;
     candidatas().forEach((fuente) => [false, true].forEach((negrita) => {
       let nota = 0, cuantas = 0, ancho = [], alto = [];
@@ -7984,12 +8419,114 @@ window.GRAPA_CONFIG = {
         cuantas++;
         alto.push(q.al / f.al); ancho.push((q.an / f.an) / (q.al / f.al));
       });
-      if (cuantas < 3) return;
+      if (cuantas < (minimo || 3)) return;
       nota /= cuantas;
       if (!mejor || nota < mejor.nota) mejor = { nota, fuente, negrita, escala: mediana(alto), estira: mediana(ancho) };
     }));
     return mejor;
   }
+
+  /* ---------- una fila del mismo signo ----------
+     La celda vacía de un cuadro suele ir rellena: «********», «--------»,
+     «xxxxxx». Un lector de texto lee ahí cualquier cosa. Pero es fácil de
+     reconocer mirando: son varias manchas iguales, una al lado de otra. Se
+     comprueba que lo sean y se mira a qué signo se parecen.               */
+
+  const RELLENOS = ['*', '-', '.', 'x', 'X', '_', '=', '#', '+', '0', 'o', '/'];
+  const difRejilla = (a, b) => { let s = 0; for (let k = 0; k < a.length; k++) s += Math.abs(a[k] - b[k]); return s / a.length; };
+
+  /** Si las manchas de un renglón son todas iguales (mismo tamaño, misma altura, misma forma), cuáles son. */
+  function manchasIguales(r, minimo) {
+    if (!r || r.letras.length < minimo) return null;
+    const L = r.letras.map((l) => ({ l, an: l.x1 - l.x0 + 1, al: l.y1 - l.y0 + 1 }));
+    const an = mediana(L.map((q) => q.an)), al = mediana(L.map((q) => q.al));
+    const margen = (v, m) => Math.abs(v - m) <= Math.max(2, m * 0.22);
+    if (!L.every((q) => margen(q.an, an) && margen(q.al, al))) return null;
+    // y a la misma altura: las letras de una palabra suben y bajan
+    const pie = mediana(L.map((q) => q.l.y1));
+    if (!L.every((q) => Math.abs(q.l.y1 - pie) <= Math.max(2, al * 0.2))) return null;
+    let base = null;
+    if (al >= 12) {
+      // con detalle suficiente se compara también el dibujo: «casos» son cinco manchas parejas, pero distintas
+      L.forEach((q) => { q.rejilla = rejilla((x, y) => r.tinta(q.l.x0 + x, q.l.y0 + y), q.an, q.al); });
+      base = L[L.length >> 1].rejilla;
+      if (Math.max(...L.map((q) => difRejilla(q.rejilla, base))) > 0.22) return null;
+    }
+    return { n: L.length, an, al, base };
+  }
+
+  /**
+   * `recorte`: un lienzo con el trozo en grande y con aire alrededor; `caja`,
+   * dónde está el trozo en él. `dicho`: lo que leyó el lector, por si acierta
+   * el signo. Devuelve el texto («*****») o null si no es una fila del mismo
+   * signo.
+   */
+  G.signoRepetido = function (recorte, caja, dicho) {
+    try {
+      const w = recorte.width, h = recorte.height;
+      if (w < 12 || h < 6) return null;
+      const d = recorte.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+      const q = manchasIguales(mirarRenglon({ d, w, h }, caja), 3);
+      if (!q || !q.base) return null;
+      // si el lector leyó justo tantas letras como manchas, y todas la misma, es ese signo
+      const visto = Array.from(String(dicho || '').replace(/\s/g, ''));
+      if (visto.length === q.n && visto.every((c) => c === visto[0]) && G.seEscribe(visto[0])) return visto[0].repeat(q.n);
+      // si no, el relleno que más se le parezca
+      let mejor = null;
+      RELLENOS.forEach((ch) => {
+        let nota = Infinity;
+        ['Arial', 'Liberation Sans', 'Times New Roman', 'Liberation Serif'].forEach((fuente) => [false, true].forEach((negrita) => {
+          const f = formaDibujada(ch, fuente, negrita);
+          if (!f) return;
+          nota = Math.min(nota, difRejilla(f.rejilla, q.base) + 0.3 * Math.min(1.5, Math.abs(Math.log((f.an / f.al) / (q.an / q.al)))));
+        }));
+        if (!mejor || nota < mejor.nota) mejor = { ch, nota };
+      });
+      return mejor ? mejor.ch.repeat(q.n) : null;
+    } catch (e) { return null; }
+  };
+
+  /* ---------- medir una letra dibujada ----------
+     Un texto convertido a curvas no dice con qué letra ni a qué tamaño se
+     escribió, pero se ve nítido: mirándolo en grande se mide dónde empieza y
+     acaba su tinta, de qué color es y a qué letra de la computadora se
+     parece. Con eso lo nuevo se escribe encima con letra de verdad, del
+     mismo tamaño.                                                         */
+
+  /**
+   * `recorte`: el trozo en grande, con aire; `caja`, dónde está en él; `texto`,
+   * lo que dice. Devuelve la caja de su tinta (en píxeles del recorte), los
+   * colores y, si hay letras suficientes para saberlo, la letra que más se
+   * le parece ({ fuente, negrita }).
+   */
+  G.medirDibujo = function (recorte, caja, texto) {
+    try {
+      const w = recorte.width, h = recorte.height;
+      const datos = recorte.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h);
+      const r = mirarRenglon({ d: datos.data, w, h }, caja);
+      if (!r) return null;
+      let llena = 0;
+      for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (r.tinta(x, y)) llena++;
+      const an = r.x1 - r.x0 + 1, al = r.y1 - r.y0 + 1;
+      const hex = (c) => '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+      const m = { x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1, forma: an / al, cubre: llena / (an * al), papel: hex(r.papel), tinta: hex(r.colorTinta), letra: null };
+      const rep = String(texto || '').trim() ? repartir(r, texto) : null;
+      if (rep) {
+        const muestras = [];
+        rep.palabras.forEach((v) => {
+          if (!v.letras) return;
+          v.letras.forEach((l, k) => {
+            const a = l.x1 - l.x0 + 1, b = l.y1 - l.y0 + 1;
+            muestras.push({ ch: v.ch[k], an: a, al: b, rejilla: rejilla((x, y) => r.tinta(l.x0 + x, l.y0 + y), a, b) });
+          });
+        });
+        // dibujadas se ven nítidas: con dos letras ya se distingue una Arial de una Times
+        const letra = letraQueSeParece(muestras, 2);
+        if (letra) m.letra = { fuente: letra.fuente, negrita: letra.negrita };
+      }
+      return m;
+    } catch (e) { return null; }
+  };
 
   /* ---------- rehacer el renglón ---------- */
 
@@ -16138,6 +16675,14 @@ window.GRAPA_CONFIG = {
     return lienzoMedir.measureText(texto).width / 100;
   }
 
+  /** Lo que ocupa la tinta de un texto a tamaño 1 (sin el aire de los lados) y cuánto aire lleva a la izquierda. */
+  function tintaTexto(texto, estilo) {
+    anchoTexto(texto, estilo);                 // deja puesta la letra en el lienzo de medir
+    const m = lienzoMedir.measureText(texto);
+    if (m.actualBoundingBoxRight == null) return { ancho: m.width / 100, izq: 0 };
+    return { ancho: (m.actualBoundingBoxRight + m.actualBoundingBoxLeft) / 100, izq: -m.actualBoundingBoxLeft / 100 };
+  }
+
   /* ---------- los trozos de texto de una hoja ---------- */
 
   const trozosLeidos = new Map();
@@ -16182,7 +16727,7 @@ window.GRAPA_CONFIG = {
       // una hoja que hubo que girar para poder leerla: sus letras están de cabeza o de lado
       if (lec.girada) return { trozos: [], girada: true, origen: lec.origen };
       const vis = visDe(pagina);
-      const trozos = [];
+      let trozos = [];
       (lec.lineas || []).forEach((l) => {
         const ws = (l.palabras || []).slice().sort((a, b) => a.x0 - b.x0);
         let grupo = [];
@@ -16198,11 +16743,228 @@ window.GRAPA_CONFIG = {
         });
         cerrar();
       });
+      // lo que no es texto pero se ve —letras dibujadas, una foto pegada, la fila de asteriscos
+      // de una celda vacía, la palabra que al lector se le escapó—: también se puede pulsar
+      try {
+        const r = await tintaSinLeer(pagina, trozos);
+        trozos = r.trozos.concat(r.sueltas);
+      } catch (e) { console.warn('No se pudo buscar la tinta sin leer', e); }
       return { trozos, girada: false, origen: lec.origen };
     })();
     trozosLeidos.set(k, p);
     p.catch(() => trozosLeidos.delete(k));
     return p;
+  }
+
+  /* ---------- lo que se ve y no es texto ----------
+     «Editar texto» ofrece todo lo que hay en la hoja, no solo lo que el PDF
+     trae como texto o lo que el lector de escaneos supo leer. La tinta que no
+     quedó en ningún trozo se ofrece igual, sin leerla todavía: qué dice se
+     averigua cuando se pulsa (`afinarTrozo`).                              */
+
+  const LETRAS_RARAS = (texto) => Array.from(texto).some((c) => !/\s/.test(c) && !G.seEscribe(c));
+  /** «*****», «-----», «xxxx»: el relleno de una celda vacía. */
+  const esRelleno = (texto) => /^([*\-._=xX#+~·•])\1{2,}$/.test(String(texto || '').replace(/\s/g, ''));
+  // sin leerla todavía, una fila de relleno se reconoce de lejos: baja y larga, de muchas manchas
+  const pareceRelleno = (t) => (t.sinLeer ? t.manchas >= 4 && t.larga : esRelleno(t.texto));
+  // lo que el lector suele leer donde hay asteriscos: «8888», «sss8», «xx»
+  const MAL_LEIDO = (texto) => /^[sS8$xX*+·.\-_=~oO0#%&]{2,10}$/.test(texto) && new Set(texto).size <= 2;
+
+  async function tintaSinLeer(pagina, trozos) {
+    if (!G.tintaSuelta) return { trozos, sueltas: [] };
+    const lienzo = await lienzoParaCopiar(pagina);
+    const vis = visDe(pagina);
+    // Lo que el lector leyó sin entender no vale como texto: signos que no existen en español,
+    // o un trozo de una fila de asteriscos leído como «sss8». Se suelta, y su tinta se ofrece
+    // entera con la de al lado (al pulsarla se mira en grande qué es).
+    const buenos = trozos.filter((t) => t.origen === 'texto' || !(LETRAS_RARAS(t.texto) || MAL_LEIDO(t.texto.replace(/\s/g, ''))));
+    const lec = { origen: 'ocr', lineas: [] };
+    const sueltas = G.tintaSuelta(lienzo, buenos, lienzo.width / vis.w).map((c) => ({
+      texto: '', origen: 'ocr', suelta: true, sinLeer: true, palabras: [], lec, x0: c.x0, x1: c.x1, y0: c.y0, y1: c.y1, manchas: c.n,
+      larga: (c.x1 - c.x0) * vis.w > (c.y1 - c.y0) * vis.h * 5,
+    }));
+    return { trozos: buenos, sueltas };
+  }
+
+  /** Un trozo de la hoja en grande, con aire alrededor, para mirarlo de cerca: { lienzo, caja }. */
+  async function zonaDe(pagina, t) {
+    const vis = visDe(pagina);
+    const altoPt = Math.max(0.5, (t.y1 - t.y0) * vis.h), anchoPt = Math.max(0.5, (t.x1 - t.x0) * vis.w);
+    const aire = altoPt * 0.7;
+    const f = { x0: Math.max(0, t.x0 - aire / vis.w), x1: Math.min(1, t.x1 + aire / vis.w),
+                y0: Math.max(0, t.y0 - aire / vis.h), y1: Math.min(1, t.y1 + aire / vis.h) };
+    const grande = await lienzoParaCopiar(pagina);
+    const ppt = grande.width / vis.w;
+    let lienzo, escala = ppt;
+    if (altoPt * ppt < 30 && !pagina.enderezo) {
+      // letra chica: se vuelve a dibujar ese trozo, más grande (un PDF dibujado sale nítido a cualquier tamaño)
+      escala = Math.min(40 / altoPt, 3400 / (anchoPt + 2 * aire), 30);
+      try { lienzo = await G.renderZona(pagina, f, escala); } catch (e) { lienzo = null; escala = ppt; }
+    }
+    if (!lienzo) {
+      const x = Math.floor(f.x0 * grande.width), y = Math.floor(f.y0 * grande.height);
+      lienzo = document.createElement('canvas');
+      lienzo.width = Math.max(1, Math.ceil(f.x1 * grande.width) - x);
+      lienzo.height = Math.max(1, Math.ceil(f.y1 * grande.height) - y);
+      lienzo.getContext('2d', { willReadFrequently: true }).drawImage(grande, -x, -y);
+    }
+    const W = vis.w * escala, H = vis.h * escala, ox = Math.floor(f.x0 * W), oy = Math.floor(f.y0 * H);
+    const caja = { x0: Math.round(t.x0 * W) - ox, x1: Math.round(t.x1 * W) - ox, y0: Math.round(t.y0 * H) - oy, y1: Math.round(t.y1 * H) - oy };
+    // de un punto del recorte a la hoja, en fracciones
+    return { lienzo, caja, aHoja: (x, y) => ({ x: (x + ox) / W, y: (y + oy) / H }), escala };
+  }
+
+  /** ¿Cae este trozo sobre una foto de la hoja (un escaneo, un logo)? */
+  async function estaEnFoto(pagina, t) {
+    let fotos = [];
+    try { fotos = await G.fotosDeHoja(pagina); } catch (e) { return true; }   // ante la duda, como un escaneo
+    const cx = (t.x0 + t.x1) / 2, cy = (t.y0 + t.y1) / 2;
+    return fotos.some((c) => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1);
+  }
+
+  /**
+   * Antes de corregir algo que no es texto del PDF, se mira de cerca: qué
+   * dice (si aún no se leyó), si está dibujado o es una foto y, si está
+   * dibujado, cómo es su letra, medida en grande: dónde empieza y acaba la
+   * tinta, su color y a qué letra de la computadora se parece.
+   */
+  async function afinarTrozo(pagina, t) {
+    if (t.afinado || t.origen === 'texto') return;
+    const enFoto = await estaEnFoto(pagina, t);
+    t.dibujado = !enFoto;
+    if (!t.sinLeer && enFoto) { t.afinado = true; return; }       // un escaneo ya leído: como siempre
+    const z = await zonaDe(pagina, t);
+    if (t.sinLeer) {
+      let texto = G.signoRepetido ? G.signoRepetido(z.lienzo, z.caja, null) : null;
+      if (!texto || !/^[*\-._=]/.test(texto)) {
+        // no es un relleno evidente: se lee, y si son varias manchas iguales manda el signo que diga el lector
+        let dicho = '';
+        try {
+          // solo el trozo: en el aire de alrededor asoman las letras de los vecinos
+          const c = z.caja, aire = Math.max(2, Math.round((c.y1 - c.y0) * 0.12));
+          const solo = document.createElement('canvas');
+          solo.width = Math.max(1, c.x1 - c.x0 + 2 * aire); solo.height = Math.max(1, c.y1 - c.y0 + 2 * aire);
+          const cs = solo.getContext('2d');
+          cs.fillStyle = '#fff'; cs.fillRect(0, 0, solo.width, solo.height);
+          cs.drawImage(z.lienzo, -(c.x0 - aire), -(c.y0 - aire));
+          const r = await G.leerRecorte(solo);
+          dicho = Array.from(r.texto).filter((c) => G.seEscribe(c)).join('').replace(/\s+/g, ' ').trim();
+        } catch (e) { dicho = ''; }
+        texto = (G.signoRepetido && G.signoRepetido(z.lienzo, z.caja, dicho)) || dicho;
+      }
+      t.texto = texto || '';
+      t.sinLeer = false;
+    }
+    else if (G.signoRepetido) {
+      // leído, pero puede ser una fila de asteriscos leída como letras: en grande se ve
+      const fila = G.signoRepetido(z.lienzo, z.caja, t.texto.replace(/\s/g, ''));
+      if (fila) t.texto = fila;
+    }
+    if (t.dibujado && G.medirDibujo) {
+      const m = G.medirDibujo(z.lienzo, z.caja, t.texto);
+      if (m) {
+        const a = z.aHoja(m.x0, m.y0), b = z.aHoja(m.x1 + 1, m.y1 + 1), vis = visDe(pagina);
+        t.tinta = { x0: a.x, y0: a.y, x1: b.x, y1: b.y, px: 0.35 / vis.w, py: 0.35 / vis.h, forma: m.forma, cubre: m.cubre };
+        t.colores = { papel: m.papel, tinta: m.tinta };
+        if (m.letra) {
+          const familia = G.letraPropiaDe && G.letraPropiaDe(m.letra.fuente.toLowerCase());
+          t.letra = { familia: 'sans', negrita: m.letra.negrita, cursiva: false, sabe: true };
+          if (familia && await G.cargarLetra(familia)) t.letra.familia = familia;
+          else if (/times|serif/i.test(m.letra.fuente) && !/sans/i.test(m.letra.fuente)) t.letra.familia = 'serif';
+        }
+      }
+    }
+    t.afinado = true;
+  }
+
+  /**
+   * La celda de la tabla donde está una caja: las rayas más cercanas a cada
+   * lado, mirando la hoja dibujada en grande. Devuelve fracciones de la hoja;
+   * lo que no tenga raya queda en null.
+   */
+  function celdaDe(lienzo, c) {
+    const r = { x0: null, x1: null, y0: null, y1: null };
+    try {
+      const W = lienzo.width, H = lienzo.height, ctx = lienzo.getContext('2d', { willReadFrequently: true });
+      const bx0 = Math.max(0, Math.floor(c.x0 * W)), bx1 = Math.min(W - 1, Math.ceil(c.x1 * W));
+      const by0 = Math.max(0, Math.floor(c.y0 * H)), by1 = Math.min(H - 1, Math.ceil(c.y1 * H));
+      const alto = by1 - by0 + 1, ancho = bx1 - bx0 + 1;
+      const oscuro = (d, i, papel) => papel - (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 > 45;
+      const papelDe = (d) => {
+        const h = new Uint32Array(256);
+        for (let i = 0; i < d.length; i += 16) h[Math.round((d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000)]++;
+        let m = 255; for (let v = 0; v < 256; v++) if (h[v] > h[m]) m = v;
+        return m;
+      };
+      // a los lados: una franja a la altura del texto; raya = una columna con tinta de arriba abajo
+      {
+        const y = Math.max(0, by0 - Math.round(alto * 0.25)), al = Math.min(H - y, alto + Math.round(alto * 0.5));
+        const lejos = Math.round(W * 0.6);
+        const x = Math.max(0, bx0 - lejos), an = Math.min(W, bx1 + lejos) - x;
+        const d = ctx.getImageData(x, y, an, al).data, papel = papelDe(d);
+        const raya = (cx) => { let n = 0; for (let f = 0; f < al; f++) if (oscuro(d, (f * an + cx) * 4, papel)) n++; return n >= al * 0.92; };
+        for (let cx = bx0 - x - 1; cx >= 0; cx--) if (raya(cx)) { r.x0 = (x + cx + 1) / W; break; }
+        for (let cx = bx1 - x + 1; cx < an; cx++) if (raya(cx)) { r.x1 = (x + cx) / W; break; }
+      }
+      // arriba y abajo: una franja del ancho del texto; raya = una fila con tinta de lado a lado
+      {
+        const lejos = Math.round(H * 0.25);
+        const y = Math.max(0, by0 - lejos), al = Math.min(H, by1 + lejos) - y;
+        const d = ctx.getImageData(bx0, y, ancho, al).data, papel = papelDe(d);
+        const raya = (cy) => { let n = 0; for (let k = 0; k < ancho; k++) if (oscuro(d, (cy * ancho + k) * 4, papel)) n++; return n >= ancho * 0.92; };
+        for (let cy = by0 - y - 1; cy >= 0; cy--) if (raya(cy)) { r.y0 = (y + cy + 1) / H; break; }
+        for (let cy = by1 - y + 1; cy < al; cy++) if (raya(cy)) { r.y1 = (y + cy) / H; break; }
+      }
+    } catch (e) { /* sin celda */ }
+    return r;
+  }
+
+  /**
+   * En un cuadro, la celda vacía lleva un relleno («*****») y la llena lleva
+   * el dato («SI», «NO», un precio), casi siempre con otra letra y otro
+   * tamaño. Al cambiar un relleno por un dato, lo natural es que salga como
+   * los demás datos del cuadro. Aquí se busca ese dato vecino: algo que no
+   * sea relleno y que tenga rellenos en su misma columna y en su misma fila
+   * (así no se confunde con el título de la columna ni con la descripción de
+   * la fila). Primero los de la misma columna, luego los de la fila.
+   */
+  async function datoVecino(lienzo, pagina, t, celda, todos) {
+    if (celda.x0 == null || celda.x1 == null) return null;
+    const cx = (q) => (q.x0 + q.x1) / 2, cy = (q) => (q.y0 + q.y1) / 2;
+    const enCol = (q, c) => c.x0 != null && c.x1 != null && cx(q) > c.x0 && cx(q) < c.x1;
+    const enFila = (q, c) => c.y0 != null && c.y1 != null && cy(q) > c.y0 && cy(q) < c.y1;
+    const dist = (q) => {
+      const col = enCol(q, celda), fila = enFila(q, celda);
+      return (col ? 0 : fila ? 1 : 2) * 10 + Math.hypot(cx(q) - cx(t), (cy(q) - cy(t)) * 0.6);
+    };
+    // ¿hay algún relleno entre estos? Los que aún no se leyeron se miran de cerca, pocos: cuesta
+    let miradas = 0;
+    const hayRelleno = async (donde) => {
+      for (const f of todos) {
+        if (f === t || !donde(f) || !pareceRelleno(f)) continue;
+        if (f.sinLeer) {
+          if (miradas++ >= 8) return false;
+          try { await afinarTrozo(pagina, f); } catch (e) { continue; }
+        }
+        if (esRelleno(f.texto)) return true;
+      }
+      return false;
+    };
+    const candidatos = todos.filter((q) => q !== t && !pareceRelleno(q) && (q.x1 - q.x0) < (celda.x1 - celda.x0) * 1.05)
+      .sort((a, b) => dist(a) - dist(b)).slice(0, 30);
+    let leidos = 0;
+    for (const q of candidatos) {
+      const c = celdaDe(lienzo, q);
+      if (!enCol(q, celda) && !(await hayRelleno((f) => enCol(f, c)))) continue;
+      if (!enFila(q, celda) && !(await hayRelleno((f) => enFila(f, c)))) continue;
+      if (q.sinLeer) {
+        if (leidos++ >= 3) continue;                 // leer cuesta: no más de tres intentos
+        try { await afinarTrozo(pagina, q); } catch (e) { continue; }
+      }
+      if (!String(q.texto || '').trim() || esRelleno(q.texto)) continue;
+      return q;
+    }
+    return null;
   }
 
   /**
@@ -16281,6 +17043,20 @@ window.GRAPA_CONFIG = {
         r.sabe = true;
         r.negrita = /bold|black|heavy|semibold|demi/i.test(nombre);
         r.cursiva = /italic|oblique/i.test(nombre);
+      }
+      // Un nombre que no dice nada («CIDFont+F3», como deja el texto un editor en línea) no
+      // sirve para saber la letra, y pdf.js en la duda dice «serif». Entonces se mira el texto
+      // dibujado, como con las letras hechas curvas.
+      if (!/arial|helvet|calibri|carlito|verdana|tahoma|segoe|sans|gothic|times|roman|georgia|garamond|cambria|book|serif|courier|mono|consol/.test(nombre.toLowerCase()) && G.medirDibujo) {
+        r.familia = 'sans';
+        const z = await zonaDe(pagina, t);
+        const m = G.medirDibujo(z.lienzo, z.caja, t.texto);
+        if (m && m.letra) {
+          const propia2 = G.letraPropiaDe(m.letra.fuente.toLowerCase());
+          if (propia2 && await G.cargarLetra(propia2)) r.familia = propia2;
+          else if (/times|serif/i.test(m.letra.fuente) && !/sans/i.test(m.letra.fuente)) r.familia = 'serif';
+          r.negrita = m.letra.negrita; r.cursiva = false; r.sabe = true;
+        }
       }
     } catch (e) { /* se queda con la letra corriente */ }
     return r;
@@ -16443,9 +17219,14 @@ window.GRAPA_CONFIG = {
   }
 
   /** Qué parte del tamaño de la letra ocupa un texto, de arriba abajo, según sus letras. */
-  function alturasDe(texto) {
+  // lo que mide una mayúscula y una minúscula en cada letra, como parte de su tamaño
+  const ALTURAS = { sans: [0.716, 0.519], serif: [0.662, 0.448], mono: [0.562, 0.426], calibri: [0.644, 0.466] };
+  function alturasDe(texto, familia) {
     const cola = /[gjpqyQ]/.test(texto) ? 0.21 : /[,;]/.test(texto) ? 0.13 : 0;
-    const alta = /[A-ZÁÉÍÓÚÑ0-9bdfhkltáéíóú()/\\|°%$#&¿?¡!]/.test(texto) ? 0.72 : 0.52;
+    const hayAlta = /[A-ZÁÉÍÓÚÑ0-9bdfhkltáéíóú()/\\|°%$#&¿?¡!]/.test(texto);
+    // de un escaneo no se sabe la letra: valen las medidas de siempre
+    const m = ALTURAS[familia];
+    const alta = m ? (hayAlta ? m[0] : m[1]) : (hayAlta ? 0.72 : 0.52);
     return { cola, alta };
   }
 
@@ -16556,7 +17337,9 @@ window.GRAPA_CONFIG = {
         // lo que ya se corrigió no se ofrece otra vez: debajo está el texto viejo
         const cx = (t.x0 + t.x1) / 2, cy = (t.y0 + t.y1) / 2;
         if (tapados.some((c) => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1)) return;
-        const b = poner(t, 'leido', { trozo: String(i) }, 'Pulsa para corregir este texto');
+        const b = poner(t, t.suelta ? 'leido suelto' : 'leido', { trozo: String(i) }, t.suelta ? 'Pulsa para corregirlo' : 'Pulsa para corregir este texto');
+        // una fila de asteriscos es una raya de dos milímetros: se le da más sitio donde pulsar
+        if ((t.y1 - t.y0) * hoja.clientHeight < 9) b.classList.add('fino');
         capa.insertBefore(b, capa.firstChild);   // debajo de lo ya puesto
       });
       if (r.girada) {
@@ -16713,7 +17496,7 @@ window.GRAPA_CONFIG = {
       if (esFigura(n)) moverFigura(n, a.dx, a.dy);
       else {
         // de una corrección se mueve lo escrito; el parche se queda tapando lo viejo
-        if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; delete n.derecha; }
+        if (String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; delete n.derecha; delete n.centro; }
         if (n.tapa && n.tipo !== 'correccion' && n.tipo) { n.tapa.x += a.dx; n.tapa.y += a.dy; if (!String(n.texto || '').trim()) { n.x += a.dx; n.y += a.dy; } }
       }
       a.pagina.sellos[a.indice] = n;
@@ -16912,6 +17695,54 @@ window.GRAPA_CONFIG = {
 
   /* ---------- la caja donde se escribe ---------- */
 
+  let turnoEdicion = 0;           // si se pulsa otro trozo mientras se mira uno, gana el último
+
+  /**
+   * Cómo está escrito un trozo de la hoja: su letra, su tamaño, su color, dónde
+   * está su tinta y dónde apoya. De un PDF con texto lo dice el propio PDF; de
+   * un escaneo se mide en la hoja; de unas letras dibujadas, mirándolas en grande.
+   */
+  async function estiloDeTrozo(hoja, pagina, t) {
+    const vis = visDe(pagina);
+    if (t.origen !== 'texto') await afinarTrozo(pagina, t);
+    const col = t.colores || coloresEn(hoja, t);
+    let letra = t.origen === 'texto' ? await letraDe(pagina, t) : (t.letra ? Object.assign({}, t.letra) : null);
+    // la letra, medida en la hoja: de ahí salen el tamaño, el sitio y el parche
+    const tinta = t.tinta || tintaDe(hoja, t, col.papel) || t;
+    if (!letra) letra = letraParecida(t.texto, tinta);
+    const alto = (tinta.y1 - tinta.y0) * vis.h, ancho = (tinta.x1 - tinta.x0) * vis.w;
+    const { cola, alta } = alturasDe(t.texto, t.dibujado ? letra.familia : null);
+    let tam, y;
+    if (t.origen === 'texto') {
+      // un PDF dice a qué tamaño escribió y dónde apoya la letra
+      const altoCaja = (t.y1 - t.y0) * vis.h;
+      tam = altoCaja / 1.05;
+      y = t.y1 - (0.19 * altoCaja) / vis.h;
+    } else {
+      tam = alto / (alta + cola);
+      y = tinta.y1 - (cola * tam) / vis.h;
+    }
+    if (!letra.sabe) {
+      // no se sabe si es negrita: se mira con cuál de las dos el texto ocupa lo que ocupa
+      const fina = Math.abs(anchoTexto(t.texto, letra) * tam - ancho);
+      const gruesa = Math.abs(anchoTexto(t.texto, Object.assign({}, letra, { negrita: true })) * tam - ancho);
+      letra.negrita = gruesa < fina;
+    }
+    // medida en grande, una letra dibujada da su tamaño con décimas; lo demás, de medio en medio punto
+    tam = t.tinta ? Math.round(Math.min(Math.max(tam, 3), 96) * 10) / 10 : Math.round(Math.min(Math.max(tam, 4), 96) * 2) / 2;
+    // La letra de fábrica no es la del original (Calibri sale más estrecha que Arial): se
+    // estrecha o se ensancha lo justo para que el texto ocupe lo que ocupaba. Así el nuevo
+    // sale igual de ancho y no se monta en la columna de al lado.
+    const anchoReal = t.origen === 'texto' ? (t.x1 - t.x0) * vis.w : ancho;
+    // de lo dibujado se midió la tinta justa: se compara con la tinta, no con lo que avanza la letra
+    const escrito = t.tinta ? tintaTexto(t.texto, letra) : { ancho: anchoTexto(t.texto, letra), izq: 0 };
+    let estira = anchoReal / ((escrito.ancho * tam) || 1);
+    estira = Math.abs(estira - 1) < (t.tinta ? 0.045 : 0.03) ? 1 : Math.round(Math.min(Math.max(estira, 0.7), 1.2) * 1000) / 1000;
+    // dónde empieza a escribirse para que la tinta caiga donde estaba
+    const x = t.origen === 'texto' ? t.x0 : tinta.x0 - (escrito.izq * tam * estira) / vis.w;
+    return { col, letra, tinta, tam, y, estira, x };
+  }
+
   async function abrirEdicion(hoja, pagina, que) {
     const vis = visDe(pagina);
     let m;
@@ -16922,48 +17753,64 @@ window.GRAPA_CONFIG = {
       delete m.img; delete m.cajaImg;
     } else if (que.trozo) {
       const t = que.trozo;
-      const col = coloresEn(hoja, t);
-      let letra = t.origen === 'texto' ? await letraDe(pagina, t) : null;
-      if (!editando || !hoja.isConnected) return;
-      // la letra, medida en la hoja: de ahí salen el tamaño, el sitio y el parche
-      const tinta = tintaDe(hoja, t, col.papel) || t;
-      if (!letra) letra = letraParecida(t.texto, tinta);
-      const alto = (tinta.y1 - tinta.y0) * vis.h, ancho = (tinta.x1 - tinta.x0) * vis.w;
-      const { cola, alta } = alturasDe(t.texto);
-      let tam, y;
-      if (t.origen === 'texto') {
-        // un PDF dice a qué tamaño escribió y dónde apoya la letra
-        const altoCaja = (t.y1 - t.y0) * vis.h;
-        tam = altoCaja / 1.05;
-        y = t.y1 - (0.19 * altoCaja) / vis.h;
-      } else {
-        tam = alto / (alta + cola);
-        y = tinta.y1 - (cola * tam) / vis.h;
+      const turno = ++turnoEdicion;
+      const capa0 = hoja.querySelector('.capa-editar');
+      // mirar de cerca algo que no es texto tarda un instante: que se note que se pulsó
+      const espera = t.origen !== 'texto' && !t.afinado && capa0 ? document.createElement('span') : null;
+      if (espera) { espera.className = 'capa-editar-nota'; espera.textContent = 'Leyendo lo que dice…'; capa0.appendChild(espera); }
+      let e, vecino = null, celda = { x0: null, x1: null, y0: null, y1: null };
+      try {
+        e = await estiloDeTrozo(hoja, pagina, t);
+        if (t.origen !== 'texto' || esRelleno(t.texto)) {
+          // en un cuadro: la celda, para dejar centrado lo que estaba centrado, y el dato vecino
+          const grande = await lienzoParaCopiar(pagina);
+          celda = celdaDe(grande, e.tinta);
+          if (esRelleno(t.texto) && capa0 && capa0._trozos) {
+            const q = await datoVecino(grande, pagina, t, celda, capa0._trozos);
+            if (q) vecino = await estiloDeTrozo(hoja, pagina, q);
+          }
+        }
+      } catch (err) {
+        console.warn('No se pudo mirar ese trozo', err);
+        if (turno === turnoEdicion) G.aviso('No se pudo leer ese trozo. Puedes taparlo con el borrador y escribir encima con «Añadir texto».', 'error');
+        return;
+      } finally { if (espera) espera.remove(); }
+      if (turno !== turnoEdicion || !editando || !hoja.isConnected) return;
+      const tinta = e.tinta, col = e.col;
+      let { letra, tam, y, estira } = e, color = col.tinta;
+      const cxTinta = (tinta.x0 + tinta.x1) / 2, altoTinta = tinta.y1 - tinta.y0;
+      // centrado en su celda: si a los dos lados queda el mismo aire (y queda aire)
+      let centro = null;
+      if (celda.x0 != null && celda.x1 != null) {
+        const izq = tinta.x0 - celda.x0, der = celda.x1 - tinta.x1, aire = (altoTinta * vis.h * 0.5) / vis.w;
+        if (izq > aire && der > aire && Math.abs(izq - der) <= Math.max((celda.x1 - celda.x0) * 0.08, 1.5 / vis.w)) centro = (celda.x0 + celda.x1) / 2;
       }
-      if (!letra.sabe) {
-        // no se sabe si es negrita: se mira con cuál de las dos el texto ocupa lo que ocupa
-        const fina = Math.abs(anchoTexto(t.texto, letra) * tam - ancho);
-        const gruesa = Math.abs(anchoTexto(t.texto, Object.assign({}, letra, { negrita: true })) * tam - ancho);
-        letra.negrita = gruesa < fina;
+      const relleno = esRelleno(t.texto);
+      if (relleno) {
+        // una celda vacía: lo que se escriba sale como los demás datos del cuadro, y centrado donde estaba el relleno
+        if (vecino) { letra = vecino.letra; tam = vecino.tam; estira = vecino.estira; color = vecino.col.tinta; }
+        else {
+          estira = 1;
+          tam = /^\*/.test(t.texto.trim()) ? Math.round(Math.min(Math.max((altoTinta * vis.h) / 0.36, 5), 14) * 2) / 2 : ultimoEstilo.tam;
+        }
+        if (centro == null) centro = cxTinta;
+        y = (tinta.y0 + tinta.y1) / 2 + (alturasDe('S', letra.familia).alta * tam * 0.5) / vis.h;
       }
-      tam = Math.round(Math.min(Math.max(tam, 4), 96) * 2) / 2;
-      // La letra de fábrica no es la del original (Calibri sale más estrecha que Arial): se
-      // estrecha o se ensancha lo justo para que el texto ocupe lo que ocupaba. Así el nuevo
-      // sale igual de ancho y no se monta en la columna de al lado.
-      const anchoReal = t.origen === 'texto' ? (t.x1 - t.x0) * vis.w : ancho;
-      let estira = anchoReal / ((anchoTexto(t.texto, letra) * tam) || 1);
-      estira = Math.abs(estira - 1) < 0.03 ? 1 : Math.round(Math.min(Math.max(estira, 0.7), 1.2) * 1000) / 1000;
       const ax = (tinta.px || 0.001) * 2, ay = (tinta.py || 0.001) * 2;
+      const deTexto = t.origen === 'texto';
       m = {
         indice: -1, tipo: 'correccion', original: t.texto, texto: t.texto,
-        x: t.origen === 'texto' ? t.x0 : tinta.x0, y, tam, color: col.tinta, estira,
+        x: relleno ? tinta.x0 : e.x, y, tam, color, estira,
+        centro,
         // un número va arrimado a la derecha, como en toda tabla de precios: si el nuevo tiene
         // más o menos cifras, crece hacia la izquierda y la columna sigue alineada
-        derecha: /^[\s\d.,:%$S/+-]+$/.test(t.texto) && /\d/.test(t.texto) ? (t.origen === 'texto' ? t.x1 : tinta.x1) : null,
+        derecha: centro == null && /^[\s\d.,:%$S/+-]+$/.test(t.texto) && /\d/.test(t.texto) ? (deTexto ? t.x1 : tinta.x1) : null,
         // en un PDF con texto, lo viejo se quita del propio archivo al exportar: aquí, dónde está
-        quita: t.origen === 'texto' ? { x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0 } : null,
+        quita: deTexto ? { x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0 } : null,
         // en un escaneo, el renglón tal como estaba: con él se rehace copiando su propia letra
-        de: t.origen === 'texto' ? null : { x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1, texto: t.texto },
+        de: deTexto || t.dibujado ? null : { x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1, texto: t.texto },
+        // letras dibujadas (hechas curvas): al exportar se quitan esos trazos del propio PDF
+        dibujo: !deTexto && t.dibujado ? { x: tinta.x0, y: tinta.y0, w: tinta.x1 - tinta.x0, h: tinta.y1 - tinta.y0 } : null,
         familia: letra.familia, negrita: letra.negrita, cursiva: letra.cursiva,
         tapa: { x: tinta.x0 - ax, y: tinta.y0 - ay, w: (tinta.x1 - tinta.x0) + 2 * ax, h: (tinta.y1 - tinta.y0) + 2 * ay, color: col.papel },
       };
@@ -17016,6 +17863,12 @@ window.GRAPA_CONFIG = {
     const escrito = anchoTexto(campo.value || ' ', m) * px;
     const minimo = m.tapa ? (m.tapa.w * hoja.clientWidth) / e : px * 6;
     campo.style.width = Math.ceil(Math.max(escrito + px * 0.6, minimo)) + 'px';
+    // lo que va a quedar centrado en su celda se escribe ya centrado sobre lo que había
+    campo.style.textAlign = m.centro != null && m.tapa ? 'center' : '';
+    if (m.centro != null && m.tapa) {
+      const sobra = (campo.offsetWidth * e - m.tapa.w * hoja.clientWidth) / 2;
+      nodo.style.left = `calc(${m.tapa.x * 100}% - ${Math.max(0, sobra)}px)`;
+    }
     pintarBarraEditor();
   }
 
@@ -17048,12 +17901,17 @@ window.GRAPA_CONFIG = {
       tapa: m.tapa || null, giroAl: G.norm(pagina.giro),
     };
     if (m.estira && m.estira !== 1) sello.estira = m.estira;
-    if (m.derecha != null && !ed.movido) {
+    if (m.centro != null && !ed.movido) {
+      // centrado en su celda, tenga las letras que tenga
+      sello.centro = m.centro;
+      sello.x = m.centro - (anchoTexto(texto, sello) * sello.tam * (sello.estira || 1)) / visDe(pagina).w / 2;
+    } else if (m.derecha != null && !ed.movido) {
       sello.derecha = m.derecha;
       sello.x = m.derecha - (anchoTexto(texto, sello) * sello.tam * (sello.estira || 1)) / visDe(pagina).w;
     }
     if (m.quita) sello.quita = m.quita;
     if (m.de) sello.de = m.de;
+    if (m.dibujo) sello.dibujo = m.dibujo;
     // si se le cambió la letra a mano, se respeta: se escribe con esa y no con la del papel
     if (m.aMano || ed.tocado) sello.aMano = true;
     if (m.indice >= 0) {

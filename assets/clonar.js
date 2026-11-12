@@ -312,9 +312,9 @@
   }
 
   /** De las letras de la computadora, la que más se parece a las muestras del papel. */
-  function letraQueSeParece(muestras) {
+  function letraQueSeParece(muestras, minimo) {
     const usar = muestras.filter((q) => /[A-Za-z0-9]/.test(q.ch)).slice(0, 14);
-    if (usar.length < 3) return null;
+    if (usar.length < (minimo || 3)) return null;
     let mejor = null;
     candidatas().forEach((fuente) => [false, true].forEach((negrita) => {
       let nota = 0, cuantas = 0, ancho = [], alto = [];
@@ -327,12 +327,114 @@
         cuantas++;
         alto.push(q.al / f.al); ancho.push((q.an / f.an) / (q.al / f.al));
       });
-      if (cuantas < 3) return;
+      if (cuantas < (minimo || 3)) return;
       nota /= cuantas;
       if (!mejor || nota < mejor.nota) mejor = { nota, fuente, negrita, escala: mediana(alto), estira: mediana(ancho) };
     }));
     return mejor;
   }
+
+  /* ---------- una fila del mismo signo ----------
+     La celda vacía de un cuadro suele ir rellena: «********», «--------»,
+     «xxxxxx». Un lector de texto lee ahí cualquier cosa. Pero es fácil de
+     reconocer mirando: son varias manchas iguales, una al lado de otra. Se
+     comprueba que lo sean y se mira a qué signo se parecen.               */
+
+  const RELLENOS = ['*', '-', '.', 'x', 'X', '_', '=', '#', '+', '0', 'o', '/'];
+  const difRejilla = (a, b) => { let s = 0; for (let k = 0; k < a.length; k++) s += Math.abs(a[k] - b[k]); return s / a.length; };
+
+  /** Si las manchas de un renglón son todas iguales (mismo tamaño, misma altura, misma forma), cuáles son. */
+  function manchasIguales(r, minimo) {
+    if (!r || r.letras.length < minimo) return null;
+    const L = r.letras.map((l) => ({ l, an: l.x1 - l.x0 + 1, al: l.y1 - l.y0 + 1 }));
+    const an = mediana(L.map((q) => q.an)), al = mediana(L.map((q) => q.al));
+    const margen = (v, m) => Math.abs(v - m) <= Math.max(2, m * 0.22);
+    if (!L.every((q) => margen(q.an, an) && margen(q.al, al))) return null;
+    // y a la misma altura: las letras de una palabra suben y bajan
+    const pie = mediana(L.map((q) => q.l.y1));
+    if (!L.every((q) => Math.abs(q.l.y1 - pie) <= Math.max(2, al * 0.2))) return null;
+    let base = null;
+    if (al >= 12) {
+      // con detalle suficiente se compara también el dibujo: «casos» son cinco manchas parejas, pero distintas
+      L.forEach((q) => { q.rejilla = rejilla((x, y) => r.tinta(q.l.x0 + x, q.l.y0 + y), q.an, q.al); });
+      base = L[L.length >> 1].rejilla;
+      if (Math.max(...L.map((q) => difRejilla(q.rejilla, base))) > 0.22) return null;
+    }
+    return { n: L.length, an, al, base };
+  }
+
+  /**
+   * `recorte`: un lienzo con el trozo en grande y con aire alrededor; `caja`,
+   * dónde está el trozo en él. `dicho`: lo que leyó el lector, por si acierta
+   * el signo. Devuelve el texto («*****») o null si no es una fila del mismo
+   * signo.
+   */
+  G.signoRepetido = function (recorte, caja, dicho) {
+    try {
+      const w = recorte.width, h = recorte.height;
+      if (w < 12 || h < 6) return null;
+      const d = recorte.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+      const q = manchasIguales(mirarRenglon({ d, w, h }, caja), 3);
+      if (!q || !q.base) return null;
+      // si el lector leyó justo tantas letras como manchas, y todas la misma, es ese signo
+      const visto = Array.from(String(dicho || '').replace(/\s/g, ''));
+      if (visto.length === q.n && visto.every((c) => c === visto[0]) && G.seEscribe(visto[0])) return visto[0].repeat(q.n);
+      // si no, el relleno que más se le parezca
+      let mejor = null;
+      RELLENOS.forEach((ch) => {
+        let nota = Infinity;
+        ['Arial', 'Liberation Sans', 'Times New Roman', 'Liberation Serif'].forEach((fuente) => [false, true].forEach((negrita) => {
+          const f = formaDibujada(ch, fuente, negrita);
+          if (!f) return;
+          nota = Math.min(nota, difRejilla(f.rejilla, q.base) + 0.3 * Math.min(1.5, Math.abs(Math.log((f.an / f.al) / (q.an / q.al)))));
+        }));
+        if (!mejor || nota < mejor.nota) mejor = { ch, nota };
+      });
+      return mejor ? mejor.ch.repeat(q.n) : null;
+    } catch (e) { return null; }
+  };
+
+  /* ---------- medir una letra dibujada ----------
+     Un texto convertido a curvas no dice con qué letra ni a qué tamaño se
+     escribió, pero se ve nítido: mirándolo en grande se mide dónde empieza y
+     acaba su tinta, de qué color es y a qué letra de la computadora se
+     parece. Con eso lo nuevo se escribe encima con letra de verdad, del
+     mismo tamaño.                                                         */
+
+  /**
+   * `recorte`: el trozo en grande, con aire; `caja`, dónde está en él; `texto`,
+   * lo que dice. Devuelve la caja de su tinta (en píxeles del recorte), los
+   * colores y, si hay letras suficientes para saberlo, la letra que más se
+   * le parece ({ fuente, negrita }).
+   */
+  G.medirDibujo = function (recorte, caja, texto) {
+    try {
+      const w = recorte.width, h = recorte.height;
+      const datos = recorte.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h);
+      const r = mirarRenglon({ d: datos.data, w, h }, caja);
+      if (!r) return null;
+      let llena = 0;
+      for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (r.tinta(x, y)) llena++;
+      const an = r.x1 - r.x0 + 1, al = r.y1 - r.y0 + 1;
+      const hex = (c) => '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+      const m = { x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1, forma: an / al, cubre: llena / (an * al), papel: hex(r.papel), tinta: hex(r.colorTinta), letra: null };
+      const rep = String(texto || '').trim() ? repartir(r, texto) : null;
+      if (rep) {
+        const muestras = [];
+        rep.palabras.forEach((v) => {
+          if (!v.letras) return;
+          v.letras.forEach((l, k) => {
+            const a = l.x1 - l.x0 + 1, b = l.y1 - l.y0 + 1;
+            muestras.push({ ch: v.ch[k], an: a, al: b, rejilla: rejilla((x, y) => r.tinta(l.x0 + x, l.y0 + y), a, b) });
+          });
+        });
+        // dibujadas se ven nítidas: con dos letras ya se distingue una Arial de una Times
+        const letra = letraQueSeParece(muestras, 2);
+        if (letra) m.letra = { fuente: letra.fuente, negrita: letra.negrita };
+      }
+      return m;
+    } catch (e) { return null; }
+  };
 
   /* ---------- rehacer el renglón ---------- */
 
