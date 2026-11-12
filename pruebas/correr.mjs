@@ -104,6 +104,53 @@ function afirmar(cond, mensaje, detalle) {
 }
 
 /** Un expediente escaneado: cada hoja es una imagen, sin texto de verdad. */
+/**
+ * Un cuadro como los que salen de «guardar como PDF» con las letras hechas
+ * curvas: cada celda lleva su dato dibujado (no es texto) o una fila de
+ * asteriscos, también dibujada. Solo el título y un «SI» son texto de verdad.
+ * Devuelve el archivo y dónde está cada celda (centros, en fracciones).
+ */
+async function pdfDibujado(page) {
+  const r = await page.evaluate(async () => {
+    const G = window.Grapa, { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+    const fk = await G.motorDeLetras();
+    const letra = fk.create(await G.bytesDeLetra('calibri', false, false));
+    const doc = await PDFDocument.create();
+    const helv = await doc.embedFont(StandardFonts.Helvetica);
+    const W = 595.28, H = 841.89, p = doc.addPage([W, H]);
+    p.drawText('Cuadro de validacion de especificaciones tecnicas', { x: 60, y: 760, size: 13, font: helv });
+    // el contorno de un texto, letra por letra, como dibujo relleno
+    const dibujar = (texto, cx, y, tam) => {
+      const k = tam / letra.unitsPerEm, tirada = letra.layout(texto);
+      let x = cx - (tirada.advanceWidth * k) / 2;
+      tirada.glyphs.forEach((g, i) => {
+        const d = g.path.commands.map((c) => {
+          const a = c.args.map((v, j) => (j % 2 ? -v : v).toFixed(1));
+          return ({ moveTo: 'M', lineTo: 'L', quadraticCurveTo: 'Q', bezierCurveTo: 'C', closePath: 'Z' })[c.command] + a.join(' ');
+        }).join(' ');
+        if (d) p.drawSvgPath(d, { x, y, scale: k, color: rgb(0, 0, 0), borderWidth: 0 });
+        x += tirada.positions[i].xAdvance * k;
+      });
+    };
+    const xs = [60, 200, 340, 480], ys = [705, 675, 645, 615];
+    xs.forEach((x) => p.drawLine({ start: { x, y: ys[0] }, end: { x, y: ys[3] }, thickness: 0.7 }));
+    ys.forEach((y) => p.drawLine({ start: { x: xs[0], y }, end: { x: xs[3], y }, thickness: 0.7 }));
+    const relleno = '*'.repeat(14);
+    const celdas = [['SI', relleno, null], [relleno, 'NO', relleno], ['CUMPLE', relleno, 'NO']];
+    celdas.forEach((fila, f) => fila.forEach((dato, c) => {
+      const cx = (xs[c] + xs[c + 1]) / 2, y = ys[f + 1] + 10;
+      if (dato == null) { p.drawText('SI', { x: cx - helv.widthOfTextAtSize('SI', 12) / 2, y, size: 12, font: helv }); return; }
+      dibujar(dato, cx, dato === relleno ? y + 1 : y, dato === relleno ? 8 : 12);
+    }));
+    const bytes = await doc.save();
+    let t = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) t += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    const centro = (f, c) => ({ x: (xs[c] + xs[c + 1]) / 2 / W, y: (H - (ys[f] + ys[f + 1]) / 2) / H });
+    return { b64: btoa(t), centros: [0, 1, 2].map((f) => [0, 1, 2].map((c) => centro(f, c))), ancho: (xs[1] - xs[0]) / W };
+  });
+  return { archivo: { name: 'Cuadro dibujado.pdf', mimeType: 'application/pdf', buffer: Buffer.from(r.b64, 'base64') }, centros: r.centros, ancho: r.ancho };
+}
+
 async function pdfEscaneado(page) {
     const b64 = await page.evaluate(async () => {
       const { PDFDocument } = window.PDFLib;
@@ -682,6 +729,91 @@ const PRUEBAS = {
     await page.keyboard.press('Escape');
     for (let i = 0; i < 6; i++) await page.keyboard.press('Control+z');
     afirmar(await page.evaluate(() => window.Grapa.estado.paginas[0].sellos.length) === 0, 'deshacer quita las figuras');
+  },
+
+  async 'editar letras dibujadas: todo lo que se ve se puede corregir, también lo que no es texto ni lo lee nadie'({ page }) {
+    const { archivo, centros, ancho } = await pdfDibujado(page);
+    await page.setInputFiles('#entradaArchivos', [archivo]);
+    await esperarCarga(page);
+    await page.keyboard.press('v');
+    await page.click('#lectorEditarTexto');
+    await page.waitForFunction(() => { const c = document.querySelector('.hoja[data-indice="0"] .capa-editar'); return c && c._trozos && !c.querySelector('.capa-editar-nota'); }, null, { timeout: 120000 });
+    // cada celda tiene algo que pulsar: el «SI» que es texto, y las ocho que solo son dibujo
+    const cual = (c) => page.evaluate((c) => document.querySelector('.hoja[data-indice="0"] .capa-editar')
+      ._trozos.findIndex((t) => c.x > t.x0 - 0.01 && c.x < t.x1 + 0.01 && c.y > t.y0 - 0.012 && c.y < t.y1 + 0.012), c);
+    const hay = [];
+    for (const fila of centros) for (const c of fila) hay.push(await cual(c));
+    afirmar(hay.every((i) => i >= 0), 'las nueve celdas se pueden pulsar', hay);
+    const origenes = await page.evaluate((hay) => { const t = document.querySelector('.hoja[data-indice="0"] .capa-editar')._trozos; return hay.map((i) => t[i].origen + (t[i].suelta ? '*' : '')); }, hay);
+    afirmar(origenes[2] === 'texto' && origenes.filter((o) => o === 'ocr*').length === 8, 'una es texto de verdad; las otras ocho, tinta sin leer', origenes);
+    const pulsar = async (i) => {
+      await page.click(`.hoja[data-indice="0"] .trozo[data-trozo="${i}"]`);
+      await page.waitForSelector('.editor-campo', { timeout: 120000 });
+      return page.inputValue('.editor-campo');
+    };
+    const sellos = () => page.evaluate(() => window.Grapa.estado.paginas[0].sellos.map((s) => ({ texto: s.texto, tam: s.tam, centro: s.centro, dibujo: !!s.dibujo, de: !!s.de, quita: !!s.quita, x: s.x })));
+
+    // 1. un dato dibujado: se lee al pulsarlo y se cambia por otro
+    afirmar(await pulsar(hay[4]) === 'NO', 'lee lo que dice el dibujo al pulsarlo');
+    await page.fill('.editor-campo', 'SI');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 1);
+    let s = await sellos();
+    afirmar(s[0].texto === 'SI' && s[0].dibujo && !s[0].de && !s[0].quita, 'queda escrito con letra de verdad, y apunta el dibujo que hay que quitar', s[0]);
+    afirmar(Math.abs(s[0].centro - centros[1][1].x) < 0.004, 'sigue centrado en su celda', s[0]);
+    afirmar(Math.abs(s[0].tam - 12) < 1.3, 'del tamaño que tenía el dibujo', s[0]);
+
+    // 2. una celda vacía (una fila de asteriscos): se reconoce, y lo nuevo sale como los datos vecinos
+    await page.waitForSelector(`.hoja[data-indice="0"] .trozo[data-trozo="${hay[1]}"]`);
+    const relleno = await pulsar(hay[1]);
+    afirmar(/^\*{14}$/.test(relleno), 'una fila de asteriscos se reconoce como tal', relleno);
+    await page.fill('.editor-campo', 'NO');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 2);
+    s = await sellos();
+    afirmar(s[1].texto === 'NO' && s[1].dibujo && Math.abs(s[1].tam - 12) < 1.3, 'el dato nuevo sale del tamaño de los demás datos, no del de los asteriscos', s[1]);
+    afirmar(Math.abs(s[1].centro - centros[0][1].x) < 0.004, 'y centrado en la celda', s[1]);
+
+    // 3. una palabra larga dibujada, y el «SI» que sí es texto
+    await page.waitForSelector(`.hoja[data-indice="0"] .trozo[data-trozo="${hay[6]}"]`);
+    afirmar(await pulsar(hay[6]) === 'CUMPLE', 'lee una palabra dibujada');
+    await page.fill('.editor-campo', 'NO CUMPLE');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 3);
+    await page.waitForSelector(`.hoja[data-indice="0"] .trozo[data-trozo="${hay[2]}"]`);
+    afirmar(await pulsar(hay[2]) === 'SI', 'el texto de verdad sigue como siempre');
+    await page.fill('.editor-campo', 'NO');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.Grapa.estado.paginas[0].sellos.length === 4);
+    s = await sellos();
+    afirmar(s[3].quita && !s[3].dibujo, 'ese se quita como texto', s[3]);
+
+    // 4. al exportar, lo dibujado se quita del propio PDF: ni parche ni restos
+    const r = await page.evaluate(async ({ centros, ancho }) => {
+      const G = window.Grapa, raiz = [];
+      const bytes = await G.construirPdf([G.estado.paginas[0]], { alQuitarDeRaiz: (i, pedidos, limpios) => raiz.push([pedidos, limpios]) });
+      const doc = await window.pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+      const pag = await doc.getPage(1);
+      const texto = (await pag.getTextContent()).items.map((x) => x.str).filter((x) => x.trim());
+      const vp = pag.getViewport({ scale: 3 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+      // cuánta tinta queda en los dos extremos de una celda, donde llegaban los asteriscos y no llega un «NO»
+      const tinta = (cx, cy) => {
+        let n = 0;
+        for (const lado of [-1, 1]) {
+          const x0 = Math.round((cx + lado * ancho * 0.13 - ancho * 0.045) * c.width), an = Math.round(ancho * 0.09 * c.width);
+          const d = ctx.getImageData(x0, Math.round(cy * c.height) - 20, an, 40).data;
+          for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
+        }
+        return n;
+      };
+      return { raiz, texto, kb: bytes.length, cambiada: tinta(centros[0][1].x, centros[0][1].y), intacta: tinta(centros[1][0].x, centros[1][0].y) };
+    }, { centros, ancho });
+    afirmar(r.raiz.length === 2 && r.raiz.every(([pedidos, limpios]) => pedidos === limpios), 'todo se quitó de raíz: el texto y los dibujos', r.raiz);
+    afirmar(r.intacta > 40 && r.cambiada === 0, 'donde había asteriscos ya no queda ninguno; en la celda de al lado siguen', r);
+    afirmar(['SI', 'NO', 'NO CUMPLE'].every((t) => r.texto.includes(t)) && r.texto.filter((t) => t === 'NO').length === 2, 'lo nuevo es texto de verdad en el PDF', r.texto);
   },
 
   async 'editar un PDF en Calibri: lo corregido sale con su gemela, dentro del PDF y sin estirar'({ page }) {

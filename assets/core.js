@@ -495,6 +495,29 @@
     return lienzo;
   };
 
+  /**
+   * Un trozo de la hoja dibujado en grande: `f` ({x0,y0,x1,y1}, fracciones de
+   * la hoja como se ve) a `escala` píxeles por punto. Un PDF dibujado (no una
+   * foto) sale nítido a cualquier tamaño, así que una letra de 5 puntos se
+   * puede mirar como si fuera de 40.
+   */
+  G.renderZona = async function (pagina, f, escala) {
+    const fuente = G.estado.fuentes.get(pagina.fuenteId);
+    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    const giro = G.norm(pagina.giro);
+    const base = pag.getViewport({ scale: 1, rotation: giro });
+    const x = Math.floor(f.x0 * base.width * escala), y = Math.floor(f.y0 * base.height * escala);
+    const lienzo = document.createElement('canvas');
+    lienzo.width = Math.max(1, Math.min(4000, Math.ceil(f.x1 * base.width * escala) - x));
+    lienzo.height = Math.max(1, Math.min(4000, Math.ceil(f.y1 * base.height * escala) - y));
+    const ctx = lienzo.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+    const vp = pag.getViewport({ scale: escala, rotation: giro, offsetX: -x, offsetY: -y });
+    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    return lienzo;
+  };
+
   /* ---------- posiciones 3x3 ---------- */
   // códigos: [a|c|b][i|c|d]  (arriba/centro/abajo  ·  izquierda/centro/derecha)
   G.CODIGOS_POS = ['ai', 'ac', 'ad', 'ci', 'cc', 'cd', 'bi', 'bc', 'bd'];
@@ -517,7 +540,7 @@
     cacheDocsPdfLib.set(fuenteId, d);
     return d;
   }
-  G.olvidarDocs = () => cacheDocsPdfLib.clear();
+  G.olvidarDocs = () => { cacheDocsPdfLib.clear(); cacheFotos.clear(); };
 
   /* =========================================================
      ALIGERAR · bajar el peso del PDF sin perder hojas
@@ -885,6 +908,72 @@
     return usos;
   }
 
+  /**
+   * Dónde hay fotos en una hoja: las cajas que ocupan sus imágenes, en
+   * fracciones de la hoja como se ve. El editor lo usa para saber si lo que
+   * se corrige está en una foto (un escaneo: se rehace con su propia letra)
+   * o dibujado (letras hechas curvas: se escribe encima, nítido).
+   */
+  const cacheFotos = new Map();
+  G.fotosDeHoja = async function (pagina) {
+    const k = pagina.fuenteId + ':' + pagina.indice;
+    if (!cacheFotos.has(k)) {
+      cacheFotos.set(k, (async () => {
+        const src = await docPdfLib(pagina.fuenteId);
+        const context = src.context, hoja = src.getPage(pagina.indice);
+        const cajas = [];
+        const visitar = (contenidos, recursos, ctm0, prof) => {
+          if (prof > 12) return;
+          const res = context.lookup(recursos);
+          const xo = res instanceof PDFDict ? context.lookup(res.get(PDFName.of('XObject'))) : null;
+          let ctm = ctm0.slice();
+          const pila = [];
+          for (const bytes of contenidos) {
+            leerOrdenes(bytes, (op, a) => {
+              if (op === 'q') pila.push(ctm);
+              else if (op === 'Q') ctm = pila.length ? pila.pop() : ctm0.slice();
+              else if (op === 'cm' && a.length >= 6 && a.slice(-6).every((x) => typeof x === 'number')) ctm = porMatriz(a.slice(-6), ctm);
+              else if (op === 'Do' && a.length && a[a.length - 1] && a[a.length - 1].nombre && xo instanceof PDFDict) {
+                const obj = context.lookup(xo.get(PDFName.of(a[a.length - 1].nombre)));
+                if (!(obj instanceof PDFStream)) return;
+                const tipo = obj.dict.get(PDFName.of('Subtype'));
+                if (tipo === PDFName.of('Image')) {
+                  // la foto ocupa el cuadrado de lado 1, llevado a su sitio por la matriz
+                  const ps = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [x * ctm[0] + y * ctm[2] + ctm[4], x * ctm[1] + y * ctm[3] + ctm[5]]);
+                  cajas.push({ x0: Math.min(...ps.map((p) => p[0])), x1: Math.max(...ps.map((p) => p[0])),
+                               y0: Math.min(...ps.map((p) => p[1])), y1: Math.max(...ps.map((p) => p[1])) });
+                } else if (tipo === PDFName.of('Form')) {
+                  const mat = context.lookup(obj.dict.get(PDFName.of('Matrix')));
+                  const m = mat instanceof PDFArray && mat.size() === 6
+                    ? [0, 1, 2, 3, 4, 5].map((i) => { const v = context.lookup(mat.get(i)); return v instanceof PDFNumber ? v.asNumber() : 0; })
+                    : [1, 0, 0, 1, 0, 0];
+                  let bytes = null;
+                  try { bytes = bytesDeFlujo(obj); } catch (e) { bytes = null; }
+                  if (bytes) visitar([bytes], obj.dict.get(PDFName.of('Resources')) || recursos, porMatriz(m, ctm), prof + 1);
+                }
+              }
+            });
+          }
+        };
+        const c = hoja.node.Contents();
+        const flujos = c instanceof PDFArray ? c.asArray().map((r) => context.lookup(r)) : [c];
+        const contenidos = [];
+        for (const f of flujos) { try { if (f) contenidos.push(bytesDeFlujo(f)); } catch (e) { /* ilegible: se salta */ } }
+        visitar(contenidos, hoja.node.Resources(), [1, 0, 0, 1, 0, 0], 0);
+        const caja = hoja.getCropBox ? hoja.getCropBox() : { x: 0, y: 0, width: hoja.getWidth(), height: hoja.getHeight() };
+        return { cajas, W: caja.width, H: caja.height, OX: caja.x, OY: caja.y };
+      })().catch(() => null));
+    }
+    const r = await cacheFotos.get(k);
+    if (!r) return [];
+    const R = G.norm(pagina.giro), vis = G.cajaVisible(r.W, r.H, R);
+    const aVista = (x, y) => (R === 90 ? [y, x] : R === 180 ? [r.W - x, y] : R === 270 ? [r.H - y, r.W - x] : [x, r.H - y]);
+    return r.cajas.map((c) => {
+      const a = aVista(c.x0 - r.OX, c.y0 - r.OY), b = aVista(c.x1 - r.OX, c.y1 - r.OY);
+      return { x0: Math.min(a[0], b[0]) / vis.w, x1: Math.max(a[0], b[0]) / vis.w, y0: Math.min(a[1], b[1]) / vis.h, y1: Math.max(a[1], b[1]) / vis.h };
+    });
+  };
+
   const nombreDe = (v) => (v instanceof PDFName ? v.asString().replace(/^\//, '') : null);
   const numeroDe = (context, v) => { const x = context.lookup(v); return x instanceof PDFNumber ? x.asNumber() : null; };
 
@@ -1225,6 +1314,30 @@
   }
 
   /**
+   * Cambia el contenido de una hoja por otro y tira el viejo. Sin tirarlo, lo
+   * quitado seguiría guardado dentro del archivo (sin verse, pero ahí) y el
+   * PDF pesaría el doble. Un contenido que también use otra hoja no se tira.
+   */
+  function ponerContenido(salida, pag, nuevo) {
+    const context = salida.context;
+    const viejo = pag.node.get(PDFName.of('Contents'));
+    const refs = viejo instanceof PDFRef ? [viejo] : [];
+    const dentro = context.lookup(viejo);
+    if (dentro instanceof PDFArray) dentro.asArray().forEach((r) => { if (r instanceof PDFRef) refs.push(r); });
+    pag.node.set(PDFName.of('Contents'), context.register(context.flateStream(nuevo)));
+    if (!refs.length) return;
+    const enUso = new Set();
+    salida.getPages().forEach((otra) => {
+      if (otra.node === pag.node) return;
+      const c = otra.node.get(PDFName.of('Contents'));
+      if (c instanceof PDFRef) enUso.add(c.toString());
+      const d = context.lookup(c);
+      if (d instanceof PDFArray) d.asArray().forEach((r) => { if (r instanceof PDFRef) enUso.add(r.toString()); });
+    });
+    refs.forEach((r) => { if (!enUso.has(r.toString())) context.delete(r); });
+  }
+
+  /**
    * Quita de la hoja el texto que cae en cada recuadro (`cajas`: {x0,y0,x1,y1}
    * en puntos del PDF). Devuelve, por recuadro, si se pudo.
    */
@@ -1361,10 +1474,151 @@
       const nuevo = new Uint8Array(largo);
       o = 0;
       partes.forEach((p) => { nuevo.set(p, o); o += p.length; });
-      pag.node.set(PDFName.of('Contents'), context.register(context.flateStream(nuevo)));
+      ponerContenido(salida, pag, nuevo);
       return hecho;
     } catch (e) {
       console.warn('No se pudo quitar el texto de raíz; se tapa con un parche', e);
+      return cajas.map(() => false);
+    }
+  }
+
+  /* ---------- quitar de raíz unas letras dibujadas ----------
+     Un PDF puede traer el texto «hecho curvas»: cada letra es un dibujo
+     relleno, no una letra. Se ve igual, pero no hay texto que quitar. Lo que
+     sí hay son las órdenes que dibujan cada una, y se quitan esas: el
+     contorno de cada letra que cae dentro del recuadro corregido. Las rayas
+     de la tabla, el fondo de la celda y todo lo demás quedan como estaban.
+
+     Solo se da por hecho (y entonces no hace falta el parche) si en ese
+     recuadro no queda nada más: una foto, un formulario, un dibujo que solo
+     pasa en parte. Y nunca se quita un dibujo claro: suele ser el parche
+     blanco con que otro programa tapó lo de debajo, y quitarlo lo
+     destaparía.                                                           */
+
+  /** `cajas`: {x0,y0,x1,y1} en puntos del PDF. Devuelve, por recuadro, si quedó limpio. */
+  function quitarDibujoDeRaiz(salida, pag, cajas) {
+    const hecho = cajas.map(() => false);
+    try {
+      const context = salida.context;
+      const cont = pag.node.Contents();
+      if (!cont) return hecho;
+      const flujos = cont instanceof PDFArray ? cont.asArray().map((r) => context.lookup(r)) : [cont];
+      const trozos = flujos.map(bytesDeFlujo);
+      const b = new Uint8Array(trozos.reduce((s, t) => s + t.length + 1, 0));
+      let o = 0;
+      trozos.forEach((t) => { b.set(t, o); o += t.length; b[o++] = 10; });
+      const recursos = pag.node.Resources();
+      const xo = recursos ? context.lookup(recursos.get(PDFName.of('XObject'))) : null;
+
+      const ordenes = ordenesConSitio(b);
+      const ID = [1, 0, 0, 1, 0, 0];
+      // lo claro que es un color (0 negro, 1 blanco); null si no se sabe (un motivo, un degradado)
+      const claro = (a) => {
+        const v = a.filter((x) => x.t === 'x').map((x) => x.v);
+        if (v.length !== a.length || !v.length) return null;
+        if (v.length === 1) return v[0];
+        if (v.length === 3) return 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2];
+        if (v.length === 4) return 1 - Math.min(1, 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2] + v[3]);
+        return null;
+      };
+      let e = { ctm: ID, relleno: 0, trazo: 0 };
+      const pila = [];
+      let camino = null;
+      const quitar = [], dudas = cajas.map(() => false), quitados = cajas.map(() => 0);
+      const punto = (x, y) => {
+        const px = x * e.ctm[0] + y * e.ctm[2] + e.ctm[4], py = x * e.ctm[1] + y * e.ctm[3] + e.ctm[5];
+        if (px < camino.x0) camino.x0 = px; if (px > camino.x1) camino.x1 = px;
+        if (py < camino.y0) camino.y0 = py; if (py > camino.y1) camino.y1 = py;
+      };
+      const abrir = (d) => { if (!camino) camino = { ini: d.ini, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, recorte: false }; };
+      const num = (a, k) => (a[k] && a[k].t === 'x' ? a[k].v : 0);
+      const toca = (q, c, m) => q.x1 > c.x0 + m && q.x0 < c.x1 - m && q.y1 > c.y0 + m && q.y0 < c.y1 - m;
+      const cuadro = (m) => {                       // el cuadrado de lado 1, llevado a su sitio
+        const ps = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [x * m[0] + y * m[2] + m[4], x * m[1] + y * m[3] + m[5]]);
+        return { x0: Math.min(...ps.map((p) => p[0])), x1: Math.max(...ps.map((p) => p[0])), y0: Math.min(...ps.map((p) => p[1])), y1: Math.max(...ps.map((p) => p[1])) };
+      };
+      for (const d of ordenes) {
+        const a = d.args;
+        switch (d.op) {
+          case 'q': pila.push(Object.assign({}, e)); break;
+          case 'Q': if (pila.length) e = pila.pop(); break;
+          case 'cm': e.ctm = porMatriz([0, 1, 2, 3, 4, 5].map((k) => num(a, k)), e.ctm); break;
+          case 'g': case 'rg': case 'k': case 'sc': case 'scn': e.relleno = claro(a); break;
+          case 'G': case 'RG': case 'K': case 'SC': case 'SCN': e.trazo = claro(a); break;
+          case 'cs': e.relleno = 0; break;
+          case 'CS': e.trazo = 0; break;
+          case 'm': case 'l': abrir(d); punto(num(a, 0), num(a, 1)); break;
+          case 'c': abrir(d); punto(num(a, 0), num(a, 1)); punto(num(a, 2), num(a, 3)); punto(num(a, 4), num(a, 5)); break;
+          case 'v': case 'y': abrir(d); punto(num(a, 0), num(a, 1)); punto(num(a, 2), num(a, 3)); break;
+          case 're': {
+            abrir(d);
+            const x = num(a, 0), y = num(a, 1), w = num(a, 2), h = num(a, 3);
+            punto(x, y); punto(x + w, y); punto(x, y + h); punto(x + w, y + h);
+            break;
+          }
+          case 'h': abrir(d); break;
+          case 'W': case 'W*': if (camino) camino.recorte = true; break;
+          case 'f': case 'F': case 'f*': case 'B': case 'B*': case 'b': case 'b*': case 'S': case 's': case 'n': {
+            const q = camino;
+            camino = null;
+            if (!q || d.op === 'n' || !(q.x1 >= q.x0)) break;
+            const conRelleno = !/^[Ss]$/.test(d.op), conTrazo = /^[BbSs]/.test(d.op);
+            const tono = Math.max(conRelleno ? (e.relleno == null ? 2 : e.relleno) : 0, conTrazo ? (e.trazo == null ? 2 : e.trazo) : 0);
+            const an = q.x1 - q.x0, al = q.y1 - q.y0, cx = (q.x0 + q.x1) / 2, cy = (q.y0 + q.y1) / 2;
+            let mio = -1;
+            cajas.forEach((c, ci) => {
+              const m = Math.max(0.8, (c.y1 - c.y0) * 0.15);
+              const dentro = cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1 &&
+                q.x0 >= c.x0 - m && q.x1 <= c.x1 + m && q.y0 >= c.y0 - m && q.y1 <= c.y1 + m;
+              if (dentro && !q.recorte && tono < 0.85) { if (mio < 0) mio = ci; return; }
+              if (!toca(q, c, 0.4)) return;
+              // lo que pasa por el recuadro sin ser suyo: el fondo de la celda o una raya no estorban
+              const fondo = q.x0 <= c.x0 && q.x1 >= c.x1 && q.y0 <= c.y0 && q.y1 >= c.y1;
+              const raya = Math.min(an, al) < 1.5 && Math.max(an, al) > Math.max(c.x1 - c.x0, c.y1 - c.y0);
+              if (!fondo && !raya && !(dentro && tono >= 0.85)) dudas[ci] = true;
+            });
+            if (mio >= 0) { quitar.push({ ini: q.ini, fin: d.fin }); quitados[mio]++; }
+            break;
+          }
+          case 'Do': {
+            // una foto o un formulario encima del recuadro: lo que lleve dentro no se puede quitar aquí
+            let caja = null;
+            try {
+              const obj = xo instanceof PDFDict && a[0] && a[0].t === 'n' ? context.lookup(xo.get(PDFName.of(a[0].v))) : null;
+              if (obj instanceof PDFStream && obj.dict.get(PDFName.of('Subtype')) === PDFName.of('Image')) caja = cuadro(e.ctm);
+              else if (obj instanceof PDFStream) {
+                // un formulario: lo que ocupa es su caja, llevada a su sitio por su matriz y la de la hoja
+                const lista = (k) => { const v = context.lookup(obj.dict.get(PDFName.of(k))); return v instanceof PDFArray ? v.asArray().map((x) => { const y = context.lookup(x); return y instanceof PDFNumber ? y.asNumber() : 0; }) : null; };
+                const bb = lista('BBox'), mat = lista('Matrix');
+                if (bb && bb.length === 4) {
+                  const m = porMatriz(mat && mat.length === 6 ? mat : ID, e.ctm);
+                  caja = cuadro(porMatriz([bb[2] - bb[0], 0, 0, bb[3] - bb[1], bb[0], bb[1]], m));
+                }
+              }
+            } catch (err) { caja = null; }
+            cajas.forEach((c, ci) => { if (!caja || toca(caja, c, 0.4)) dudas[ci] = true; });
+            break;
+          }
+          case 'sh': cajas.forEach((c, ci) => { dudas[ci] = true; }); break;
+          default: break;
+        }
+      }
+      if (!quitar.length) return hecho;
+      const partes = [];
+      let desde = 0;
+      quitar.sort((p, q) => p.ini - q.ini).forEach((t) => {
+        if (t.ini < desde) return;
+        partes.push(b.subarray(desde, t.ini));
+        desde = t.fin;
+      });
+      partes.push(b.subarray(desde));
+      const nuevo = new Uint8Array(partes.reduce((s, p) => s + p.length + 1, 0));
+      o = 0;
+      partes.forEach((p) => { nuevo.set(p, o); o += p.length; nuevo[o++] = 32; });
+      ponerContenido(salida, pag, nuevo);
+      return cajas.map((c, ci) => quitados[ci] > 0 && !dudas[ci]);
+    } catch (e) {
+      console.warn('No se pudieron quitar las letras dibujadas; se tapan con un parche', e);
       return cajas.map(() => false);
     }
   }
@@ -1635,6 +1889,18 @@
         });
         quitarTextoDeRaiz(salida, pag, cajas).forEach((ok, k) => { if (ok) sinParche.add(deRaiz[k]); });
         if (opciones.alQuitarDeRaiz) opciones.alQuitarDeRaiz(i, deRaiz.length, sinParche.size);
+      }
+
+      // y las letras dibujadas (hechas curvas) que se corrigieron: se quitan sus trazos
+      const dibujos = aligerar.has(i) ? [] : est.sellos.filter((s) => s.rol === 'texto' && s.dibujo && s.tapa);
+      if (dibujos.length) {
+        const cajas = dibujos.map((s) => {
+          const R0 = G.norm(s.giroAl == null ? R : s.giroAl), v0 = G.cajaVisible(W, H, R0), q = s.dibujo;
+          const a = G.aPuntoPdf(q.x * v0.w, q.y * v0.h, W, H, R0), b = G.aPuntoPdf((q.x + q.w) * v0.w, (q.y + q.h) * v0.h, W, H, R0);
+          return { x0: Math.min(a.x, b.x) + OX, x1: Math.max(a.x, b.x) + OX, y0: Math.min(a.y, b.y) + OY, y1: Math.max(a.y, b.y) + OY };
+        });
+        quitarDibujoDeRaiz(salida, pag, cajas).forEach((ok, k) => { if (ok) sinParche.add(dibujos[k]); });
+        if (opciones.alQuitarDeRaiz) opciones.alQuitarDeRaiz(i, dibujos.length, dibujos.filter((s) => sinParche.has(s)).length);
       }
 
       // lo leído de un escaneo, como texto invisible encima («Hacer buscables»)

@@ -1728,6 +1728,10 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
 .capa-editar .trozo{ position:absolute; box-sizing:content-box; margin:-2px; padding:2px; border-radius:3px; }
 .capa-editar .trozo.leido{ cursor:text; outline:1px dashed rgba(47,111,237,.38); }
 .capa-editar .trozo.leido:hover{ outline:2px solid #2f6fed; background:rgba(47,111,237,.10); }
+/* lo que se ve pero no es texto (letras dibujadas, una foto, un relleno): se pulsa igual */
+.capa-editar .trozo.leido.suelto{ outline:1px dotted rgba(47,111,237,.45); }
+.capa-editar .trozo.leido.suelto:hover{ outline:2px solid #2f6fed; }
+.capa-editar .trozo.leido.fino{ margin:-5px -2px; padding:5px 2px; }
 .capa-editar .trozo.puesto{ cursor:move; }
 .capa-editar .trozo.puesto:hover{ outline:1px solid rgba(224,83,47,.7); }
 .capa-editar .trozo.puesto.elegido{ outline:2px solid #e0532f; }
