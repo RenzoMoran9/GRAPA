@@ -1174,7 +1174,13 @@
       const nom = document.createElement('span');
       nom.className = 'doc-nombre';
       nom.textContent = f.nombreCompleto;
-      nom.title = f.nombreCompleto;
+      // el nombre se corta: un clic lo enseña entero, para copiarlo
+      nom.title = f.nombreCompleto + ' · Clic: ver el nombre completo y copiarlo';
+      nom.tabIndex = 0;
+      nom.setAttribute('role', 'button');
+      const verNombre = () => { if (tableroActivo) abrirFichaNombre(tableroActivo.id, nom); };
+      nom.addEventListener('click', verNombre);
+      nom.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); verNombre(); } });
       const meta = document.createElement('span');
       meta.className = 'doc-meta';
       meta.textContent = cuenta + (cuenta === 1 ? ' pág.' : ' págs.');
@@ -3022,7 +3028,8 @@
         + (estado === 'vacio' ? 'en blanco' : estado === 'guardado' ? 'guardado'
           : estado === 'nuevo' ? 'nunca guardado' : 'con cambios sin guardar')
         + (d.paginas.length ? ` · ${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'}` : '')
-        + (n <= 10 ? ` · Alt+${n % 10}` : '');
+        + (n <= 10 ? ` · Alt+${n % 10}` : '')
+        + ' · Clic derecho: ver el nombre completo y copiarlo';
 
       const punto = document.createElement('span');
       punto.className = 'tablero-punto';
@@ -3151,6 +3158,144 @@
    * que se está viendo: con diez abiertos, los nombres de las pestañas se
    * cortan y no dicen qué falta en cada uno.
    */
+  /* ---------- el nombre completo de un tablero, para leerlo y copiarlo ----------
+     En la pestaña y en la lista de documentos el nombre se corta. Con clic
+     derecho en la pestaña (o un clic en la que ya está abierta, o en el nombre
+     de un documento) sale entero, con el de cada documento, y se copia. */
+  function abrirFichaNombre(id, ancla) {
+    const t = tableros.find((x) => x.id === id);
+    if (!t) return;
+    cerrarMenuTodos();
+    cerrarMenuSinGuardar();
+    let ficha = $('#fichaNombre');
+    if (!ficha) {
+      ficha = document.createElement('div');
+      ficha.id = 'fichaNombre';
+      ficha.className = 'ficha-nombre';
+      ficha.setAttribute('role', 'dialog');
+      ficha.setAttribute('aria-label', 'Nombre completo');
+      document.body.appendChild(ficha);
+    }
+    const d = datosDe(t);
+    const nombre = nombreTablero(t);
+    ficha.innerHTML = '';
+    const el = (tag, clase, texto) => {
+      const e = document.createElement(tag);
+      if (clase) e.className = clase;
+      if (texto != null) e.textContent = texto;
+      return e;
+    };
+    /** Un botón que copia ese texto y lo dice. */
+    const copiar = (texto, conTexto) => {
+      const b = el('button', 'btn btn-mini fn-copiar');
+      b.type = 'button';
+      const pintarB = (hecho) => {
+        b.innerHTML = icono(hecho ? 'check' : 'duplicar') + (conTexto ? (hecho ? ' Copiado' : ' Copiar') : '');
+        b.title = hecho ? 'Copiado' : 'Copiar: ' + texto;
+        b.setAttribute('aria-label', hecho ? 'Copiado' : 'Copiar ' + texto);
+        b.classList.toggle('hecho', hecho);
+      };
+      pintarB(false);
+      b.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        let ok = false;
+        try { await navigator.clipboard.writeText(texto); ok = true; } catch (e) {
+          // sin permiso del navegador: se copia por el camino antiguo
+          const tmp = el('textarea');
+          tmp.value = texto;
+          tmp.setAttribute('readonly', '');
+          tmp.style.cssText = 'position:fixed;left:-9999px;top:0';
+          ficha.appendChild(tmp);
+          tmp.select();
+          try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+          tmp.remove();
+        }
+        if (!ok) { G.aviso('No se pudo copiar. Selecciona el nombre y usa Ctrl+C.', 'error'); return; }
+        pintarB(true);
+        setTimeout(() => { if (b.isConnected) pintarB(false); }, 1600);
+      });
+      return b;
+    };
+
+    const cab = el('div', 'fn-cab');
+    cab.append(el('span', 'fn-etiqueta', 'Nombre del tablero'));
+    const cerrar = el('button', 'btn btn-fantasma fn-cerrar');
+    cerrar.type = 'button';
+    cerrar.innerHTML = icono('cerrar');
+    cerrar.setAttribute('aria-label', 'Cerrar');
+    cerrar.addEventListener('click', cerrarFichaNombre);
+    cab.append(cerrar);
+    // en una caja de texto: se ve entero, y se puede seleccionar solo una parte
+    const caja = el('textarea', 'fn-nombre');
+    caja.readOnly = true;
+    caja.rows = 1;
+    caja.value = nombre;
+    caja.spellcheck = false;
+    caja.setAttribute('aria-label', 'Nombre del tablero');
+    const fila = el('div', 'fn-fila');
+    fila.append(caja, copiar(nombre, true));
+    ficha.append(cab, fila);
+
+    // los documentos que tiene, con su nombre de archivo entero
+    const vistos = new Set();
+    const docs = [];
+    d.paginas.forEach((p) => {
+      if (vistos.has(p.fuenteId)) return;
+      vistos.add(p.fuenteId);
+      const f = E.fuentes.get(p.fuenteId);
+      if (f) docs.push(f);
+    });
+    if (docs.length) {
+      ficha.append(el('span', 'fn-etiqueta', docs.length === 1 ? 'Su documento' : `Sus ${docs.length} documentos`));
+      const lista = el('ul', 'fn-docs');
+      docs.forEach((f) => {
+        const li = el('li');
+        const punto = el('span', 'punto-color');
+        punto.style.background = f.color;
+        li.append(punto, el('span', 'fn-doc', f.nombreCompleto), copiar(f.nombreCompleto, false));
+        lista.append(li);
+      });
+      ficha.append(lista);
+    }
+
+    ficha.hidden = false;
+    // la caja crece hasta enseñar el nombre entero
+    caja.style.height = 'auto';
+    caja.style.height = caja.scrollHeight + 'px';
+    // debajo de lo que se tocó, sin salirse de la ventana
+    const r = (ancla || $('#tableros')).getBoundingClientRect();
+    const w = ficha.offsetWidth, h = ficha.offsetHeight;
+    const x = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    let y = r.bottom + 6;
+    if (y + h > window.innerHeight - 8) y = Math.max(8, r.top - h - 6);
+    ficha.style.left = x + 'px';
+    ficha.style.top = y + 'px';
+    // el nombre ya seleccionado: Ctrl+C también sirve
+    caja.focus({ preventScroll: true });
+    caja.select();
+  }
+  function cerrarFichaNombre() {
+    const f = $('#fichaNombre');
+    if (!f) return;
+    // el foco no se queda en la caja escondida: si no, los atajos (F, V…) dejan de responder
+    if (f.contains(document.activeElement)) document.activeElement.blur();
+    f.hidden = true;
+  }
+  /** La pestaña con la que se cerró la ficha: su clic no la vuelve a abrir. */
+  let fichaRecienCerrada = null;
+  document.addEventListener('mousedown', (ev) => {
+    const f = $('#fichaNombre');
+    if (!f || f.hidden || f.contains(ev.target)) return;
+    const pest = ev.target.closest && ev.target.closest('.tablero.activo');
+    fichaRecienCerrada = pest && ev.button === 0 ? pest.dataset.id : null;
+    cerrarFichaNombre();
+  }, true);
+  document.addEventListener('keydown', (ev) => {
+    const f = $('#fichaNombre');
+    if (ev.key === 'Escape' && f && !f.hidden) { ev.stopPropagation(); cerrarFichaNombre(); }
+  }, true);
+  window.addEventListener('resize', cerrarFichaNombre);
+
   function abrirMenuTodos() {
     const m = $('#menuTodosTableros');
     m.innerHTML = '';
@@ -3569,7 +3714,20 @@
       const cerrar = ev.target.closest('.tablero-cerrar');
       const pest = ev.target.closest('.tablero');
       if (cerrar && pest) { ev.stopPropagation(); cerrarTablero(pest.dataset.id); return; }
+      // un clic en la que ya está abierta enseña su nombre entero (y otro, lo cierra)
+      if (pest && pest.classList.contains('activo')) {
+        if (fichaRecienCerrada === pest.dataset.id) { fichaRecienCerrada = null; return; }
+        abrirFichaNombre(pest.dataset.id, pest);
+        return;
+      }
       if (pest) activarTablero(pest.dataset.id);
+    });
+    // clic derecho en cualquier pestaña: su nombre entero, para copiarlo
+    barra.addEventListener('contextmenu', (ev) => {
+      const pest = ev.target.closest('.tablero');
+      if (!pest) return;
+      ev.preventDefault();
+      abrirFichaNombre(pest.dataset.id, pest);
     });
     barra.addEventListener('keydown', (ev) => {
       const pest = ev.target.closest('.tablero');
