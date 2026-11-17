@@ -1149,6 +1149,38 @@ const PRUEBAS = {
     await page.waitForFunction(() => document.querySelector('.barra-superior').getBoundingClientRect().bottom <= 0, null, { timeout: 3000 });
   },
 
+  async 'nombre completo: la pestaña y los documentos lo enseñan entero y se copia'({ page }) {
+    const largo = 'INFORME N° 0457-2026-GRA-OA-ABASTECIMIENTO - ADQUISICION DE UTILES DE ESCRITORIO PARA LAS OFICINAS';
+    await abrir(page, [largo, 2], ['Cotizacion A', 1]);
+    const corto = await page.textContent('.tablero.activo .tablero-nombre');
+    afirmar(corto.length < largo.length, 'en la pestaña el nombre va cortado', corto);
+    // clic derecho en la pestaña: el nombre entero, ya seleccionado, y sus documentos
+    await page.click('.tablero.activo', { button: 'right' });
+    await page.waitForSelector('#fichaNombre:not([hidden])');
+    afirmar(await page.inputValue('.fn-nombre') === largo, 'el nombre entero', await page.inputValue('.fn-nombre'));
+    const sel = await page.evaluate(() => { const t = document.querySelector('.fn-nombre'); return [document.activeElement === t, t.selectionEnd - t.selectionStart]; });
+    afirmar(sel[0] && sel[1] === largo.length, 'ya seleccionado, listo para Ctrl+C', sel);
+    const docs = await page.$$eval('.fn-doc', (xs) => xs.map((x) => x.textContent));
+    afirmar(docs.length === 2 && docs[0] === largo + '.pdf' && docs[1] === 'Cotizacion A.pdf', 'los nombres enteros de sus documentos', docs);
+    await page.click('.fn-fila .fn-copiar');
+    await page.waitForFunction(() => document.querySelector('.fn-fila .fn-copiar').textContent.includes('Copiado'));
+    // Esc la cierra, y los atajos siguen respondiendo
+    await page.keyboard.press('Escape');
+    afirmar(await page.isHidden('#fichaNombre'), 'Esc la cierra');
+    await page.keyboard.press('v');
+    await page.waitForSelector('#lector:not([hidden])');
+    await page.keyboard.press('Escape');
+    // un clic en la pestaña abierta también la enseña; otro, la cierra
+    await page.click('.tablero.activo');
+    afirmar(await page.isVisible('#fichaNombre'), 'un clic en la pestaña abierta la enseña');
+    await page.click('.tablero.activo');
+    afirmar(await page.isHidden('#fichaNombre'), 'otro clic la cierra');
+    // y desde el nombre de un documento, en el panel
+    await page.click('.riel-btn[data-va="docs"]');
+    await page.click('#listaDocs .doc-nombre');
+    afirmar(await page.isVisible('#fichaNombre') && await page.inputValue('.fn-nombre') === largo, 'también desde la lista de documentos');
+  },
+
   async 'modo enfocado: el recorrido guiado señala dónde quedó cada cosa'({ page }) {
     await conEnfocadoDeEntrada(page);
     await page.evaluate(() => window.Grapa.guia.empezar());

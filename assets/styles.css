@@ -1986,3 +1986,39 @@ body.enfocado.fijo-vistas .enf-acciones .enf-sep{display:none}
 /* con el riel fijo, el cajón empieza bajo las pestañas: no las tapa */
 body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .panel .panel-vistas{top:var(--tableros-alto);border-top:1px solid var(--borde);border-top-right-radius:14px}
 body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:calc(var(--tableros-alto) + 9px)}
+
+/* ---------- el nombre completo de un tablero, para copiarlo ----------
+   Sale con clic derecho en una pestaña, un clic en la que está abierta o en
+   el nombre de un documento del panel. */
+.ficha-nombre{
+  position:fixed;z-index:85;width:min(440px,calc(100vw - 16px));
+  display:flex;flex-direction:column;gap:8px;padding:12px 12px 12px 14px;
+  background:var(--fondo-2);border:1px solid var(--borde);border-radius:12px;box-shadow:var(--sombra-fuerte);
+}
+.ficha-nombre[hidden]{display:none}
+.fn-cab{display:flex;align-items:center;justify-content:space-between;margin-bottom:-4px}
+.fn-cerrar{padding:3px 5px;min-height:24px}
+.fn-cerrar .ico{width:14px;height:14px}
+.fn-etiqueta{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--texto-3)}
+.fn-fila{display:flex;align-items:flex-start;gap:8px}
+.fn-nombre{
+  flex:1;min-width:0;resize:none;overflow:hidden;
+  padding:7px 9px;border:1px solid var(--borde);border-radius:var(--radio-s);
+  background:var(--fondo);color:var(--texto);font:600 14px/1.4 var(--fuente);
+  word-break:break-word;
+}
+.fn-nombre:focus{outline:2px solid var(--acento-tenue);border-color:var(--acento)}
+.fn-copiar{flex:none;gap:5px;border:1px solid var(--borde);background:var(--fondo-2);color:var(--texto)}
+.fn-copiar .ico{width:14px;height:14px}
+.fn-copiar.hecho{color:var(--verde);border-color:var(--verde)}
+.fn-fila .fn-copiar{min-height:34px;padding:0 11px}
+.fn-docs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:240px;overflow-y:auto}
+.fn-docs li{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-top:1px solid var(--borde-suave)}
+.fn-docs li:first-child{border-top:0}
+.fn-docs .punto-color{margin-top:6px;flex:none}
+.fn-doc{flex:1;min-width:0;font-size:13px;line-height:1.4;word-break:break-word;user-select:text;-webkit-user-select:text}
+.fn-docs .fn-copiar{padding:0 7px;min-height:26px}
+/* el nombre de un documento en el panel: se toca para verlo entero */
+.doc-nombre[role="button"]{cursor:pointer;border-radius:4px}
+.doc-nombre[role="button"]:hover{text-decoration:underline;text-decoration-color:var(--texto-3);text-underline-offset:3px}
+.doc-nombre[role="button"]:focus-visible{outline:2px solid var(--acento);outline-offset:2px}

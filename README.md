@@ -133,6 +133,11 @@ avanzar con todos en paralelo.
 - **Nuevo tablero** (el **＋** de las pestañas o *Archivo ▸ Nuevo tablero*) abre
   otro en blanco; si ya tienes uno en blanco, te lleva a ese. **Alt+1 … Alt+9**
   cambian de uno a otro, y **Alt+0** va al décimo.
+- **El nombre completo, para copiarlo:** en la pestaña el nombre va cortado.
+  Con **clic derecho en la pestaña** (o un clic en la que ya está abierta, o en
+  el nombre de un documento del panel *Documentos*) sale una ficha con el
+  nombre entero, ya seleccionado, y el de cada uno de sus documentos, cada
+  uno con su botón **Copiar**.
 - **Con muchas pestañas** se estrechan y la tira se desplaza (también con la
   rueda del ratón); la pestaña que ves siempre queda a la vista y un
   degradado avisa de que hay más a un lado.
