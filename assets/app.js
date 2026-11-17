@@ -188,9 +188,13 @@
 
   G.cargando = function (activo, texto) {
     const capa = $('#cargando');
+    const antes = contadorCarga;
     contadorCarga = Math.max(0, contadorCarga + (activo ? 1 : -1));
     if (texto) $('#cargandoTexto').textContent = texto;
     capa.hidden = contadorCarga === 0;
+    // un trabajo largo: que siga aunque la pestaña quede detrás de otra ventana
+    if (!antes && contadorCarga) G.ocupado(true);
+    if (antes && !contadorCarga) G.ocupado(false);
   };
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
@@ -438,6 +442,35 @@
       });
     });
   }, { rootMargin: '400px 0px' });
+
+  /**
+   * Con la pestaña escondida (otra ventana u otro programa delante) el
+   * navegador deja de avisar qué hojas se ven, y las miniaturas se quedaban
+   * girando hasta volver. Escondida, se dibujan igual las de la zona que se
+   * estaba mirando y algo más abajo: al volver ya están.
+   */
+  function adelantarMiniaturas() {
+    if (!document.hidden) return;
+    const alto = window.innerHeight;
+    $$('#rejilla .pag').forEach((el) => {
+      if (!el.querySelector('.pag-cargando')) return;          // ya tiene su imagen
+      const c = el.getBoundingClientRect();
+      if (c.bottom < -600 || c.top > alto + 2000) return;      // lejos de lo que se veía
+      const pagina = E.paginas.find((p) => p.uid === el.dataset.uid);
+      if (!pagina) return;
+      observador.unobserve(el);
+      G.miniatura(pagina, G.NIVELES_MINI[0], () => (el.isConnected ? 'ya' : false)).then((url) => {
+        const img = el.querySelector('.mini');
+        if (img && !img.src.startsWith('data:')) { img.src = url; img.style.display = 'block'; }
+        const hueco = el.querySelector('.pag-cargando');
+        if (hueco) hueco.remove();
+      }).catch(() => { if (el.isConnected) observador.observe(el); });
+    });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) adelantarMiniaturas();
+    else afinarVisibles();   // al volver, con el detalle que pida el zoom
+  });
 
   function nodoSellos(pagina, anchoPx) {
     const capa = document.createElement('div');
@@ -989,6 +1022,8 @@
     }
     $('#vacio').hidden = E.paginas.length > 0;
     pintarBarraPaquete();
+    // escondida, nadie avisa de qué hojas se ven: se adelantan las miniaturas
+    if (document.hidden) queueMicrotask(adelantarMiniaturas);
 
     const grupos = paquetesEnOrden();
     const visibles = hojasVisibles().length;
@@ -3523,6 +3558,8 @@
   }
 
   /** El título del tablero, su chip de estado y la barra de abajo. */
+  // core.js pone ⏳ / ✓ delante del título mientras la pestaña está escondida
+  G.pintarTitulo = () => pintarCabeceraYEstado();
   function pintarCabeceraYEstado() {
     const t = tableroActivo;
     if (!t || !$('#tituloTablero')) return;
@@ -3533,7 +3570,7 @@
     // «●» delante, como los editores, si algo de esta ventana está sin guardar:
     // se ve en la pestaña del navegador aunque Pdflash no esté al frente
     const pendientes = tableros.filter(sinGuardar).length;
-    document.title = (pendientes ? '● ' : '')
+    document.title = (G.marcaTitulo ? G.marcaTitulo() : '') + (pendientes ? '● ' : '')
       + (estado === 'vacio' ? 'Pdflash · Taller de PDF' : nombre + ' · Pdflash')
       + (pendientes > 1 ? ` (${pendientes} sin guardar)` : '');
 
@@ -6603,6 +6640,7 @@
     const sin = escaneadasPorLeer();
     if (!sin.length) { G.aviso('No hay hojas escaneadas por leer.', 'ok'); return; }
     const tarea = (lecturaEscaneos.corriendo = { cancelada: false });
+    G.ocupado(true);   // que siga aunque la pestaña quede detrás de otra ventana
     const dueno = tableroActivo;              // se puede cambiar de tablero mientras lee
     Object.assign(lecturaEscaneos, { hechas: 0, total: sin.length, estado: '' });
     pintarEscaneadas();
@@ -6674,6 +6712,7 @@
       G.aviso('No se pudo poner el texto en las hojas: ' + e.message, 'error');
     } finally {
       lecturaEscaneos.corriendo = null;
+      G.ocupado(false);
       lecturaEscaneos.estado = '';
       pintarEscaneadas();
     }
@@ -7663,6 +7702,7 @@
     if (ubicacion.corriendo) { ubicacion.corriendo.cancelada = true; return; }
     if (!E.paginas.length) { G.aviso('Primero abre el expediente.', 'error'); return; }
     const tarea = (ubicacion.corriendo = { cancelada: false });
+    G.ocupado(true);   // que siga aunque la pestaña quede detrás de otra ventana
     const dueno = tableroActivo;     // se puede cambiar de tablero mientras lee
     const lista = E.paginas.slice();
     const continuaciones = new Set();
@@ -7720,6 +7760,7 @@
     } finally {
       if (bajaEstado) bajaEstado();
       ubicacion.corriendo = null;
+      G.ocupado(false);
       boton.textContent = 'Ubicar y marcar los Formatos 1 y 5';
       $('#formatosProgreso').hidden = true;
     }
@@ -7818,6 +7859,7 @@
     if (revision.corriendo) { revision.corriendo.cancelada = true; return; }
     if (!E.paginas.length) return;
     const tarea = (revision.corriendo = { cancelada: false });
+    G.ocupado(true);   // que siga aunque la pestaña quede detrás de otra ventana
     const estado = $('#revisarEstado');
     pintarRevision();
     const lista = E.paginas.slice();
@@ -7851,6 +7893,7 @@
       }
     } finally {
       revision.corriendo = null;
+      G.ocupado(false);
     }
     pintar();
     if (tarea.cancelada) {

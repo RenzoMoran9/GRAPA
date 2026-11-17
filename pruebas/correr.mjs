@@ -1149,6 +1149,58 @@ const PRUEBAS = {
     await page.waitForFunction(() => document.querySelector('.barra-superior').getBoundingClientRect().bottom <= 0, null, { timeout: 3000 });
   },
 
+  async 'pestaña escondida: abrir, revisar y armar el PDF siguen sin esperar a volver'({ page }) {
+    // Lo que hace Chrome con una pestaña detrás de otra ventana: no pinta
+    // (sin cuadros de animación), no avisa de qué se ve y estira los relojes
+    // (aquí, 30 s cada uno: más que lo que se espera cada paso de la prueba).
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('prueba-escondida')) return;
+      Object.defineProperty(Document.prototype, 'hidden', { get: () => true, configurable: true });
+      Object.defineProperty(Document.prototype, 'visibilityState', { get: () => 'hidden', configurable: true });
+      const reloj = window.setTimeout;
+      window.setTimeout = (fn, ms, ...a) => reloj(fn, (ms || 0) + 30000, ...a);
+      window.requestAnimationFrame = () => 0;
+      window.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } };
+      localStorage.setItem('grapa.avisar-exportar', '0');
+    });
+    await page.evaluate(() => sessionStorage.setItem('prueba-escondida', '1'));
+    await page.reload();
+    await page.waitForFunction(() => window.Grapa && window.Grapa.pintar);
+    afirmar(await page.evaluate(() => document.hidden), 'la pestaña figura escondida');
+    const candado = () => page.evaluate(async () => (await navigator.locks.query()).held.some((l) => l.name === 'pdflash-trabajando'));
+
+    // abrir: las miniaturas de lo que se estaba viendo se dibujan igual
+    await abrir(page, ['Expediente', 12]);
+    await page.waitForFunction(() => document.querySelectorAll('#rejilla .pag').length === 12
+      && !document.querySelector('#rejilla .pag:nth-child(-n+4) .pag-cargando'), null, { timeout: 20000 });
+    afirmar(await page.evaluate(() => document.title.startsWith('✓')), 'el título avisa que terminó', await page.title());
+
+    // revisar
+    await page.evaluate(() => { document.querySelector('.riel-btn[data-va="revisar"]').click(); document.querySelector('#btnRevisar').click(); });
+    await page.waitForFunction(() => /Todo en orden|Revisadas/.test(document.querySelector('#revisarEstado').textContent), null, { timeout: 20000 });
+    afirmar(!(await candado()), 'al terminar suelta el candado');
+
+    // armar el PDF: mientras trabaja tiene el candado y el ⏳ en el título
+    await page.evaluate(() => {
+      // lo que se ve mientras está la capa de «Armando el PDF…»: el título y el candado
+      window.__durante = { titulos: [], candados: [] };
+      const capa = document.querySelector('#cargando');
+      new MutationObserver(() => {
+        if (capa.hidden) return;
+        window.__durante.titulos.push(document.title);
+        window.__durante.candados.push(navigator.locks.query().then((q) => q.held.some((l) => l.name === 'pdflash-trabajando')));
+      }).observe(capa, { attributes: true, attributeFilter: ['hidden'] });
+    });
+    const descarga = page.waitForEvent('download', { timeout: 25000 });
+    await page.evaluate(() => document.querySelector('#btnGuardar').click());
+    await descarga;
+    const durante = await page.evaluate(async () => ({ titulos: window.__durante.titulos, candados: await Promise.all(window.__durante.candados) }));
+    afirmar(durante.titulos.length && durante.titulos.every((t) => t.startsWith('⏳')), 'el título dice que está trabajando', durante);
+    afirmar(durante.candados.length && durante.candados.every(Boolean), 'mientras arma el PDF, la pestaña no se deja congelar', durante);
+    await page.waitForFunction(() => document.querySelector('#cargando').hidden, null, { timeout: 5000 });
+    afirmar(!(await candado()), 'y lo suelta al terminar');
+  },
+
   async 'nombre completo: la pestaña y los documentos lo enseñan entero y se copia'({ page }) {
     const largo = 'INFORME N° 0457-2026-GRA-OA-ABASTECIMIENTO - ADQUISICION DE UTILES DE ESCRITORIO PARA LAS OFICINAS';
     await abrir(page, [largo, 2], ['Cotizacion A', 1]);

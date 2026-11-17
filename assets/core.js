@@ -14,6 +14,51 @@
           setStrokingColor, setLineWidth, setLineCap, setLineJoin, LineCapStyle, LineJoinStyle,
           moveTo, lineTo, stroke } = PDFLib;
 
+  /* ---------- que el trabajo no se duerma con la pestaña escondida ----------
+     pdf.js dibuja cada hoja por tramos y espera al «siguiente cuadro» de la
+     pantalla (requestAnimationFrame) entre uno y otro. Con la pestaña detrás
+     de otra ventana o de otro programa el navegador no da cuadros, y TODO lo
+     que dibuja hojas se quedaba parado hasta volver: las miniaturas, revisar,
+     leer escaneos, bajar el peso. Escondida, el siguiente cuadro llega por un
+     mensaje entre puertos, que nadie frena; a la vista, todo sigue igual. Y si
+     se esconde con un cuadro pedido, ese también pasa por mensaje. */
+  (function () {
+    const raf = window.requestAnimationFrame && window.requestAnimationFrame.bind(window);
+    const caf = window.cancelAnimationFrame && window.cancelAnimationFrame.bind(window);
+    if (!raf || !caf) return;
+    const pendientes = new Map();   // id → { cb, nativo }
+    let siguiente = 1;
+    const porMensaje = (id) => {
+      const canal = new MessageChannel();
+      canal.port1.onmessage = () => {
+        canal.port1.close();
+        const p = pendientes.get(id);
+        if (!p) return;
+        pendientes.delete(id);
+        p.cb(performance.now());
+      };
+      canal.port2.postMessage(0);
+    };
+    window.requestAnimationFrame = function (cb) {
+      const id = siguiente++;
+      const p = { cb, nativo: 0 };
+      pendientes.set(id, p);
+      if (document.hidden) porMensaje(id);
+      else p.nativo = raf((t) => { if (!pendientes.has(id)) return; pendientes.delete(id); cb(t); });
+      return id;
+    };
+    window.cancelAnimationFrame = function (id) {
+      const p = pendientes.get(id);
+      if (!p) { caf(id); return; }
+      pendientes.delete(id);
+      if (p.nativo) caf(p.nativo);
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) return;
+      pendientes.forEach((p, id) => { if (p.nativo) { caf(p.nativo); p.nativo = 0; porMensaje(id); } });
+    });
+  })();
+
   /* ---------- configuración de pdf.js ---------- */
   const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
   G.pdfjsLib = pdfjsLib;
@@ -1166,10 +1211,67 @@
    * pintar, así que no se espera más de 60 ms.
    */
   G.respiro = () => new Promise((listo) => {
+    // Con la pestaña escondida (otra ventana u otro programa delante) no hay
+    // nada que pintar, y Chrome estira los relojes: uno por segundo, y pasados
+    // cinco minutos, uno por MINUTO. Armar un PDF se quedaba parado hasta
+    // volver. Un mensaje entre dos puertos no lo frena nadie.
+    if (document.hidden) { pasarTurno().then(listo); return; }
     let hecho = false;
-    const fin = () => { if (!hecho) { hecho = true; listo(); } };
+    const fin = () => { if (!hecho) { hecho = true; document.removeEventListener('visibilitychange', fin); listo(); } };
     requestAnimationFrame(() => setTimeout(fin, 0));
     setTimeout(fin, 60);
+    // si se esconde mientras espera, no se queda esperando un reloj frenado
+    document.addEventListener('visibilitychange', fin);
+  });
+
+  /** Deja pasar lo que está en cola (clics, mensajes) sin reloj de por medio. */
+  function pasarTurno() {
+    return new Promise((listo) => {
+      const canal = new MessageChannel();
+      canal.port1.onmessage = () => { canal.port1.close(); listo(); };
+      canal.port2.postMessage(0);
+    });
+  }
+  G.pasarTurno = pasarTurno;
+
+  /* =========================================================
+     TRABAJO LARGO CON LA PESTAÑA ESCONDIDA
+     Mientras Pdflash trabaja (abrir, revisar, leer escaneos, armar el PDF)
+     se queda con un «candado» del navegador: Chrome no congela una pestaña
+     que lo tiene, y así sigue aunque esté detrás de otra ventana. Y el
+     título de la pestaña lo dice: ⏳ mientras trabaja, ✓ cuando terminó,
+     hasta que se vuelve a ella.
+     ========================================================= */
+  let ocupados = 0;
+  let soltarCandado = null;
+  let pidiendoCandado = false;
+  let terminoEscondida = false;
+  function pedirCandado() {
+    if (soltarCandado || pidiendoCandado || !navigator.locks || !navigator.locks.request) return;
+    pidiendoCandado = true;
+    navigator.locks.request('pdflash-trabajando', () => new Promise((soltar) => {
+      pidiendoCandado = false;
+      // si ya terminó mientras se pedía, se suelta en el acto
+      if (!ocupados) { soltar(); return; }
+      soltarCandado = soltar;
+    })).catch(() => { pidiendoCandado = false; });
+  }
+  /** Empieza (true) o termina (false) un trabajo largo. Se pueden anidar. */
+  G.ocupado = function (si) {
+    const antes = ocupados;
+    ocupados = Math.max(0, ocupados + (si ? 1 : -1));
+    if (ocupados && !antes) { pedirCandado(); terminoEscondida = false; }
+    if (!ocupados && antes) {
+      if (soltarCandado) { soltarCandado(); soltarCandado = null; }
+      if (document.hidden) terminoEscondida = true;
+    }
+    if (G.pintarTitulo) G.pintarTitulo();
+  };
+  /** Lo que va delante del título de la pestaña mientras no se mira. */
+  G.marcaTitulo = () => (!document.hidden ? '' : ocupados ? '⏳ ' : terminoEscondida ? '✓ ' : '');
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) terminoEscondida = false;
+    if (G.pintarTitulo) G.pintarTitulo();
   });
 
   /* =========================================================
