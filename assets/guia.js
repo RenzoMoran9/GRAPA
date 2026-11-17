@@ -132,6 +132,27 @@
       texto: 'Aquí están la ayuda y los atajos. Este recorrido vuelve cuando quieras desde el menú Ayuda.' },
   ];
 
+  // En el modo enfocado (assets/enfocado.js) casi todo está apartado: el
+  // recorrido señala dónde se esconde cada cosa.
+  const PASOS_ENFOCADO = [
+    { el: '#btnAbrir2', titulo: 'Empieza abriendo tus archivos',
+      texto: 'PDF, Word, Excel o fotos. También puedes arrastrarlos a la pantalla, pegarlos con Ctrl+V o usar Ctrl+O.' },
+    { el: '#lienzo', titulo: 'Las hojas, a pantalla completa',
+      texto: 'Arrástralas para cambiar el orden. Un clic marca una hoja; con Ctrl o Mayús marcas varias. La tecla V las abre en grande.' },
+    { el: '.enf-fab', titulo: 'Tus herramientas, en una rueda',
+      texto: 'Abrir, buscar, revisar, firmar, foliar, separar… Toca aquí o haz clic derecho en el tablero. Sobre una hoja, la rueda trae lo de esa hoja: girar, firmar, duplicar, borrar…' },
+    { el: '#riel', titulo: 'También en el borde izquierdo', lado: 'derecha', mostrar: 'ver-izq',
+      texto: 'Acerca el ratón al borde y salen las herramientas en columna. La que elijas se abre encima de las hojas; con la chincheta se queda fija a un lado.' },
+    { el: '.enf-zoom', titulo: 'Hojas del tamaño justo',
+      texto: '«+» y «−» acercan y alejan (también Ctrl + rueda del ratón). El de abajo las ajusta para leerlas enteras sin desplazarte.' },
+    { el: '.enf-ruta', titulo: 'Lo que te falta',
+      texto: 'Los puntos dicen qué está hecho (verde) y qué falta. El botón hace el paso siguiente: foliar, firmar, guardar…' },
+    { el: '.enf-exportar', titulo: 'Exporta el PDF final',
+      texto: 'Arma el PDF con folios y firmas y lo descarga. Para seguir otro día, guarda el expediente con Ctrl+Mayús+S.' },
+    { el: '.enf-logo', titulo: 'Los menús, a un toque',
+      texto: 'Archivo, Editar, Ver y Ayuda bajan al acercar el ratón al borde de arriba o al tocar el logo. ¿Prefieres ver todo siempre? Pulsa F para la vista clásica.' },
+  ];
+
   const capa = document.createElement('div');
   capa.className = 'guia';
   capa.id = 'guia';
@@ -206,7 +227,12 @@
     $('#guiaSaltar').textContent = ultimo ? (E.paginas.length ? '' : 'Terminar') : 'Saltar';
     $('#guiaSaltar').hidden = ultimo && !!E.paginas.length;
     $('#guiaPuntos').innerHTML = pasos.map((_, i) => `<i class="${i === actual ? 'activo' : ''}"></i>`).join('');
+    // lo que vive escondido (el riel del modo enfocado) sale mientras se explica
+    const antes = document.body.classList.contains('ver-izq');
+    document.body.classList.toggle('ver-izq', paso.mostrar === 'ver-izq');
     colocar();
+    // y se vuelve a medir cuando termina de deslizarse
+    if (antes !== document.body.classList.contains('ver-izq')) setTimeout(colocar, 260);
     // el botón principal recibe el foco: Enter avanza
     setTimeout(() => $('#guiaSiguiente').focus(), 30);
   }
@@ -214,7 +240,9 @@
   function empezar() {
     if (!capa.hidden) return;
     // los pasos cuyo botón no está (por permisos, o la ruta sin hojas) se saltan
-    pasos = PASOS.filter((p) => visible($(p.el)));
+    const enfocado = document.body.classList.contains('enfocado');
+    // en el modo enfocado el riel está apartado, pero existe: cuenta como visible
+    pasos = (enfocado ? PASOS_ENFOCADO : PASOS).filter((p) => (p.mostrar ? !!$(p.el) : visible($(p.el))));
     if (!pasos.length) return;
     actual = 0;
     try { localStorage.setItem(CLAVE_VISTA, '1'); } catch (e) {}
@@ -225,6 +253,7 @@
 
   function terminar() {
     capa.hidden = true;
+    document.body.classList.remove('ver-izq');
     document.documentElement.classList.remove('con-guia');
   }
 

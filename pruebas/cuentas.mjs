@@ -172,6 +172,32 @@ const PRUEBAS = {
     afirmar(r === false, 'permitido(firmas) es false');
   },
 
+  async 'modo enfocado: la rueda solo ofrece lo que la cuenta puede usar'({ page }) {
+    await entrar(page, 'ana@x.com');
+    await page.waitForSelector('#acceso', { state: 'hidden' });
+    // como lo verá Ana: el modo enfocado viene encendido
+    await page.evaluate(() => { sessionStorage.setItem('prueba-enfocado-libre', '1'); localStorage.removeItem('grapa.enfocado'); });
+    await page.reload();
+    await page.waitForFunction(() => window.Grapa && window.Grapa.cuentas && window.Grapa.cuentas.perfil() && document.body.classList.contains('enfocado'));
+    const rueda = () => page.$$eval('.enf-rueda-btn span', (s) => s.map((x) => x.textContent));
+    await page.click('.enf-fab');
+    let hay = await rueda();
+    afirmar(!hay.includes('Firmas') && hay.includes('Folios'), 'sin Firmas en la rueda, con Folios', hay);
+    await page.keyboard.press('Escape');
+    // sobre una hoja tampoco: ni firmar ni bajarla (exportar está apagado)
+    await page.evaluate(() => window.Grapa.guia.abrirEjemplo());
+    await page.waitForFunction(() => window.Grapa.estado.paginas.length === 6, null, { timeout: 20000 });
+    const caja = await (await page.$$('#rejilla .pag'))[0].boundingBox();
+    await page.mouse.click(caja.x + caja.width / 2, caja.y + caja.height / 2, { button: 'right' });
+    hay = await rueda();
+    afirmar(!hay.includes('Firmar') && !hay.includes('Bajar') && hay.includes('Imprimir'), 'la rueda de la hoja respeta los permisos', hay);
+    await page.keyboard.press('Escape');
+    // Exportar de la tira de arriba lleva el candado y lo explica
+    afirmar(await page.evaluate(() => document.querySelector('.enf-exportar').classList.contains('bloqueado-admin')), 'Exportar de arriba con candado');
+    await page.click('.enf-exportar');
+    await page.waitForSelector('.aviso:has-text("no está habilitada")');
+  },
+
   async 'el admin cambia permisos y al usuario le llegan solos'({ page, sb }) {
     await entrar(page, 'ana@x.com');
     await page.waitForSelector('#acceso', { state: 'hidden' });
@@ -275,6 +301,11 @@ try {
     const sb = servidorFalso();
     // el recorrido de la primera vez taparía la pantalla: se da por visto (tiene su propia prueba)
     await ctx.addInitScript(() => { try { localStorage.setItem('grapa.guia.vista', '1'); } catch (e) {} });
+    // la vista clásica, con el botón de la cuenta siempre a la vista; la prueba
+    // del modo enfocado lo pide aparte
+    await ctx.addInitScript(() => {
+      try { if (!sessionStorage.getItem('prueba-enfocado-libre')) localStorage.setItem('grapa.enfocado', '0'); } catch (e) {}
+    });
     await ctx.route(SB + '/**', sb.atender);
     await ctx.route('**/assets/config.js*', (route) => route.fulfill({
       contentType: 'text/javascript',

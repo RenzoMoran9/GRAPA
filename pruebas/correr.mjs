@@ -982,7 +982,130 @@ const PRUEBAS = {
     afirmar(r.w > r.h, 'horizontal', r);
     afirmar(r.rojos > 200, 'la cabecera conserva su relleno rojo', r);
   },
+
+  async 'modo enfocado: viene encendido, las hojas a lo ancho, y F vuelve a la vista clásica'({ page }) {
+    await conEnfocadoDeEntrada(page);
+    afirmar(await page.evaluate(() => document.body.classList.contains('enfocado')), 'viene encendido');
+    const medidas = () => page.evaluate(() => {
+      const l = document.querySelector('#lienzo').getBoundingClientRect();
+      const barra = document.querySelector('.barra-superior').getBoundingClientRect();
+      return { ancho: l.width, arriba: l.top, barra: barra.bottom, vw: innerWidth };
+    });
+    let m = await medidas();
+    afirmar(m.ancho === m.vw, 'las hojas usan todo el ancho', m);
+    afirmar(m.barra <= 0 && m.arriba < 50, 'la barra de menús se aparta: solo queda la tira de pestañas', m);
+    // quien ya usaba Pdflash recibe, una vez, el aviso de cómo volver
+    await page.waitForFunction(() => document.querySelector('.avisos') && document.querySelector('.avisos').textContent.includes('Pulsa F'), null, { timeout: 4000 });
+    // acercarse al borde de arriba baja los menús; alejarse los sube
+    await page.mouse.move(700, 2);
+    await page.waitForFunction(() => document.body.classList.contains('ver-arriba'));
+    await page.mouse.move(700, 600);
+    await page.waitForFunction(() => !document.body.classList.contains('ver-arriba'), null, { timeout: 3000 });
+    // F lo apaga, se recuerda, y todo vuelve a su sitio
+    await page.keyboard.press('f');
+    m = await medidas();
+    afirmar(!(await page.evaluate(() => document.body.classList.contains('enfocado'))), 'F lo apaga');
+    afirmar(m.ancho < m.vw - 200 && m.barra > 40, 'vuelven el panel y la barra de arriba', m);
+    afirmar(await page.evaluate(() => localStorage.getItem('grapa.enfocado')) === '0', 'se recuerda apagado');
+    await page.reload();
+    await page.waitForFunction(() => window.Grapa && window.Grapa.pintar);
+    afirmar(!(await page.evaluate(() => document.body.classList.contains('enfocado'))), 'sigue apagado al volver');
+    // y desde el menú Ver se vuelve a encender
+    await page.click('#menus .menu-boton:text("Ver")');
+    await page.click('#menus .menu-item:has-text("Modo enfocado")');
+    afirmar(await page.evaluate(() => document.body.classList.contains('enfocado')), 'Ver ▸ Modo enfocado lo enciende');
+  },
+
+  async 'modo enfocado: la rueda (también con clic derecho), el cajón encima de las hojas y el zoom'({ page }) {
+    await conEnfocadoDeEntrada(page);
+    await page.evaluate(() => window.Grapa.guia.abrirEjemplo());
+    await page.waitForFunction(() => window.Grapa.estado.paginas.length === 6, null, { timeout: 20000 });
+    await page.evaluate(() => document.querySelector('#btnSelNada').click());
+    // sin nada marcado no hay barra de acciones tapando las hojas
+    afirmar(await page.isHidden('#barraSeleccion'), 'sin hojas marcadas no se ve la barra de abajo');
+    // clic derecho sobre la hoja 2: su rueda, y «Girar der.» la gira
+    const giro = () => page.evaluate(() => window.Grapa.estado.paginas[1].giro);
+    const caja = await (await page.$$('#rejilla .pag'))[1].boundingBox();
+    await page.mouse.click(caja.x + caja.width / 2, caja.y + caja.height / 2, { button: 'right' });
+    afirmar(await page.evaluate(() => !document.querySelector('.enf-rueda').hidden), 'el clic derecho abre la rueda');
+    afirmar((await page.textContent('.enf-rueda-centro b')) === 'Hoja 2', 'la rueda dice de qué hoja es');
+    await page.click('.enf-rueda-btn[aria-label="Girar a la derecha"]');
+    afirmar(await giro() === 90, 'gira la hoja', await giro());
+    afirmar(await page.evaluate(() => document.querySelector('.enf-rueda').hidden), 'la rueda se cierra al elegir');
+    // deshacer desde la tira de arriba
+    await page.click('.enf-acciones [aria-label="Deshacer"]');
+    afirmar(await giro() === 0, 'deshacer desde la tira de arriba', await giro());
+    // con varias marcadas, la rueda trabaja con todas
+    const casillas = await page.$$('.pag-check');
+    await casillas[1].click(); await casillas[3].click();
+    afirmar(await page.isVisible('#barraSeleccion'), 'con hojas marcadas aparece la barra');
+    const c3 = await (await page.$$('#rejilla .pag'))[3].boundingBox();
+    await page.mouse.click(c3.x + c3.width / 2, c3.y + c3.height / 2, { button: 'right' });
+    afirmar((await page.textContent('.enf-rueda-centro b')) === '2 hojas', 'la rueda habla de las marcadas');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.querySelector('#btnSelNada').click());
+    // la rueda del botón abre Folios como cajón encima de las hojas, sin encogerlas
+    await page.click('.enf-fab');
+    await page.click('.enf-rueda-btn[aria-label="Foliación y numeración"]');
+    afirmar(await page.isVisible('[data-bloque="foliar"]'), 'se ve Folios');
+    const ancho = await page.evaluate(() => [document.querySelector('#lienzo').getBoundingClientRect().width, innerWidth]);
+    afirmar(ancho[0] === ancho[1], 'el cajón flota encima: las hojas no se encogen', ancho);
+    afirmar(await page.evaluate(() => !document.documentElement.scrollTop && !document.body.scrollTop && !document.body.scrollLeft), 'la página no se corre');
+    // la ruta de arriba sigue el trabajo
+    afirmar((await page.textContent('.enf-ruta-txt')).startsWith('Foliar'), 'lo siguiente es foliar');
+    await page.click('#btnFoliarAplicar');
+    await page.waitForFunction(() => !document.querySelector('.enf-ruta-txt').textContent.startsWith('Foliar'));
+    // la chincheta lo fija al lado; la equis lo cierra
+    await page.click('[data-cajon="fijar"]');
+    const fijo = await page.evaluate(() => document.querySelector('#lienzo').getBoundingClientRect().width);
+    afirmar(fijo < 1440 - 300, 'fijado, el panel va al lado de las hojas', fijo);
+    await page.click('[data-cajon="cerrar"]');
+    afirmar(await page.evaluate(() => !document.body.classList.contains('cajon-abierto')), 'la equis cierra el cajón');
+    // zoom: más, Ctrl + rueda del ratón, y «Ajustar» deja una hoja entera a la vista
+    const z = () => page.evaluate(() => +document.querySelector('#zoom').value);
+    const z0 = await z();
+    await page.click('[data-zoom="mas"]');
+    afirmar(await z() > z0, 'el «+» acerca');
+    await page.mouse.move(700, 500);
+    await page.keyboard.down('Control'); await page.mouse.wheel(0, 400); await page.keyboard.up('Control');
+    await page.waitForTimeout(150);
+    afirmar(await z() < z0 * 1.12, 'Ctrl + rueda del ratón aleja');
+    await page.click('[data-zoom="ajustar"]');
+    await page.waitForTimeout(300);
+    const cabe = await page.evaluate(() => {
+      const h = document.querySelector('#rejilla .pag-marco').getBoundingClientRect();
+      const l = document.querySelector('#lienzo').getBoundingClientRect();
+      return { abajo: h.bottom, lienzo: l.bottom, alto: h.height };
+    });
+    afirmar(cabe.abajo <= cabe.lienzo && cabe.alto > l0(cabe), '«Ajustar»: la hoja entera cabe y se lee', cabe);
+  },
+
+  async 'modo enfocado: el recorrido guiado señala dónde quedó cada cosa'({ page }) {
+    await conEnfocadoDeEntrada(page);
+    await page.evaluate(() => window.Grapa.guia.empezar());
+    await page.waitForSelector('#guia:not([hidden])');
+    const vistos = [];
+    const total = await page.$$eval('.guia-puntos i', (x) => x.length);
+    for (let i = 0; i < total; i++) {
+      vistos.push(await page.textContent('#guiaTitulo'));
+      const foco = await page.evaluate(() => document.querySelector('#guiaFoco').getBoundingClientRect().width);
+      afirmar(foco > 0, 'cada paso señala algo que se ve: ' + vistos[i]);
+      if (i < total - 1) await page.click('#guiaSiguiente');
+    }
+    afirmar(vistos.includes('Tus herramientas, en una rueda') && vistos.includes('Los menús, a un toque'), 'habla de la rueda y de los menús', vistos);
+    afirmar(!vistos.includes('Tus herramientas, en orden'), 'no señala el riel escondido', vistos);
+  },
 };
+
+/** El modo enfocado como lo ve quien ya usaba Pdflash: sin elegir nada todavía. */
+async function conEnfocadoDeEntrada(page) {
+  await page.evaluate(() => { sessionStorage.setItem('prueba-enfocado-libre', '1'); localStorage.removeItem('grapa.enfocado'); });
+  await page.reload();
+  await page.waitForFunction(() => window.Grapa && window.Grapa.pintar);
+  await page.waitForTimeout(250);
+}
+/** Alto mínimo de una hoja «que se lee» a 1440×900: más de la mitad del alto del tablero. */
+const l0 = (c) => (c.lienzo - 60) / 2;
 
 /* ---------------- el corredor ---------------- */
 const srv = spawn(process.execPath, [RAIZ + 'servidor.mjs'], { env: { ...process.env, PUERTO: String(PUERTO) }, stdio: 'ignore' });
@@ -998,6 +1121,11 @@ try {
     await ctx.route('**/assets/config.js*', (route) => route.fulfill({ contentType: 'text/javascript', body: 'window.GRAPA_CONFIG = {};' }));
     // el recorrido de la primera vez taparía la pantalla: se da por visto (tiene su propia prueba)
     await ctx.addInitScript(() => { try { localStorage.setItem('grapa.guia.vista', '1'); } catch (e) {} });
+    // las pruebas del taller van con la vista clásica, todo a la vista; las del
+    // modo enfocado (que viene encendido) lo piden con conEnfocadoDeEntrada()
+    await ctx.addInitScript(() => {
+      try { if (!sessionStorage.getItem('prueba-enfocado-libre')) localStorage.setItem('grapa.enfocado', '0'); } catch (e) {}
+    });
     const errores = [];
     const nueva = async () => {
       const p = await ctx.newPage();
