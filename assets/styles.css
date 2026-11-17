@@ -1778,3 +1778,151 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
 .ed-herr.ed-icono{padding:0 8px}
 .capa-editar.herr-lapiz,.capa-editar.herr-linea,.capa-editar.herr-rect,.capa-editar.herr-elipse{cursor:crosshair}
 .figura-viva{pointer-events:none;z-index:4}
+
+/* ---------- modo enfocado ----------
+   Las hojas se quedan con casi toda la pantalla. Arriba, una sola tira con
+   las pestañas, el paso siguiente y Exportar; lo demás se aparta y vuelve al
+   acercar el ratón al borde (menús arriba, riel a la izquierda) o desde la
+   rueda de abajo a la derecha. Lo arma assets/enfocado.js. */
+.enf-zona,.enf-logo,.enf-acciones,.enf-dock,.enf-cajon-botones{display:none}
+body.enfocado{--tableros-alto:42px}
+
+/* los bordes que despiertan lo escondido */
+body.enfocado .enf-zona{display:block;position:fixed;z-index:55}
+.enf-zona-arriba{top:0;left:0;right:0;height:6px}
+.enf-zona-izq{left:0;top:var(--tableros-alto);bottom:0;width:10px}
+.enf-zona-izq::after{
+  content:"";position:absolute;left:3px;top:50%;width:4px;height:46px;margin-top:-23px;
+  border-radius:4px;background:var(--borde);transition:opacity .15s,background .15s;
+}
+.enf-zona-izq:hover::after{background:var(--texto-3)}
+body.enfocado.ver-izq .enf-zona-izq::after,body.enfocado.cajon-abierto .enf-zona-izq::after{opacity:0}
+
+/* la barra de menús baja sola, encima de todo, sin empujar las hojas */
+body.enfocado .barra-superior{
+  position:fixed;top:0;left:0;right:0;z-index:60;
+  transform:translateY(-100%);transition:transform .18s ease,box-shadow .18s;
+}
+body.enfocado.ver-arriba .barra-superior{transform:none;box-shadow:var(--sombra-fuerte)}
+body.enfocado .marca #btnPanel{display:none}
+
+/* lo que repetía lo que ya dicen las pestañas, o va a la tira de arriba */
+body.enfocado .taller-cabecera,body.enfocado .ruta,body.enfocado .barra-estado{display:none}
+/* de la barra del taller solo queda lo que avisa de algo: la búsqueda puesta
+   o el «volver a Paquetes»; si no hay nada de eso, no ocupa sitio */
+body.enfocado .taller-barra{padding:8px 22px 4px;border-bottom:0}
+body.enfocado .taller-barra > :not(#chipBusqueda):not(.taller-herramientas){display:none}
+body.enfocado .taller-herramientas > :not(#btnVolverPaquetes){display:none}
+body.enfocado .taller-barra:not(:has(#chipBusqueda:not([hidden]),#btnVolverPaquetes:not([hidden]))){display:none}
+body.enfocado .lienzo{padding-top:16px}
+
+/* la tira de pestañas: logo, pestañas y, a la derecha, lo de siempre a mano */
+body.enfocado .tableros{padding:0 10px 0 8px;background:var(--fondo-2)}
+body.enfocado .tablero.activo{background:var(--fondo)}
+body.enfocado .enf-logo{
+  display:grid;place-items:center;align-self:center;flex:none;width:28px;height:28px;margin-right:6px;
+  border:0;border-radius:8px;cursor:pointer;padding:0;
+  background:linear-gradient(145deg,var(--acento),var(--acento-oscuro));box-shadow:0 1px 4px rgba(224,83,47,.35);
+}
+.enf-logo svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.enf-logo:hover{filter:brightness(1.08)}
+body.enfocado .enf-acciones{display:flex;align-items:center;gap:3px;align-self:center;flex:none;margin-left:8px}
+.enf-ico{
+  width:30px;height:30px;display:grid;place-items:center;padding:0;border:0;border-radius:7px;
+  background:transparent;color:var(--texto-2);cursor:pointer;
+}
+.enf-ico:hover:not(:disabled){background:var(--fondo-3);color:var(--texto)}
+.enf-ico:disabled{opacity:.35;cursor:default}
+.enf-exportar{min-height:28px;padding:3px 12px;font-size:12.5px;margin-left:5px}
+.enf-ruta{
+  display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 11px 0 9px;margin-right:6px;
+  border:1px solid var(--borde);border-radius:999px;background:var(--fondo);cursor:pointer;
+  color:var(--acento);font:inherit;font-size:12.5px;font-weight:600;white-space:nowrap;
+}
+.enf-ruta:hover:not(:disabled){border-color:var(--acento)}
+.enf-ruta.listo{color:var(--verde);cursor:default}
+.enf-ruta[hidden]{display:none}
+.enf-puntos{display:inline-flex;gap:3px}
+.enf-puntos i{width:7px;height:7px;border-radius:50%;background:var(--borde)}
+.enf-puntos i.hecho{background:var(--verde)}
+.enf-puntos i.alerta{background:var(--aviso)}
+.enf-puntos i.sig{background:var(--acento);box-shadow:0 0 0 2px var(--acento-tenue)}
+
+/* el panel: el riel sale del borde y la herramienta se abre como cajón
+   ENCIMA de las hojas, sin encogerlas. Fijado, vuelve a su sitio de siempre. */
+body.enfocado .panel{
+  position:fixed;left:0;top:var(--tableros-alto);bottom:0;z-index:45;width:auto;
+  transform:translateX(calc(-100% - 14px));transition:transform .2s ease,box-shadow .2s;
+  border-radius:0 14px 14px 0;overflow:hidden;
+}
+body.enfocado.ver-izq .panel,body.enfocado.cajon-abierto .panel{transform:none;box-shadow:var(--sombra-fuerte)}
+body.enfocado .panel .panel-vistas{display:none}
+body.enfocado.cajon-abierto .panel .panel-vistas{display:block;width:calc(var(--panel-ancho) - 64px)}
+body.enfocado.cajon-abierto .enf-cajon-botones{display:flex;position:absolute;top:9px;right:8px;gap:1px;z-index:3}
+body.enfocado.cajon-abierto .bloque-cabecera{padding-right:76px}
+body.enfocado.cajon-fijo .panel{position:relative;top:auto;transform:none;box-shadow:none;border-radius:0;z-index:auto}
+body.enfocado.cajon-fijo [data-cajon="fijar"]{color:var(--acento);background:var(--acento-tenue)}
+
+/* la barra de lo marcado, solo cuando hay algo marcado */
+body.enfocado .barra-seleccion:has(.bs-cuenta.todas){display:none}
+
+/* abajo a la derecha: el zoom en columna y la rueda */
+body.enfocado .enf-dock{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  position:absolute;right:16px;bottom:16px;z-index:13;
+}
+body.enfocado #lector:not([hidden]) ~ .enf-dock{display:none}
+.enf-zoom{
+  display:flex;flex-direction:column;align-items:center;padding:3px;
+  background:var(--fondo-2);border:1px solid var(--borde);border-radius:12px;box-shadow:var(--sombra);
+}
+.enf-zoom button{
+  width:34px;height:32px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;
+  background:transparent;color:var(--texto-2);cursor:pointer;
+}
+.enf-zoom button:hover{background:var(--fondo-3);color:var(--texto)}
+.enf-zoom-num{font-size:10.5px;font-weight:600;color:var(--texto-3);font-variant-numeric:tabular-nums;line-height:1.3}
+.enf-zoom-sep{width:20px;height:1px;background:var(--borde);margin:3px 0}
+.enf-fab{
+  width:52px;height:52px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;cursor:pointer;
+  background:var(--acento);color:#fff;
+  box-shadow:0 8px 22px rgba(224,83,47,.38),0 2px 6px rgba(0,0,0,.12);
+  transition:transform .18s ease,background .12s;
+}
+.enf-fab svg{width:24px;height:24px;fill:currentColor}
+.enf-fab:hover{background:var(--acento-oscuro)}
+.enf-fab.activo{transform:rotate(36deg)}
+body.enfocado .avisos{bottom:16px;right:86px}
+
+/* la rueda: se abre alrededor del puntero */
+.enf-rueda{position:fixed;z-index:90;width:0;height:0}
+.enf-rueda::before{
+  content:"";position:absolute;left:-152px;top:-152px;width:304px;height:304px;border-radius:50%;
+  background:color-mix(in srgb,var(--fondo-2) 90%,transparent);border:1px solid var(--borde);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:var(--sombra-fuerte);
+}
+.enf-rueda.abierta::before{animation:enf-disco .16s ease-out both}
+@keyframes enf-disco{from{transform:scale(.6);opacity:0}}
+.enf-rueda-centro{
+  position:absolute;left:-48px;top:-48px;width:96px;height:96px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px;
+  border:1px solid var(--borde);background:var(--fondo);color:var(--texto);cursor:pointer;font:inherit;text-align:center;
+}
+.enf-rueda-centro b{font-size:13px;font-weight:700;line-height:1.15}
+.enf-rueda-centro small{font-size:10px;line-height:1.2;color:var(--texto-3)}
+.enf-rueda-btn{
+  position:absolute;left:calc(var(--x) - 29px);top:calc(var(--y) - 29px);width:58px;height:58px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;
+  border:0;border-radius:50%;background:transparent;color:var(--texto-2);cursor:pointer;font:inherit;
+}
+.enf-rueda-btn .ico{width:21px;height:21px}
+.enf-rueda-btn span{font-size:10px;font-weight:600;line-height:1}
+.enf-rueda-btn:hover,.enf-rueda-btn:focus-visible{background:var(--acento-tenue);color:var(--acento);outline:none}
+.enf-rueda-btn.peligro:hover,.enf-rueda-btn.peligro:focus-visible{background:color-mix(in srgb,var(--rojo) 14%,transparent);color:var(--rojo)}
+.enf-rueda.abierta .enf-rueda-btn{animation:enf-sale .22s cubic-bezier(.2,.9,.3,1.15) both;animation-delay:var(--d)}
+@keyframes enf-sale{from{transform:translate(calc(var(--x) * -1),calc(var(--y) * -1)) scale(.4);opacity:0}}
+.pag.enf-apuntada .pag-marco{box-shadow:0 0 0 2px var(--azul),0 4px 14px rgba(47,111,237,.25)}
+@media (prefers-reduced-motion:reduce){
+  .enf-rueda.abierta .enf-rueda-btn,.enf-rueda.abierta::before{animation:none}
+  body.enfocado .panel,body.enfocado .barra-superior{transition:none}
+}
