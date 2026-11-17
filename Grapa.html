@@ -1836,10 +1836,10 @@ body.enfocado .marca #btnPanel{display:none}
 body.enfocado .taller-cabecera,body.enfocado .ruta,body.enfocado .barra-estado{display:none}
 /* de la barra del taller solo queda lo que avisa de algo: la búsqueda puesta
    o el «volver a Paquetes»; si no hay nada de eso, no ocupa sitio */
-body.enfocado .taller-barra{padding:8px 22px 4px;border-bottom:0}
-body.enfocado .taller-barra > :not(#chipBusqueda):not(.taller-herramientas){display:none}
-body.enfocado .taller-herramientas > :not(#btnVolverPaquetes){display:none}
-body.enfocado .taller-barra:not(:has(#chipBusqueda:not([hidden]),#btnVolverPaquetes:not([hidden]))){display:none}
+body.enfocado:not(.fijo-vistas) .taller-barra{padding:8px 22px 4px;border-bottom:0}
+body.enfocado:not(.fijo-vistas) .taller-barra > :not(#chipBusqueda):not(.taller-herramientas){display:none}
+body.enfocado:not(.fijo-vistas) .taller-herramientas > :not(#btnVolverPaquetes){display:none}
+body.enfocado:not(.fijo-vistas) .taller-barra:not(:has(#chipBusqueda:not([hidden]),#btnVolverPaquetes:not([hidden]))){display:none}
 body.enfocado .lienzo{padding-top:16px}
 
 /* la tira de pestañas: logo, pestañas y, a la derecha, lo de siempre a mano */
@@ -1884,7 +1884,7 @@ body.enfocado .panel{
 body.enfocado.ver-izq .panel,body.enfocado.cajon-abierto .panel{transform:none;box-shadow:var(--sombra-fuerte)}
 body.enfocado .panel .panel-vistas{display:none}
 body.enfocado.cajon-abierto .panel .panel-vistas{display:block;width:calc(var(--panel-ancho) - 64px)}
-body.enfocado.cajon-abierto .enf-cajon-botones{display:flex;position:absolute;top:9px;right:8px;gap:1px;z-index:3}
+body.enfocado.cajon-abierto .enf-cajon-botones{display:flex;position:absolute;top:9px;left:calc(var(--panel-ancho) - 74px);gap:1px;z-index:3}
 body.enfocado.cajon-abierto .bloque-cabecera{padding-right:76px}
 body.enfocado.cajon-fijo .panel{position:relative;top:auto;transform:none;box-shadow:none;border-radius:0;z-index:auto}
 body.enfocado.cajon-fijo [data-cajon="fijar"]{color:var(--acento);background:var(--acento-tenue)}
@@ -1952,6 +1952,66 @@ body.enfocado .avisos{bottom:16px;right:86px}
   .enf-rueda.abierta .enf-rueda-btn,.enf-rueda.abierta::before{animation:none}
   body.enfocado .panel,body.enfocado .barra-superior{transition:none}
 }
+
+/* --- modo enfocado: cómo ver el expediente, en la tira de arriba --- */
+.enf-vistas{display:inline-flex;gap:2px;padding:2px;background:var(--fondo-3);border:1px solid var(--borde);border-radius:8px}
+.enf-vistas button{
+  display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:0;border-radius:6px;
+  background:transparent;color:var(--texto-2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;
+}
+.enf-vistas button:hover:not(:disabled){color:var(--texto)}
+.enf-vistas button.on{background:var(--fondo-2);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.enf-vistas button:disabled{opacity:.45;cursor:default}
+.enf-vistas .ico{width:15px;height:15px}
+.enf-sep{width:1px;height:20px;background:var(--borde);margin:0 5px}
+/* en pantallas angostas, solo los iconos */
+@media (max-width:1180px){.enf-vistas button span{display:none}.enf-vistas button{padding:0 7px}}
+
+/* --- chinchetas: dejar fija cada barra --- */
+.enf-fijar,.enf-solo{display:none}
+body.enfocado .enf-fijar-arriba{display:inline-flex}
+body.enfocado .enf-solo{display:flex}
+.enf-fijar.on{color:var(--acento);background:var(--acento-tenue)}
+.enf-menu-fijar .ico{opacity:0}
+.enf-menu-fijar[aria-checked="true"] .ico{opacity:1;color:var(--acento)}
+body.enfocado .enf-fijar-riel{
+  display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:auto;
+  padding:8px 2px 6px;border:1px solid transparent;border-radius:9px;
+  background:none;cursor:pointer;color:var(--texto-3);font:inherit;
+}
+.enf-fijar-riel:hover{background:var(--fondo-3);color:var(--texto)}
+.enf-fijar-riel .ico{width:18px;height:18px}
+
+/* la barra de menús, fija: vuelve a su sitio arriba y empuja lo demás */
+body.enfocado.fijo-arriba .barra-superior{position:relative;transform:none;box-shadow:none;z-index:30}
+body.enfocado.fijo-arriba .enf-zona-arriba,
+body.enfocado.fijo-arriba .enf-logo,
+body.enfocado.fijo-arriba .enf-dup{display:none}
+body.enfocado.fijo-arriba .panel,
+body.enfocado.fijo-arriba .enf-zona-izq{top:calc(var(--barra-alto) + var(--tableros-alto))}
+body.enfocado.fijo-arriba .tableros{padding-left:22px}
+
+/* las herramientas, fijas: el riel queda a la izquierda y la herramienta
+   elegida sigue abriéndose como cajón encima de las hojas */
+body.enfocado.fijo-riel .panel{
+  position:relative;top:auto;transform:none;box-shadow:none;border-radius:0;overflow:visible;z-index:46;
+}
+body.enfocado.fijo-riel .enf-zona-izq{display:none}
+body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .panel .panel-vistas{
+  position:absolute;left:100%;top:0;bottom:0;z-index:2;
+  background:var(--fondo-2);border-right:1px solid var(--borde);border-radius:0 14px 14px 0;box-shadow:var(--sombra-fuerte);
+}
+body.enfocado.fijo-riel.cajon-fijo .panel{border-right:1px solid var(--borde)}
+
+/* la barra de vistas y selección, fija: Hojas · Paquetes · En grande, el
+   buscador y Seleccionar todo, como en la vista clásica */
+body.enfocado.fijo-vistas .taller-barra{padding:10px 22px 10px}
+body.enfocado.fijo-vistas .enf-vistas,
+body.enfocado.fijo-vistas .enf-buscar,
+body.enfocado.fijo-vistas .enf-acciones .enf-sep{display:none}
+/* con el riel fijo, el cajón empieza bajo las pestañas: no las tapa */
+body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .panel .panel-vistas{top:var(--tableros-alto);border-top:1px solid var(--borde);border-top-right-radius:14px}
+body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:calc(var(--tableros-alto) + 9px)}
 
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
@@ -2810,6 +2870,7 @@ body.enfocado .avisos{bottom:16px;right:86px}
       <button class="btn btn-fantasma cerrar" data-cerrar aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </header>
     <div class="modal-cuerpo ayuda">
+      <p class="ayuda-enfocado"><strong>La pantalla (modo enfocado):</strong> las hojas ocupan casi todo. Arriba están las pestañas, <strong>Hojas · Paquetes · En grande</strong>, la lupa para buscar, el paso siguiente y <strong>Exportar PDF</strong>. Los menús bajan al acercar el ratón al borde de arriba y las herramientas salen del borde izquierdo. La <strong>rueda</strong> naranja (o el clic derecho) junta todas las herramientas, y sobre una hoja trae lo de esa hoja. Para dejar fija una barra, usa su <strong>chincheta</strong> o <strong>Ver ▸ Fijar…</strong>. La tecla <strong>F</strong> vuelve a la vista clásica, con todo a la vista.</p>
       <ol>
         <li><strong>Abre</strong> el PDF que escaneaste y, encima, los anexos (indagación de mercado, cotizaciones, etc.).</li>
         <li><strong>Ordena</strong> arrastrando las miniaturas. El color del borde te dice de qué archivo viene cada página.</li>
@@ -2829,6 +2890,9 @@ body.enfocado .avisos{bottom:16px;right:86px}
       </ol>
       <h4>Atajos</h4>
       <table class="tabla-atajos">
+        <tr><td>F</td><td>Modo enfocado (las hojas a pantalla completa) o vista clásica</td></tr>
+        <tr><td>Clic derecho</td><td>(modo enfocado) La rueda de herramientas; sobre una hoja, lo de esa hoja</td></tr>
+        <tr><td>Ctrl + rueda del ratón</td><td>(modo enfocado) Acercar o alejar las hojas</td></tr>
         <tr><td>Ctrl+O</td><td>Abrir archivos</td></tr>
         <tr><td>Ctrl+S</td><td>Exportar PDF</td></tr>
         <tr><td>Ctrl+P</td><td>Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta)</td></tr>
@@ -20462,10 +20526,12 @@ window.GRAPA_CONFIG = {
       texto: 'PDF, Word, Excel o fotos. También puedes arrastrarlos a la pantalla, pegarlos con Ctrl+V o usar Ctrl+O.' },
     { el: '#lienzo', titulo: 'Las hojas, a pantalla completa',
       texto: 'Arrástralas para cambiar el orden. Un clic marca una hoja; con Ctrl o Mayús marcas varias. La tecla V las abre en grande.' },
+    { el: '.enf-vistas', titulo: 'Hojas, Paquetes o en grande',
+      texto: 'Aquí eliges cómo ver el expediente: todas las hojas, una tarjeta por documento (Paquetes) o las hojas en grande para revisarlas una por una.' },
     { el: '.enf-fab', titulo: 'Tus herramientas, en una rueda',
       texto: 'Abrir, buscar, revisar, firmar, foliar, separar… Toca aquí o haz clic derecho en el tablero. Sobre una hoja, la rueda trae lo de esa hoja: girar, firmar, duplicar, borrar…' },
     { el: '#riel', titulo: 'También en el borde izquierdo', lado: 'derecha', mostrar: 'ver-izq',
-      texto: 'Acerca el ratón al borde y salen las herramientas en columna. La que elijas se abre encima de las hojas; con la chincheta se queda fija a un lado.' },
+      texto: 'Acerca el ratón al borde y salen las herramientas en columna. La que elijas se abre encima de las hojas. ¿Las quieres siempre a la vista? Toca «Fijar», abajo del todo.' },
     { el: '.enf-zoom', titulo: 'Hojas del tamaño justo',
       texto: '«+» y «−» acercan y alejan (también Ctrl + rueda del ratón). El de abajo las ajusta para leerlas enteras sin desplazarte.' },
     { el: '.enf-ruta', titulo: 'Lo que te falta',
@@ -20473,7 +20539,7 @@ window.GRAPA_CONFIG = {
     { el: '.enf-exportar', titulo: 'Exporta el PDF final',
       texto: 'Arma el PDF con folios y firmas y lo descarga. Para seguir otro día, guarda el expediente con Ctrl+Mayús+S.' },
     { el: '.enf-logo', titulo: 'Los menús, a un toque',
-      texto: 'Archivo, Editar, Ver y Ayuda bajan al acercar el ratón al borde de arriba o al tocar el logo. ¿Prefieres ver todo siempre? Pulsa F para la vista clásica.' },
+      texto: 'Archivo, Editar, Ver y Ayuda bajan al acercar el ratón al borde de arriba o al tocar el logo; con su chincheta se quedan fijos. En Ver ▸ Fijar… eliges qué barras quieres siempre a la vista, y la tecla F vuelve a la vista clásica.' },
   ];
 
   const capa = document.createElement('div');
@@ -20690,15 +20756,39 @@ window.GRAPA_CONFIG = {
   btnLogo.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7"/></svg>';
   tableros.prepend(btnLogo);
 
-  // …y a la derecha: el paso siguiente, deshacer, rehacer y Exportar
+  // …y a la derecha: cómo ver el expediente (Hojas · Paquetes · En grande),
+  // buscar, el paso siguiente, deshacer, rehacer y Exportar
+  const ICO_GRANDE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/></svg>';
+  const ICO_CHINCHETA = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/></svg>';
   const acciones = document.createElement('div');
   acciones.className = 'enf-acciones';
   acciones.innerHTML = `
+    <div class="enf-vistas" role="group" aria-label="Cómo ver el expediente">
+      <button type="button" data-espejo='#segVista [data-vista="hojas"]' data-vista-enf="hojas">${ico('hojas')}<span>Hojas</span></button>
+      <button type="button" data-espejo='#segVista [data-vista="paquetes"]' data-vista-enf="paquetes">${ico('paquete')}<span>Paquetes</span></button>
+      <button type="button" data-espejo="#btnLector">${ICO_GRANDE}<span>En grande</span></button>
+    </div>
+    <button type="button" class="enf-ico enf-buscar" data-espejo="#btnBuscarBarra" aria-label="Buscar en el expediente (Ctrl+F)">${ico('lupa')}</button>
+    <span class="enf-sep"></span>
     <button type="button" class="enf-ruta" hidden><span class="enf-puntos"></span><span class="enf-ruta-txt"></span></button>
-    <button type="button" class="enf-ico" data-espejo="#btnDeshacer" aria-label="Deshacer">${ico('deshacer')}</button>
-    <button type="button" class="enf-ico" data-espejo="#btnRehacer" aria-label="Rehacer">${ico('rehacer')}</button>
-    <button type="button" class="btn btn-primario enf-exportar" data-espejo="#btnGuardar">${ico('guardar')} Exportar PDF</button>`;
+    <button type="button" class="enf-ico enf-dup" data-espejo="#btnDeshacer" aria-label="Deshacer">${ico('deshacer')}</button>
+    <button type="button" class="enf-ico enf-dup" data-espejo="#btnRehacer" aria-label="Rehacer">${ico('rehacer')}</button>
+    <button type="button" class="btn btn-primario enf-exportar enf-dup" data-espejo="#btnGuardar">${ico('guardar')} Exportar PDF</button>`;
   tableros.append(acciones);
+
+  // Chinchetas: dejar fija cada barra, sin volver a la vista clásica entera
+  const fijarArriba = document.createElement('button');
+  fijarArriba.type = 'button';
+  fijarArriba.className = 'btn btn-fantasma enf-fijar enf-fijar-arriba';
+  fijarArriba.dataset.fijar = 'arriba';
+  fijarArriba.innerHTML = ICO_CHINCHETA;
+  $('.barra-acciones').prepend(fijarArriba);
+  const fijarRiel = document.createElement('button');
+  fijarRiel.type = 'button';
+  fijarRiel.className = 'enf-fijar enf-fijar-riel';
+  fijarRiel.dataset.fijar = 'riel';
+  fijarRiel.innerHTML = `<span class="riel-ico">${ICO_CHINCHETA}</span><span class="riel-txt">Fijar</span>`;
+  $('#riel').append(fijarRiel);
 
   // Zoom en columna, sobre la rueda
   const zoomCol = document.createElement('div');
@@ -20744,7 +20834,27 @@ window.GRAPA_CONFIG = {
   itemMenu.className = 'menu-item';
   itemMenu.setAttribute('role', 'menuitem');
   itemMenu.innerHTML = `${ico('captura')} <span class="enf-menu-txt">Modo enfocado</span><kbd>F</kbd>`;
-  if (menuVer) menuVer.querySelector('.menu-lista').prepend(itemMenu);
+  // y debajo, qué barras se quedan fijas (solo tiene sentido en el modo enfocado)
+  const FIJABLES = {
+    arriba: { clave: 'grapa.enfocado.fijo.arriba', clase: 'fijo-arriba', menu: 'Fijar la barra de menús' },
+    riel: { clave: 'grapa.enfocado.fijo.riel', clase: 'fijo-riel', menu: 'Fijar las herramientas (izquierda)' },
+    vistas: { clave: 'grapa.enfocado.fijo.vistas', clase: 'fijo-vistas', menu: 'Fijar la barra de vistas y selección' },
+  };
+  const itemsFijar = Object.entries(FIJABLES).map(([cual, f]) => {
+    const it = document.createElement('button');
+    it.className = 'menu-item enf-solo enf-menu-fijar';
+    it.setAttribute('role', 'menuitemcheckbox');
+    it.dataset.fijar = cual;
+    it.innerHTML = `${ico('check')} ${f.menu}`;
+    return it;
+  });
+  if (menuVer) {
+    const lista = menuVer.querySelector('.menu-lista');
+    const sep = document.createElement('span');
+    sep.className = 'menu-sep';
+    sep.setAttribute('role', 'separator');
+    lista.prepend(itemMenu, ...itemsFijar, sep);
+  }
 
   /* ---------------- espejos de los botones de siempre ---------------- */
 
@@ -20755,14 +20865,22 @@ window.GRAPA_CONFIG = {
     // se explica, igual que en el original: assets/cuentas.js mira la clase)
     copia.classList.toggle('bloqueado-admin', original.classList.contains('bloqueado-admin'));
     if (original.dataset.funcion) copia.dataset.funcion = original.dataset.funcion;
+    // la vista encendida (Hojas, Paquetes o En grande)
+    copia.classList.toggle('on', original.classList.contains('on'));
+    if (original.hasAttribute('aria-pressed')) copia.setAttribute('aria-pressed', original.getAttribute('aria-pressed'));
   }
+  const lectorAbierto = () => !$('#lector').hidden;
   $$('[data-espejo]', acciones).forEach((copia) => {
     const original = $(copia.dataset.espejo);
     if (!original) { copia.remove(); return; }
-    copia.addEventListener('click', () => original.click());
+    copia.addEventListener('click', () => {
+      // Hojas o Paquetes con las hojas en grande: primero se cierra lo grande
+      if (copia.dataset.vistaEnf && lectorAbierto()) $('#lectorCerrar').click();
+      original.click();
+    });
     copiarEstado(copia, original);
     new MutationObserver(() => copiarEstado(copia, original))
-      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title', 'class', 'data-funcion'] });
+      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title', 'class', 'data-funcion', 'aria-pressed'] });
   });
 
   /** Lo que la cuenta tiene permitido (sin cuentas, todo). */
@@ -20853,7 +20971,7 @@ window.GRAPA_CONFIG = {
     clearTimeout(tArriba);
     tArriba = setTimeout(() => {
       const barra = $('.barra-superior');
-      if (menuAbierto() || barra.matches(':hover') || barra.contains(document.activeElement)) { ocultarArribaLuego(); return; }
+      if (menuAbierto() || barra.matches(':hover') || barra.querySelector(':focus-visible')) { ocultarArribaLuego(); return; }
       verArriba(false);
     }, 450);
   }
@@ -20877,7 +20995,7 @@ window.GRAPA_CONFIG = {
   function ocultarIzqLuego() {
     clearTimeout(tIzq);
     tIzq = setTimeout(() => {
-      if (panel.matches(':hover') || panel.contains(document.activeElement)) return;
+      if (panel.matches(':hover') || panel.querySelector(':focus-visible')) return;
       verIzq(false);
     }, 380);
   }
@@ -21077,6 +21195,36 @@ window.GRAPA_CONFIG = {
     window.dispatchEvent(new Event('resize'));
     $('#lienzo').dispatchEvent(new Event('scroll'));
   }
+  /* ---------------- chinchetas: qué barras se quedan fijas ---------------- */
+
+  const fijada = (cual) => cuerpo.classList.contains(FIJABLES[cual].clase);
+  function pintarFijas() {
+    Object.keys(FIJABLES).forEach((cual) => {
+      const si = fijada(cual);
+      itemsFijar.find((it) => it.dataset.fijar === cual).setAttribute('aria-checked', String(si));
+    });
+    fijarArriba.classList.toggle('on', fijada('arriba'));
+    fijarArriba.title = fijada('arriba') ? 'Soltar esta barra: que se esconda y baje al acercar el ratón' : 'Dejar fija esta barra';
+    fijarArriba.setAttribute('aria-label', fijarArriba.title);
+    fijarRiel.classList.toggle('on', fijada('riel'));
+    fijarRiel.title = fijada('riel') ? 'Soltar las herramientas: que salgan al acercar el ratón al borde' : 'Dejar fijas las herramientas a la izquierda';
+    fijarRiel.setAttribute('aria-label', fijarRiel.title);
+    $('.riel-txt', fijarRiel).textContent = fijada('riel') ? 'Soltar' : 'Fijar';
+  }
+  function fijar(cual, si) {
+    cuerpo.classList.toggle(FIJABLES[cual].clase, si);
+    poner(FIJABLES[cual].clave, si ? '1' : '0');
+    // al soltar, la barra no desaparece bajo el ratón: se va cuando se aleja
+    if (!si && cual === 'arriba') { verArriba(true); ocultarArribaLuego(); }
+    if (!si && cual === 'riel') { verIzq(true); ocultarIzqLuego(); }
+    pintarFijas();
+    window.dispatchEvent(new Event('resize'));
+  }
+  Object.keys(FIJABLES).forEach((cual) => cuerpo.classList.toggle(FIJABLES[cual].clase, leer(FIJABLES[cual].clave) === '1'));
+  pintarFijas();
+  // (el menú se cierra solo: lo hace app.js al tocar cualquier opción)
+  [fijarArriba, fijarRiel, ...itemsFijar].forEach((b) => b.addEventListener('click', () => fijar(b.dataset.fijar, !fijada(b.dataset.fijar))));
+
   const avisar = (texto) => { try { window.Grapa.aviso(texto, 'ok'); } catch (e) { /* sin avisos */ } };
   /** Lo cambia la persona (tecla F o el menú Ver): se recuerda y se dice cómo volver. */
   function alternar() {

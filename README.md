@@ -53,9 +53,10 @@ Pdflash abre en **modo enfocado**: las hojas ocupan casi toda la pantalla
 (en una laptop de 1366×768, el 95 % en vez del 48 % de antes) y lo demás se
 aparta hasta que lo buscas. Así se leen sin estar acercando y alejando.
 
-- **Arriba queda una sola tira:** las pestañas de los tableros, la ruta del
-  expediente en seis puntos con el paso siguiente («Foliar →»), deshacer,
-  rehacer y **Exportar PDF**.
+- **Arriba queda una sola tira:** las pestañas de los tableros, **Hojas ·
+  Paquetes · En grande** (cómo ver el expediente), la lupa de buscar, la
+  ruta del expediente en seis puntos con el paso siguiente («Foliar →»),
+  deshacer, rehacer y **Exportar PDF**.
 - **Los menús bajan solos** (Archivo, Editar, Ver, Ayuda, con Abrir,
   Imprimir y Guardar) al acercar el ratón al borde de arriba, o tocando el
   logo.
@@ -75,6 +76,12 @@ aparta hasta que lo buscas. Así se leen sin estar acercando y alejando.
   desplazarte. `Ctrl` + rueda del ratón sobre las hojas también acerca y
   aleja.
 - **La barra de acciones de abajo** solo aparece cuando hay hojas marcadas.
+- **Cada barra se puede dejar fija** con su chincheta, o desde *Ver*:
+  *Fijar la barra de menús* (la chincheta está junto a deshacer, en esa
+  misma barra), *Fijar las herramientas (izquierda)* (el botón **Fijar**,
+  abajo del riel; la herramienta elegida sigue abriéndose encima de las
+  hojas) y *Fijar la barra de vistas y selección* (Hojas · Paquetes · En
+  grande, el buscador y Seleccionar todo). Pdflash recuerda cuáles fijaste.
 - ¿Prefieres ver todo siempre? La tecla **`F`** (o *Ver ▸ Modo enfocado*)
   vuelve a la **vista clásica**, con la barra, el panel y el pie fijos, y
   otra vez `F` regresa. Pdflash recuerda la que elegiste.

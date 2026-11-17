@@ -1080,6 +1080,75 @@ const PRUEBAS = {
     afirmar(cabe.abajo <= cabe.lienzo && cabe.alto > l0(cabe), '«Ajustar»: la hoja entera cabe y se lee', cabe);
   },
 
+  async 'modo enfocado: Hojas · Paquetes arriba, y cada barra se puede dejar fija'({ page }) {
+    await conEnfocadoDeEntrada(page);
+    await abrir(page, ['Expediente', 3]);
+    await abrir(page, ['Cotizacion A', 2]);
+    // con dos documentos entra en Paquetes; la tira de arriba lo dice y cambia de vista
+    const encendida = () => page.$eval('.enf-vistas .on span', (s) => s.textContent).catch(() => null);
+    afirmar(await encendida() === 'Paquetes', 'la tira marca Paquetes', await encendida());
+    await page.click('.enf-vistas [data-vista-enf="hojas"]');
+    afirmar(await page.$$eval('#rejilla .pag', (x) => x.length) === 5 && await encendida() === 'Hojas', 'Hojas muestra todas las hojas');
+    // En grande, y desde ahí de vuelta a Paquetes
+    await page.click('.enf-vistas button:has-text("En grande")');
+    await page.waitForSelector('#lector:not([hidden])');
+    afirmar(await encendida() === 'En grande', 'la tira marca En grande', await encendida());
+    await page.click('.enf-vistas [data-vista-enf="paquetes"]');
+    await page.waitForSelector('#lector', { state: 'hidden' });
+    afirmar(await page.$$eval('#rejilla .pag.paquete', (x) => x.length) === 2, 'Paquetes cierra lo grande y muestra las tarjetas');
+
+    const medir = () => page.evaluate(() => ({
+      barra: document.querySelector('.barra-superior').getBoundingClientRect().bottom,
+      riel: document.querySelector('#riel').getBoundingClientRect().right,
+      lienzoX: document.querySelector('#lienzo').getBoundingClientRect().left,
+      vistas: getComputedStyle(document.querySelector('.taller-barra')).display,
+    }));
+    let m = await medir();
+    afirmar(m.barra <= 0 && m.lienzoX === 0 && m.vistas === 'none', 'sin fijar nada, todo apartado', m);
+    // la chincheta de la barra de menús la deja fija
+    await page.mouse.move(700, 2);
+    await page.waitForFunction(() => document.body.classList.contains('ver-arriba'));
+    await page.click('.enf-fijar-arriba');
+    await page.mouse.move(700, 600);
+    await page.waitForTimeout(700);
+    m = await medir();
+    afirmar(m.barra > 40, 'la barra de menús se queda', m);
+    afirmar(await page.isHidden('.enf-exportar'), 'sin Exportar repetido en la tira de pestañas');
+    // la de las herramientas (abajo del riel)
+    await page.mouse.move(4, 450);
+    await page.waitForFunction(() => document.body.classList.contains('ver-izq'));
+    await page.click('.enf-fijar-riel');
+    await page.mouse.move(700, 600);
+    await page.waitForTimeout(600);
+    m = await medir();
+    afirmar(m.riel > 50 && m.lienzoX >= m.riel - 1, 'el riel se queda a la izquierda, al lado de las hojas', m);
+    // con el riel fijo, la herramienta sigue abriéndose encima, sin tapar las pestañas
+    await page.click('.riel-btn[data-va="foliar"]');
+    const cajon = await page.evaluate(() => ({
+      lienzoX: document.querySelector('#lienzo').getBoundingClientRect().left,
+      arriba: document.querySelector('.panel-vistas').getBoundingClientRect().top,
+      pestanas: document.querySelector('#tableros').getBoundingClientRect().bottom,
+    }));
+    afirmar(cajon.lienzoX === m.lienzoX && cajon.arriba >= cajon.pestanas - 1, 'el cajón flota sin mover las hojas ni tapar las pestañas', cajon);
+    await page.keyboard.press('Escape');
+    // y la de vistas, desde el menú Ver
+    await page.click('#menus .menu-boton:text("Ver")');
+    await page.click('.enf-menu-fijar[data-fijar="vistas"]');
+    m = await medir();
+    afirmar(m.vistas !== 'none' && await page.isVisible('#segVista') && await page.isVisible('#btnBuscarBarra'), 'la barra de vistas y selección se queda', m);
+    afirmar(await page.isHidden('.enf-vistas'), 'sin Hojas · Paquetes repetidos arriba');
+    const marcas = await page.$$eval('.enf-menu-fijar', (xs) => xs.map((x) => x.getAttribute('aria-checked')));
+    afirmar(marcas.every((x) => x === 'true'), 'el menú Ver marca las tres', marcas);
+    // se recuerdan
+    await page.reload();
+    await page.waitForFunction(() => window.Grapa && window.Grapa.pintar);
+    afirmar(await page.evaluate(() => ['fijo-arriba', 'fijo-riel', 'fijo-vistas'].every((c) => document.body.classList.contains(c))), 'siguen fijas al volver');
+    // soltar la barra de menús la devuelve a su sitio escondido
+    await page.click('.enf-fijar-arriba');
+    await page.mouse.move(700, 600);
+    await page.waitForFunction(() => document.querySelector('.barra-superior').getBoundingClientRect().bottom <= 0, null, { timeout: 3000 });
+  },
+
   async 'modo enfocado: el recorrido guiado señala dónde quedó cada cosa'({ page }) {
     await conEnfocadoDeEntrada(page);
     await page.evaluate(() => window.Grapa.guia.empezar());
