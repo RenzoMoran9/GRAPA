@@ -1805,6 +1805,154 @@ body.editando-texto .lector-acciones .al-leer{ display:none; }
 .capa-editar.herr-lapiz,.capa-editar.herr-linea,.capa-editar.herr-rect,.capa-editar.herr-elipse{cursor:crosshair}
 .figura-viva{pointer-events:none;z-index:4}
 
+/* ---------- modo enfocado ----------
+   Las hojas se quedan con casi toda la pantalla. Arriba, una sola tira con
+   las pestañas, el paso siguiente y Exportar; lo demás se aparta y vuelve al
+   acercar el ratón al borde (menús arriba, riel a la izquierda) o desde la
+   rueda de abajo a la derecha. Lo arma assets/enfocado.js. */
+.enf-zona,.enf-logo,.enf-acciones,.enf-dock,.enf-cajon-botones{display:none}
+body.enfocado{--tableros-alto:42px}
+
+/* los bordes que despiertan lo escondido */
+body.enfocado .enf-zona{display:block;position:fixed;z-index:55}
+.enf-zona-arriba{top:0;left:0;right:0;height:6px}
+.enf-zona-izq{left:0;top:var(--tableros-alto);bottom:0;width:10px}
+.enf-zona-izq::after{
+  content:"";position:absolute;left:3px;top:50%;width:4px;height:46px;margin-top:-23px;
+  border-radius:4px;background:var(--borde);transition:opacity .15s,background .15s;
+}
+.enf-zona-izq:hover::after{background:var(--texto-3)}
+body.enfocado.ver-izq .enf-zona-izq::after,body.enfocado.cajon-abierto .enf-zona-izq::after{opacity:0}
+
+/* la barra de menús baja sola, encima de todo, sin empujar las hojas */
+body.enfocado .barra-superior{
+  position:fixed;top:0;left:0;right:0;z-index:60;
+  transform:translateY(-100%);transition:transform .18s ease,box-shadow .18s;
+}
+body.enfocado.ver-arriba .barra-superior{transform:none;box-shadow:var(--sombra-fuerte)}
+body.enfocado .marca #btnPanel{display:none}
+
+/* lo que repetía lo que ya dicen las pestañas, o va a la tira de arriba */
+body.enfocado .taller-cabecera,body.enfocado .ruta,body.enfocado .barra-estado{display:none}
+/* de la barra del taller solo queda lo que avisa de algo: la búsqueda puesta
+   o el «volver a Paquetes»; si no hay nada de eso, no ocupa sitio */
+body.enfocado .taller-barra{padding:8px 22px 4px;border-bottom:0}
+body.enfocado .taller-barra > :not(#chipBusqueda):not(.taller-herramientas){display:none}
+body.enfocado .taller-herramientas > :not(#btnVolverPaquetes){display:none}
+body.enfocado .taller-barra:not(:has(#chipBusqueda:not([hidden]),#btnVolverPaquetes:not([hidden]))){display:none}
+body.enfocado .lienzo{padding-top:16px}
+
+/* la tira de pestañas: logo, pestañas y, a la derecha, lo de siempre a mano */
+body.enfocado .tableros{padding:0 10px 0 8px;background:var(--fondo-2)}
+body.enfocado .tablero.activo{background:var(--fondo)}
+body.enfocado .enf-logo{
+  display:grid;place-items:center;align-self:center;flex:none;width:28px;height:28px;margin-right:6px;
+  border:0;border-radius:8px;cursor:pointer;padding:0;
+  background:linear-gradient(145deg,var(--acento),var(--acento-oscuro));box-shadow:0 1px 4px rgba(224,83,47,.35);
+}
+.enf-logo svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.enf-logo:hover{filter:brightness(1.08)}
+body.enfocado .enf-acciones{display:flex;align-items:center;gap:3px;align-self:center;flex:none;margin-left:8px}
+.enf-ico{
+  width:30px;height:30px;display:grid;place-items:center;padding:0;border:0;border-radius:7px;
+  background:transparent;color:var(--texto-2);cursor:pointer;
+}
+.enf-ico:hover:not(:disabled){background:var(--fondo-3);color:var(--texto)}
+.enf-ico:disabled{opacity:.35;cursor:default}
+.enf-exportar{min-height:28px;padding:3px 12px;font-size:12.5px;margin-left:5px}
+.enf-ruta{
+  display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 11px 0 9px;margin-right:6px;
+  border:1px solid var(--borde);border-radius:999px;background:var(--fondo);cursor:pointer;
+  color:var(--acento);font:inherit;font-size:12.5px;font-weight:600;white-space:nowrap;
+}
+.enf-ruta:hover:not(:disabled){border-color:var(--acento)}
+.enf-ruta.listo{color:var(--verde);cursor:default}
+.enf-ruta[hidden]{display:none}
+.enf-puntos{display:inline-flex;gap:3px}
+.enf-puntos i{width:7px;height:7px;border-radius:50%;background:var(--borde)}
+.enf-puntos i.hecho{background:var(--verde)}
+.enf-puntos i.alerta{background:var(--aviso)}
+.enf-puntos i.sig{background:var(--acento);box-shadow:0 0 0 2px var(--acento-tenue)}
+
+/* el panel: el riel sale del borde y la herramienta se abre como cajón
+   ENCIMA de las hojas, sin encogerlas. Fijado, vuelve a su sitio de siempre. */
+body.enfocado .panel{
+  position:fixed;left:0;top:var(--tableros-alto);bottom:0;z-index:45;width:auto;
+  transform:translateX(calc(-100% - 14px));transition:transform .2s ease,box-shadow .2s;
+  border-radius:0 14px 14px 0;overflow:hidden;
+}
+body.enfocado.ver-izq .panel,body.enfocado.cajon-abierto .panel{transform:none;box-shadow:var(--sombra-fuerte)}
+body.enfocado .panel .panel-vistas{display:none}
+body.enfocado.cajon-abierto .panel .panel-vistas{display:block;width:calc(var(--panel-ancho) - 64px)}
+body.enfocado.cajon-abierto .enf-cajon-botones{display:flex;position:absolute;top:9px;right:8px;gap:1px;z-index:3}
+body.enfocado.cajon-abierto .bloque-cabecera{padding-right:76px}
+body.enfocado.cajon-fijo .panel{position:relative;top:auto;transform:none;box-shadow:none;border-radius:0;z-index:auto}
+body.enfocado.cajon-fijo [data-cajon="fijar"]{color:var(--acento);background:var(--acento-tenue)}
+
+/* la barra de lo marcado, solo cuando hay algo marcado */
+body.enfocado .barra-seleccion:has(.bs-cuenta.todas){display:none}
+
+/* abajo a la derecha: el zoom en columna y la rueda */
+body.enfocado .enf-dock{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  position:absolute;right:16px;bottom:16px;z-index:13;
+}
+body.enfocado #lector:not([hidden]) ~ .enf-dock{display:none}
+.enf-zoom{
+  display:flex;flex-direction:column;align-items:center;padding:3px;
+  background:var(--fondo-2);border:1px solid var(--borde);border-radius:12px;box-shadow:var(--sombra);
+}
+.enf-zoom button{
+  width:34px;height:32px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;
+  background:transparent;color:var(--texto-2);cursor:pointer;
+}
+.enf-zoom button:hover{background:var(--fondo-3);color:var(--texto)}
+.enf-zoom-num{font-size:10.5px;font-weight:600;color:var(--texto-3);font-variant-numeric:tabular-nums;line-height:1.3}
+.enf-zoom-sep{width:20px;height:1px;background:var(--borde);margin:3px 0}
+.enf-fab{
+  width:52px;height:52px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;cursor:pointer;
+  background:var(--acento);color:#fff;
+  box-shadow:0 8px 22px rgba(224,83,47,.38),0 2px 6px rgba(0,0,0,.12);
+  transition:transform .18s ease,background .12s;
+}
+.enf-fab svg{width:24px;height:24px;fill:currentColor}
+.enf-fab:hover{background:var(--acento-oscuro)}
+.enf-fab.activo{transform:rotate(36deg)}
+body.enfocado .avisos{bottom:16px;right:86px}
+
+/* la rueda: se abre alrededor del puntero */
+.enf-rueda{position:fixed;z-index:90;width:0;height:0}
+.enf-rueda::before{
+  content:"";position:absolute;left:-152px;top:-152px;width:304px;height:304px;border-radius:50%;
+  background:color-mix(in srgb,var(--fondo-2) 90%,transparent);border:1px solid var(--borde);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:var(--sombra-fuerte);
+}
+.enf-rueda.abierta::before{animation:enf-disco .16s ease-out both}
+@keyframes enf-disco{from{transform:scale(.6);opacity:0}}
+.enf-rueda-centro{
+  position:absolute;left:-48px;top:-48px;width:96px;height:96px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px;
+  border:1px solid var(--borde);background:var(--fondo);color:var(--texto);cursor:pointer;font:inherit;text-align:center;
+}
+.enf-rueda-centro b{font-size:13px;font-weight:700;line-height:1.15}
+.enf-rueda-centro small{font-size:10px;line-height:1.2;color:var(--texto-3)}
+.enf-rueda-btn{
+  position:absolute;left:calc(var(--x) - 29px);top:calc(var(--y) - 29px);width:58px;height:58px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;
+  border:0;border-radius:50%;background:transparent;color:var(--texto-2);cursor:pointer;font:inherit;
+}
+.enf-rueda-btn .ico{width:21px;height:21px}
+.enf-rueda-btn span{font-size:10px;font-weight:600;line-height:1}
+.enf-rueda-btn:hover,.enf-rueda-btn:focus-visible{background:var(--acento-tenue);color:var(--acento);outline:none}
+.enf-rueda-btn.peligro:hover,.enf-rueda-btn.peligro:focus-visible{background:color-mix(in srgb,var(--rojo) 14%,transparent);color:var(--rojo)}
+.enf-rueda.abierta .enf-rueda-btn{animation:enf-sale .22s cubic-bezier(.2,.9,.3,1.15) both;animation-delay:var(--d)}
+@keyframes enf-sale{from{transform:translate(calc(var(--x) * -1),calc(var(--y) * -1)) scale(.4);opacity:0}}
+.pag.enf-apuntada .pag-marco{box-shadow:0 0 0 2px var(--azul),0 4px 14px rgba(47,111,237,.25)}
+@media (prefers-reduced-motion:reduce){
+  .enf-rueda.abierta .enf-rueda-btn,.enf-rueda.abierta::before{animation:none}
+  body.enfocado .panel,body.enfocado .barra-superior{transition:none}
+}
+
 /* la envoltura del visor limita las imágenes; los sellos se miden solos */
 .sello-mini{max-width:none}
 
@@ -20307,6 +20455,27 @@ window.GRAPA_CONFIG = {
       texto: 'Aquí están la ayuda y los atajos. Este recorrido vuelve cuando quieras desde el menú Ayuda.' },
   ];
 
+  // En el modo enfocado (assets/enfocado.js) casi todo está apartado: el
+  // recorrido señala dónde se esconde cada cosa.
+  const PASOS_ENFOCADO = [
+    { el: '#btnAbrir2', titulo: 'Empieza abriendo tus archivos',
+      texto: 'PDF, Word, Excel o fotos. También puedes arrastrarlos a la pantalla, pegarlos con Ctrl+V o usar Ctrl+O.' },
+    { el: '#lienzo', titulo: 'Las hojas, a pantalla completa',
+      texto: 'Arrástralas para cambiar el orden. Un clic marca una hoja; con Ctrl o Mayús marcas varias. La tecla V las abre en grande.' },
+    { el: '.enf-fab', titulo: 'Tus herramientas, en una rueda',
+      texto: 'Abrir, buscar, revisar, firmar, foliar, separar… Toca aquí o haz clic derecho en el tablero. Sobre una hoja, la rueda trae lo de esa hoja: girar, firmar, duplicar, borrar…' },
+    { el: '#riel', titulo: 'También en el borde izquierdo', lado: 'derecha', mostrar: 'ver-izq',
+      texto: 'Acerca el ratón al borde y salen las herramientas en columna. La que elijas se abre encima de las hojas; con la chincheta se queda fija a un lado.' },
+    { el: '.enf-zoom', titulo: 'Hojas del tamaño justo',
+      texto: '«+» y «−» acercan y alejan (también Ctrl + rueda del ratón). El de abajo las ajusta para leerlas enteras sin desplazarte.' },
+    { el: '.enf-ruta', titulo: 'Lo que te falta',
+      texto: 'Los puntos dicen qué está hecho (verde) y qué falta. El botón hace el paso siguiente: foliar, firmar, guardar…' },
+    { el: '.enf-exportar', titulo: 'Exporta el PDF final',
+      texto: 'Arma el PDF con folios y firmas y lo descarga. Para seguir otro día, guarda el expediente con Ctrl+Mayús+S.' },
+    { el: '.enf-logo', titulo: 'Los menús, a un toque',
+      texto: 'Archivo, Editar, Ver y Ayuda bajan al acercar el ratón al borde de arriba o al tocar el logo. ¿Prefieres ver todo siempre? Pulsa F para la vista clásica.' },
+  ];
+
   const capa = document.createElement('div');
   capa.className = 'guia';
   capa.id = 'guia';
@@ -20381,7 +20550,12 @@ window.GRAPA_CONFIG = {
     $('#guiaSaltar').textContent = ultimo ? (E.paginas.length ? '' : 'Terminar') : 'Saltar';
     $('#guiaSaltar').hidden = ultimo && !!E.paginas.length;
     $('#guiaPuntos').innerHTML = pasos.map((_, i) => `<i class="${i === actual ? 'activo' : ''}"></i>`).join('');
+    // lo que vive escondido (el riel del modo enfocado) sale mientras se explica
+    const antes = document.body.classList.contains('ver-izq');
+    document.body.classList.toggle('ver-izq', paso.mostrar === 'ver-izq');
     colocar();
+    // y se vuelve a medir cuando termina de deslizarse
+    if (antes !== document.body.classList.contains('ver-izq')) setTimeout(colocar, 260);
     // el botón principal recibe el foco: Enter avanza
     setTimeout(() => $('#guiaSiguiente').focus(), 30);
   }
@@ -20389,7 +20563,9 @@ window.GRAPA_CONFIG = {
   function empezar() {
     if (!capa.hidden) return;
     // los pasos cuyo botón no está (por permisos, o la ruta sin hojas) se saltan
-    pasos = PASOS.filter((p) => visible($(p.el)));
+    const enfocado = document.body.classList.contains('enfocado');
+    // en el modo enfocado el riel está apartado, pero existe: cuenta como visible
+    pasos = (enfocado ? PASOS_ENFOCADO : PASOS).filter((p) => (p.mostrar ? !!$(p.el) : visible($(p.el))));
     if (!pasos.length) return;
     actual = 0;
     try { localStorage.setItem(CLAVE_VISTA, '1'); } catch (e) {}
@@ -20400,6 +20576,7 @@ window.GRAPA_CONFIG = {
 
   function terminar() {
     capa.hidden = true;
+    document.body.classList.remove('ver-izq');
     document.documentElement.classList.remove('con-guia');
   }
 
@@ -20449,6 +20626,495 @@ window.GRAPA_CONFIG = {
       setTimeout(() => { if (!yaLaVio() && puedeEmpezarSola()) empezar(); }, 700);
     }, 500);
   }
+})();
+
+</script>
+
+<!-- assets/enfocado.js -->
+<script>
+/* ===========================================================
+   Pdflash · modo enfocado
+
+   Las hojas se quedan con casi toda la pantalla. Lo demás no desaparece:
+   se aparta y vuelve cuando se le busca.
+
+     · Arriba queda una sola tira: las pestañas de los tableros, deshacer,
+       el paso siguiente del expediente y Exportar PDF.
+     · La barra de menús (Archivo, Editar, Ver, Ayuda) baja sola al acercar
+       el ratón al borde de arriba, o con el botón del logo.
+     · El riel de herramientas sale al acercar el ratón al borde izquierdo;
+       la herramienta elegida se abre como un cajón ENCIMA de las hojas, sin
+       encogerlas. Con la chincheta se queda fijo, como antes.
+     · La rueda (botón redondo abajo a la derecha, o clic derecho en el
+       tablero) junta todas las herramientas alrededor del puntero. Con clic
+       derecho sobre una hoja, la rueda trae lo que se hace con esa hoja (o
+       con las marcadas, si es una de ellas).
+     · El zoom pasa a una columnita junto a la rueda: «+», «−» y «Ajustar»,
+       que deja las hojas del tamaño justo para leerlas sin desplazarse.
+       Ctrl + rueda del ratón sobre las hojas también acerca y aleja.
+     · La barra de lo marcado solo aparece cuando hay algo marcado.
+
+   Todo actúa sobre los botones de siempre (se les hace clic): no hay una
+   segunda manera de hacer lo mismo que pueda separarse con el tiempo.
+   Viene encendido. La tecla F o Ver ▸ Modo enfocado lo apagan (la vista
+   clásica, con todo a la vista) y lo vuelven a encender; se recuerda.
+   =========================================================== */
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const ico = (id) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  const CLAVE = 'grapa.enfocado';
+  const CLAVE_FIJO = 'grapa.enfocado.cajonFijo';
+  const leer = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const poner = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
+  const cuerpo = document.body;
+  const activo = () => cuerpo.classList.contains('enfocado');
+
+  /* ---------------- piezas nuevas ---------------- */
+
+  // Bordes que despiertan lo escondido al acercar el ratón
+  const zonaArriba = document.createElement('div');
+  zonaArriba.className = 'enf-zona enf-zona-arriba';
+  const zonaIzq = document.createElement('div');
+  zonaIzq.className = 'enf-zona enf-zona-izq';
+  cuerpo.append(zonaArriba, zonaIzq);
+
+  // En la tira de pestañas: el logo, que baja los menús…
+  const tableros = $('#tableros');
+  const btnLogo = document.createElement('button');
+  btnLogo.type = 'button';
+  btnLogo.className = 'enf-logo';
+  btnLogo.title = 'Menús: Archivo, Editar, Ver y Ayuda (o acerca el ratón al borde de arriba)';
+  btnLogo.setAttribute('aria-label', 'Mostrar los menús');
+  btnLogo.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7"/></svg>';
+  tableros.prepend(btnLogo);
+
+  // …y a la derecha: el paso siguiente, deshacer, rehacer y Exportar
+  const acciones = document.createElement('div');
+  acciones.className = 'enf-acciones';
+  acciones.innerHTML = `
+    <button type="button" class="enf-ruta" hidden><span class="enf-puntos"></span><span class="enf-ruta-txt"></span></button>
+    <button type="button" class="enf-ico" data-espejo="#btnDeshacer" aria-label="Deshacer">${ico('deshacer')}</button>
+    <button type="button" class="enf-ico" data-espejo="#btnRehacer" aria-label="Rehacer">${ico('rehacer')}</button>
+    <button type="button" class="btn btn-primario enf-exportar" data-espejo="#btnGuardar">${ico('guardar')} Exportar PDF</button>`;
+  tableros.append(acciones);
+
+  // Zoom en columna, sobre la rueda
+  const zoomCol = document.createElement('div');
+  zoomCol.className = 'enf-zoom';
+  zoomCol.innerHTML = `
+    <button type="button" data-zoom="mas" title="Acercar (Ctrl + rueda del ratón)" aria-label="Acercar">${ico('mas')}</button>
+    <span class="enf-zoom-num" title="Tamaño de las hojas">100%</span>
+    <button type="button" data-zoom="menos" title="Alejar (Ctrl + rueda del ratón)" aria-label="Alejar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+    <span class="enf-zoom-sep"></span>
+    <button type="button" data-zoom="ajustar" title="Ajustar: las hojas del tamaño justo para leerlas sin desplazarte" aria-label="Ajustar a la pantalla">${ico('captura')}</button>`;
+  const fab = document.createElement('button');
+  fab.type = 'button';
+  fab.className = 'enf-fab';
+  fab.title = 'Herramientas (o clic derecho sobre las hojas)';
+  fab.setAttribute('aria-label', 'Abrir la rueda de herramientas');
+  fab.setAttribute('aria-expanded', 'false');
+  fab.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="18.1" cy="9.5" r="2"/><circle cx="15.8" cy="16.6" r="2"/><circle cx="8.2" cy="16.6" r="2"/><circle cx="5.9" cy="9.5" r="2"/></svg>';
+  const dock = document.createElement('div');
+  dock.className = 'enf-dock';
+  dock.append(zoomCol, fab);
+  $('.taller').append(dock);
+
+  // La rueda
+  const rueda = document.createElement('div');
+  rueda.className = 'enf-rueda';
+  rueda.hidden = true;
+  rueda.setAttribute('role', 'menu');
+  rueda.innerHTML = '<div class="enf-rueda-aro"></div><button type="button" class="enf-rueda-centro" aria-label="Cerrar la rueda"><b></b><small></small></button>';
+  cuerpo.append(rueda);
+
+  // Botones del cajón: fijarlo y cerrarlo
+  const panel = $('#panel');
+  const cajonBotones = document.createElement('div');
+  cajonBotones.className = 'enf-cajon-botones';
+  cajonBotones.innerHTML = `
+    <button type="button" class="enf-ico" data-cajon="fijar" title="Fijar el panel al lado de las hojas" aria-label="Fijar el panel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/></svg></button>
+    <button type="button" class="enf-ico" data-cajon="cerrar" title="Cerrar (Esc)" aria-label="Cerrar el panel">${ico('cerrar')}</button>`;
+  panel.append(cajonBotones);
+
+  // Ver ▸ Modo enfocado
+  const menuVer = $$('#menus .menu').find((m) => m.querySelector('[data-vista="hojas"]'));
+  const itemMenu = document.createElement('button');
+  itemMenu.className = 'menu-item';
+  itemMenu.setAttribute('role', 'menuitem');
+  itemMenu.innerHTML = `${ico('captura')} <span class="enf-menu-txt">Modo enfocado</span><kbd>F</kbd>`;
+  if (menuVer) menuVer.querySelector('.menu-lista').prepend(itemMenu);
+
+  /* ---------------- espejos de los botones de siempre ---------------- */
+
+  function copiarEstado(copia, original) {
+    copia.disabled = original.disabled;
+    if (original.title) copia.title = original.title;
+    // lo que el administrador apagó se ve apagado también aquí (y al tocarlo
+    // se explica, igual que en el original: assets/cuentas.js mira la clase)
+    copia.classList.toggle('bloqueado-admin', original.classList.contains('bloqueado-admin'));
+    if (original.dataset.funcion) copia.dataset.funcion = original.dataset.funcion;
+  }
+  $$('[data-espejo]', acciones).forEach((copia) => {
+    const original = $(copia.dataset.espejo);
+    if (!original) { copia.remove(); return; }
+    copia.addEventListener('click', () => original.click());
+    copiarEstado(copia, original);
+    new MutationObserver(() => copiarEstado(copia, original))
+      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title', 'class', 'data-funcion'] });
+  });
+
+  /** Lo que la cuenta tiene permitido (sin cuentas, todo). */
+  const cuentas = () => (window.Grapa && window.Grapa.cuentas) || null;
+  function permitida(h) {
+    const C = cuentas();
+    if (!C) return true;
+    if (h.va && !C.seccionPermitida(h.va)) return false;
+    if (h.fn && !C.puede(h.fn)) return false;
+    return true;
+  }
+
+  // La ruta del expediente, en seis puntos y el paso siguiente
+  const ruta = $('#ruta');
+  const enfRuta = $('.enf-ruta', acciones);
+  function pintarRuta() {
+    const pasos = $$('#rutaPasos .paso');
+    const sig = $('#rutaSiguiente');
+    enfRuta.hidden = ruta.hidden || !pasos.length;
+    if (enfRuta.hidden) return;
+    $('.enf-puntos', enfRuta).innerHTML = pasos.map((p) => {
+      const cls = ['hecho', 'alerta'].find((e) => p.classList.contains('est-' + e)) || '';
+      return `<i class="${cls}${p.classList.contains('siguiente') ? ' sig' : ''}"></i>`;
+    }).join('');
+    const listo = sig.classList.contains('listo');
+    enfRuta.classList.toggle('listo', listo);
+    $('.enf-ruta-txt', enfRuta).textContent = listo ? 'Todo listo' : sig.textContent;
+    const hechos = pasos.filter((p) => p.classList.contains('est-hecho')).length;
+    enfRuta.title = `Ruta del expediente: ${hechos} de ${pasos.length} pasos hechos. ${sig.title || ''}`;
+    enfRuta.disabled = listo;
+  }
+  enfRuta.addEventListener('click', () => $('#rutaSiguiente').click());
+  new MutationObserver(pintarRuta).observe(ruta, { attributes: true, childList: true, subtree: true, characterData: true });
+  pintarRuta();
+
+  /* ---------------- zoom ---------------- */
+
+  const zoom = $('#zoom');
+  const ZOOM_BASE = 180;
+  function ponerZoom(v) {
+    zoom.value = String(Math.round(Math.max(+zoom.min, Math.min(+zoom.max, v))));
+    zoom.dispatchEvent(new Event('input', { bubbles: true }));
+    zoom.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  const numZoom = $('.enf-zoom-num', zoomCol);
+  const pintarZoom = () => { numZoom.textContent = Math.round((+zoom.value / ZOOM_BASE) * 100) + '%'; };
+  zoom.addEventListener('input', pintarZoom);
+  pintarZoom();
+
+  /** El ancho de hoja con el que una fila entera cabe en la pantalla, alta y sin desplazarse. */
+  function anchoAjustado() {
+    const lienzo = $('#lienzo');
+    const cs = getComputedStyle(lienzo);
+    const ancho = lienzo.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const alto = lienzo.clientHeight - parseFloat(cs.paddingTop) - 34; // el pie de la hoja
+    const hueco = 18;
+    // la proporción de la primera hoja (A4 si aún no hay ninguna)
+    const marco = $('#rejilla .pag-marco');
+    const prop = marco ? marco.clientHeight / Math.max(1, marco.clientWidth) : 1.414;
+    const ideal = alto / prop;
+    const columnas = Math.max(1, Math.ceil((ancho + hueco) / (ideal + hueco)));
+    return Math.floor((ancho - hueco * (columnas - 1)) / columnas) - 1;
+  }
+  zoomCol.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-zoom]');
+    if (!b) return;
+    const v = +zoom.value;
+    if (b.dataset.zoom === 'mas') ponerZoom(v * 1.12);
+    else if (b.dataset.zoom === 'menos') ponerZoom(v / 1.12);
+    else ponerZoom(anchoAjustado());
+  });
+  // Ctrl + rueda sobre las hojas: acerca y aleja las hojas, no la página entera
+  $('#lienzo').addEventListener('wheel', (ev) => {
+    if (!activo() || !(ev.ctrlKey || ev.metaKey)) return;
+    ev.preventDefault();
+    ponerZoom(+zoom.value * (ev.deltaY < 0 ? 1.08 : 1 / 1.08));
+  }, { passive: false });
+
+  /* ---------------- bordes: menús arriba, riel a la izquierda ---------------- */
+
+  let tArriba = 0, tIzq = 0;
+  const menuAbierto = () => $$('#menus .menu-lista').some((l) => !l.hidden);
+  function verArriba(si) {
+    clearTimeout(tArriba);
+    cuerpo.classList.toggle('ver-arriba', si);
+  }
+  function ocultarArribaLuego() {
+    clearTimeout(tArriba);
+    tArriba = setTimeout(() => {
+      const barra = $('.barra-superior');
+      if (menuAbierto() || barra.matches(':hover') || barra.contains(document.activeElement)) { ocultarArribaLuego(); return; }
+      verArriba(false);
+    }, 450);
+  }
+  zonaArriba.addEventListener('mouseenter', () => verArriba(true));
+  // con un movimiento rápido el puntero puede no llegar a «entrar» en la barra:
+  // también se cuenta salir del borde
+  zonaArriba.addEventListener('mouseleave', ocultarArribaLuego);
+  $('.barra-superior').addEventListener('mouseleave', ocultarArribaLuego);
+  $('.barra-superior').addEventListener('mouseenter', () => clearTimeout(tArriba));
+  btnLogo.addEventListener('click', () => {
+    verArriba(!cuerpo.classList.contains('ver-arriba'));
+    if (cuerpo.classList.contains('ver-arriba')) ocultarArribaLuego();
+  });
+  // un clic en una opción de menú la usa y la barra vuelve a subir
+  $('#menus').addEventListener('click', (ev) => { if (ev.target.closest('.menu-item')) setTimeout(() => verArriba(false), 120); });
+
+  function verIzq(si) {
+    clearTimeout(tIzq);
+    cuerpo.classList.toggle('ver-izq', si);
+  }
+  function ocultarIzqLuego() {
+    clearTimeout(tIzq);
+    tIzq = setTimeout(() => {
+      if (panel.matches(':hover') || panel.contains(document.activeElement)) return;
+      verIzq(false);
+    }, 380);
+  }
+  zonaIzq.addEventListener('mouseenter', () => verIzq(true));
+  zonaIzq.addEventListener('mouseleave', ocultarIzqLuego);
+  panel.addEventListener('mouseenter', () => clearTimeout(tIzq));
+  panel.addEventListener('mouseleave', ocultarIzqLuego);
+
+  /* ---------------- el cajón de la herramienta ---------------- */
+
+  const cajonAbierto = () => cuerpo.classList.contains('cajon-abierto');
+  function abrirCajon(cual) {
+    const C = cuentas();
+    // una herramienta apagada por el administrador: se explica, sin abrir un cajón vacío
+    if (C && !C.seccionPermitida(cual)) { C.permitido(C.funcionDeSeccion(cual)); return; }
+    cuerpo.classList.add('cajon-abierto');
+    const b = $(`.riel-btn[data-va="${cual}"]`);
+    if (b && !b.classList.contains('activo')) b.click();
+    devolverScroll();
+  }
+  function cerrarCajon() {
+    cuerpo.classList.remove('cajon-abierto');
+    verIzq(false);
+  }
+  // irASeccion() hace scrollIntoView, y con el panel aún fuera de la vista el
+  // navegador podía correr la página entera: se devuelve a su sitio.
+  function devolverScroll() {
+    requestAnimationFrame(() => {
+      document.documentElement.scrollTop = document.documentElement.scrollLeft = 0;
+      cuerpo.scrollTop = cuerpo.scrollLeft = 0;
+    });
+  }
+  // un clic en el riel abre su cajón; otro clic en la que ya está abierta lo cierra
+  $('#riel').addEventListener('click', (ev) => {
+    if (!activo()) return;
+    const b = ev.target.closest('.riel-btn');
+    if (!b) return;
+    if (ev.isTrusted && cajonAbierto() && b.classList.contains('activo')) {
+      cerrarCajon();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    cuerpo.classList.add('cajon-abierto');
+    devolverScroll();
+  }, true);
+  cajonBotones.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-cajon]');
+    if (!b) return;
+    if (b.dataset.cajon === 'cerrar') {
+      cuerpo.classList.remove('cajon-fijo');
+      poner(CLAVE_FIJO, '0');
+      cerrarCajon();
+    } else {
+      const fijo = !cuerpo.classList.contains('cajon-fijo');
+      cuerpo.classList.toggle('cajon-fijo', fijo);
+      cuerpo.classList.add('cajon-abierto');
+      poner(CLAVE_FIJO, fijo ? '1' : '0');
+      b.title = fijo ? 'Soltar el panel: que vuelva a flotar encima de las hojas' : 'Fijar el panel al lado de las hojas';
+    }
+  });
+
+  /* ---------------- la rueda ---------------- */
+
+  const HERRAMIENTAS = [
+    { ico: 'abrir', txt: 'Abrir', largo: 'Abrir archivos (Ctrl+O)', hacer: () => $('#btnAbrir').click() },
+    { ico: 'docs', txt: 'Docs', largo: 'Documentos del expediente', va: 'docs', hacer: () => abrirCajon('docs') },
+    { ico: 'lupa', txt: 'Buscar', largo: 'Buscar en todas las hojas (Ctrl+F)', va: 'buscar', hacer: () => abrirCajon('buscar') },
+    { ico: 'revisar', txt: 'Revisar', largo: 'Hojas en blanco o torcidas', va: 'revisar', hacer: () => abrirCajon('revisar') },
+    { ico: 'firma', txt: 'Firmas', largo: 'Firmas y sellos', va: 'firmas', hacer: () => abrirCajon('firmas') },
+    { ico: 'sello', txt: 'Marca', largo: 'Marca de agua o sello de texto', va: 'marca', hacer: () => abrirCajon('marca') },
+    { ico: 'folios', txt: 'Folios', largo: 'Foliación y numeración', va: 'foliar', hacer: () => abrirCajon('foliar') },
+    { ico: 'dividir', txt: 'Separar', largo: 'Separar hojas en otro PDF', va: 'dividir', hacer: () => abrirCajon('dividir') },
+    { ico: 'comparar', txt: 'Grande', largo: 'Ver las hojas en grande (V)', hacer: () => $('#btnLector').click() },
+    { ico: 'salida', txt: 'Opciones', largo: 'Nombre, peso y carpeta del PDF', va: 'salida', hacer: () => abrirCajon('salida') },
+  ];
+
+  /** Lo que se hace con una hoja: los mismos botones que salen al pasar por encima de ella. */
+  function accionesDeHoja(pag) {
+    const botones = $$('.pag-acciones button', pag);
+    const de = (i) => () => botones[i] && botones[i].click();
+    const n = $$('.pag.sel').length;
+    if (pag.classList.contains('sel') && n > 1) {
+      // es una de varias marcadas: la rueda trabaja con todas ellas
+      const por = (sel) => () => $(sel).click();
+      return {
+        titulo: `${n} hojas`, sub: 'marcadas',
+        lista: [
+          { ico: 'girar-izq', txt: 'Girar izq.', largo: 'Girar a la izquierda', hacer: por('#btnGirarIzq') },
+          { ico: 'girar-der', txt: 'Girar der.', largo: 'Girar a la derecha', hacer: por('#btnGirarDer') },
+          { ico: 'firma', txt: 'Firmar', largo: 'Firmar estas hojas', fn: 'firmas', hacer: por('#bsFirmar') },
+          { ico: 'comparar', txt: 'Comparar', largo: 'Verlas una al lado de otra', hacer: por('#btnComparar') },
+          { ico: 'inicio', txt: 'Al inicio', largo: 'Moverlas al inicio', hacer: por('#btnMoverInicio') },
+          { ico: 'fin', txt: 'Al final', largo: 'Moverlas al final', hacer: por('#btnMoverFin') },
+          { ico: 'guardar', txt: 'Extraer', largo: 'Bajarlas en un PDF aparte', fn: 'exportar', hacer: por('#btnDescargarSel') },
+          { ico: 'imprimir', txt: 'Imprimir', largo: 'Imprimir solo estas', fn: 'imprimir', hacer: por('#btnImprimirSel') },
+          { ico: 'duplicar', txt: 'Duplicar', largo: 'Duplicarlas (Ctrl+D)', hacer: por('#btnDuplicar') },
+          { ico: 'borrar', txt: 'Eliminar', largo: 'Eliminarlas (Supr)', hacer: por('#btnEliminar'), peligro: true },
+        ],
+      };
+    }
+    const num = (pag.querySelector('.pag-etiqueta b') || {}).textContent || $$('#rejilla .pag').indexOf(pag) + 1;
+    return {
+      titulo: 'Hoja ' + num, sub: 'clic derecho',
+      lista: [
+        { ico: 'girar-izq', txt: 'Girar izq.', largo: 'Girar a la izquierda', hacer: de(0) },
+        { ico: 'girar-der', txt: 'Girar der.', largo: 'Girar a la derecha', hacer: de(1) },
+        { ico: 'lupa', txt: 'Grande', largo: 'Ver esta hoja en grande', hacer: de(2) },
+        { ico: 'firma', txt: 'Firmar', largo: 'Colocar firma o sello', fn: 'firmas', hacer: de(3) },
+        { ico: 'texto', txt: 'Texto', largo: 'Corregir el texto de esta hoja', fn: 'editarTexto', hacer: de(4) },
+        { ico: 'guardar', txt: 'Bajar', largo: 'Descargar solo esta hoja', fn: 'exportar', hacer: de(5) },
+        { ico: 'imprimir', txt: 'Imprimir', largo: 'Imprimir esta hoja', fn: 'imprimir', hacer: de(6) },
+        { ico: 'duplicar', txt: 'Duplicar', largo: 'Duplicar', hacer: de(7) },
+        { ico: 'borrar', txt: 'Eliminar', largo: 'Eliminar', hacer: de(8), peligro: true },
+      ],
+    };
+  }
+
+  const RADIO = 104;
+  let alCerrarRueda = null;
+  function abrirRueda(x, y, menu) {
+    const aro = $('.enf-rueda-aro', rueda);
+    const centro = $('.enf-rueda-centro', rueda);
+    const titulo = menu.titulo || 'Herramientas';
+    const sub = menu.sub || 'elige una';
+    aro.innerHTML = '';
+    // solo lo que esta cuenta puede usar: la rueda no ofrece lo apagado
+    const lista = menu.lista.filter(permitida);
+    lista.forEach((h, i) => {
+      const ang = -Math.PI / 2 + (i * 2 * Math.PI) / lista.length;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'enf-rueda-btn' + (h.peligro ? ' peligro' : '');
+      b.setAttribute('role', 'menuitem');
+      b.style.setProperty('--x', (Math.cos(ang) * RADIO).toFixed(1) + 'px');
+      b.style.setProperty('--y', (Math.sin(ang) * RADIO).toFixed(1) + 'px');
+      b.style.setProperty('--d', (i * 14) + 'ms');
+      b.innerHTML = ico(h.ico) + `<span>${h.txt}</span>`;
+      b.setAttribute('aria-label', h.largo);
+      b.addEventListener('mouseenter', () => { $('b', centro).textContent = h.txt; $('small', centro).textContent = h.largo; });
+      b.addEventListener('mouseleave', () => { $('b', centro).textContent = titulo; $('small', centro).textContent = sub; });
+      b.addEventListener('click', () => { cerrarRueda(); h.hacer(); });
+      aro.appendChild(b);
+    });
+    $('b', centro).textContent = titulo;
+    $('small', centro).textContent = sub;
+    const m = RADIO + 52;
+    rueda.style.left = Math.max(m, Math.min(innerWidth - m, x)) + 'px';
+    rueda.style.top = Math.max(m, Math.min(innerHeight - m, y)) + 'px';
+    rueda.hidden = false;
+    rueda.classList.remove('abierta');
+    void rueda.offsetWidth;
+    rueda.classList.add('abierta');
+    fab.setAttribute('aria-expanded', 'true');
+    fab.classList.add('activo');
+    setTimeout(() => { const p = $('.enf-rueda-btn', rueda); if (p && document.activeElement === document.body) p.focus({ preventScroll: true }); }, 0);
+  }
+  function cerrarRueda() {
+    if (rueda.hidden) return;
+    rueda.hidden = true;
+    fab.setAttribute('aria-expanded', 'false');
+    fab.classList.remove('activo');
+    if (alCerrarRueda) { alCerrarRueda(); alCerrarRueda = null; }
+  }
+  $('.enf-rueda-centro', rueda).addEventListener('click', cerrarRueda);
+  rueda.addEventListener('mousedown', (ev) => { if (ev.target === rueda) cerrarRueda(); });
+  document.addEventListener('mousedown', (ev) => {
+    if (!rueda.hidden && !rueda.contains(ev.target) && !fab.contains(ev.target)) cerrarRueda();
+  }, true);
+  fab.addEventListener('click', () => {
+    if (!rueda.hidden) { cerrarRueda(); return; }
+    // arriba a la izquierda del botón, para que el botón siga a la vista y cierre
+    const r = fab.getBoundingClientRect();
+    abrirRueda(r.left + r.width / 2 - 150, r.top + r.height / 2 - 150, { lista: HERRAMIENTAS });
+  });
+  // clic derecho: sobre una hoja, lo de esa hoja; en el resto del tablero, las herramientas
+  $('#lienzo').addEventListener('contextmenu', (ev) => {
+    if (!activo() || ev.shiftKey) return; // Mayús + clic derecho: el menú de siempre del navegador
+    ev.preventDefault();
+    const pag = ev.target.closest('.pag');
+    if (pag) {
+      pag.classList.add('enf-apuntada');
+      alCerrarRueda = () => pag.classList.remove('enf-apuntada');
+      abrirRueda(ev.clientX, ev.clientY, accionesDeHoja(pag));
+    } else {
+      abrirRueda(ev.clientX, ev.clientY, { lista: HERRAMIENTAS });
+    }
+  });
+
+  /* ---------------- encender y apagar ---------------- */
+
+  function aplicar(si, recordar) {
+    cuerpo.classList.toggle('enfocado', si);
+    if (!si) { cuerpo.classList.remove('ver-arriba', 'ver-izq', 'cajon-abierto'); cerrarRueda(); }
+    $('.enf-menu-txt', itemMenu).textContent = si ? 'Salir del modo enfocado' : 'Modo enfocado';
+    if (recordar) poner(CLAVE, si ? '1' : '0');
+    // la parrilla cambió de ancho: que las miniaturas se vuelvan a medir
+    window.dispatchEvent(new Event('resize'));
+    $('#lienzo').dispatchEvent(new Event('scroll'));
+  }
+  const avisar = (texto) => { try { window.Grapa.aviso(texto, 'ok'); } catch (e) { /* sin avisos */ } };
+  /** Lo cambia la persona (tecla F o el menú Ver): se recuerda y se dice cómo volver. */
+  function alternar() {
+    const si = !activo();
+    aplicar(si, true);
+    avisar(si
+      ? 'Modo enfocado: las herramientas están en la rueda y en los bordes. F vuelve a la vista clásica.'
+      : 'Vista clásica, con todo a la vista. F vuelve al modo enfocado.');
+  }
+  itemMenu.addEventListener('click', alternar);
+  if (leer(CLAVE_FIJO) === '1') cuerpo.classList.add('cajon-fijo', 'cajon-abierto');
+  // Encendido de entrada: solo se apaga si alguien lo apagó a propósito
+  const elegido = leer(CLAVE);
+  aplicar(elegido !== '0', false);
+  // Quien ya usaba Pdflash se encuentra la pantalla cambiada: una vez, se le
+  // dice qué pasó y cómo volver a la de antes. (Quien llega por primera vez
+  // lo aprende en el recorrido guiado.)
+  if (elegido === null && leer('grapa.guia.vista') === '1' && leer('grapa.enfocado.avisado') !== '1') {
+    poner('grapa.enfocado.avisado', '1');
+    setTimeout(() => avisar('Novedad: las hojas ocupan casi toda la pantalla. Las herramientas están en la rueda naranja (o con clic derecho) y en los bordes. ¿Prefieres la vista de antes? Pulsa F.'), 1200);
+  }
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      if (!rueda.hidden) { ev.stopPropagation(); cerrarRueda(); return; }
+      if (activo() && cuerpo.classList.contains('ver-arriba')) { verArriba(false); }
+      if (activo() && cajonAbierto() && !cuerpo.classList.contains('cajon-fijo')
+        && !$$('.modal:not([hidden])').length && !$('#lector').offsetParent) { cerrarCajon(); }
+      return;
+    }
+    const t = ev.target;
+    const enCampo = /INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable;
+    if (enCampo || ev.ctrlKey || ev.metaKey || ev.altKey || $$('.modal:not([hidden])').length) return;
+    if (ev.key === 'f' || ev.key === 'F') { ev.preventDefault(); alternar(); }
+  }, true);
+
+  // para las pruebas y las capturas
+  window.PdflashEnfocado = { aplicar, abrirRueda, cerrarRueda, abrirCajon, cerrarCajon, verArriba, verIzq, HERRAMIENTAS, accionesDeHoja };
 })();
 
 </script>

@@ -47,6 +47,37 @@ Funciona en Chrome, Edge y Firefox actuales.
   ejemplo*.
 - **Una herramienta a la vez:** el riel de la izquierda elige la herramienta
   y el panel enseña solo esa, con una línea que dice para qué sirve.
+
+### Modo enfocado: las hojas a pantalla completa
+Pdflash abre en **modo enfocado**: las hojas ocupan casi toda la pantalla
+(en una laptop de 1366×768, el 95 % en vez del 48 % de antes) y lo demás se
+aparta hasta que lo buscas. Así se leen sin estar acercando y alejando.
+
+- **Arriba queda una sola tira:** las pestañas de los tableros, la ruta del
+  expediente en seis puntos con el paso siguiente («Foliar →»), deshacer,
+  rehacer y **Exportar PDF**.
+- **Los menús bajan solos** (Archivo, Editar, Ver, Ayuda, con Abrir,
+  Imprimir y Guardar) al acercar el ratón al borde de arriba, o tocando el
+  logo.
+- **El riel sale del borde izquierdo** al acercar el ratón. La herramienta
+  que elijas se abre como un cajón **encima** de las hojas, sin encogerlas;
+  `Esc` o la equis lo cierran. Con la **chincheta** se queda fijo a un lado,
+  como en la vista clásica.
+- **La rueda** (el botón naranja de abajo a la derecha) junta todas las
+  herramientas alrededor del puntero. Con **clic derecho en el tablero** se
+  abre donde estás; **sobre una hoja**, trae lo de esa hoja: girar, verla en
+  grande, firmar, corregir el texto, bajarla, imprimirla, duplicarla o
+  borrarla. Si es una de varias marcadas, actúa sobre todas (y añade
+  comparar, mover al inicio o al final y extraer). `Mayús` + clic derecho
+  deja el menú de siempre del navegador.
+- **El zoom** está en la columnita de encima de la rueda: «+», «−» y
+  **Ajustar**, que deja las hojas del tamaño justo para leerlas enteras sin
+  desplazarte. `Ctrl` + rueda del ratón sobre las hojas también acerca y
+  aleja.
+- **La barra de acciones de abajo** solo aparece cuando hay hojas marcadas.
+- ¿Prefieres ver todo siempre? La tecla **`F`** (o *Ver ▸ Modo enfocado*)
+  vuelve a la **vista clásica**, con la barra, el panel y el pie fijos, y
+  otra vez `F` regresa. Pdflash recuerda la que elegiste.
 - Al abrir archivos en un tablero vacío **no queda nada marcado** (antes
   salían todas las hojas marcadas, con su borde naranja, sin haber marcado
   ninguna). Lo que añades después a un expediente sí queda marcado, para
@@ -651,7 +682,10 @@ salga tal como se ve.
 
 | Atajo | Qué hace |
 |---|---|
-| `P` | Plegar o desplegar el panel lateral |
+| `F` | Modo enfocado (las hojas a pantalla completa) o vista clásica |
+| `Clic derecho` | (modo enfocado) La rueda: sobre una hoja, lo de esa hoja |
+| `Ctrl` + rueda del ratón | (modo enfocado) Acercar o alejar las hojas |
+| `P` | Plegar o desplegar el panel lateral (vista clásica) |
 | `Ctrl+O` | Abrir archivos |
 | `Ctrl+S` | Exportar PDF |
 | `Ctrl+P` | Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta) |
@@ -770,6 +804,7 @@ assets/
   firmas.js           limpieza de fondo, recorte desde escaneo, dibujo
   app.js              interfaz: rejilla de páginas, arrastre, foliación, lector, dividir
   guia.js             primeros pasos: recorrido guiado y expediente de ejemplo
+  enfocado.js         modo enfocado: la tira de arriba, los bordes, la rueda y el zoom
   config.js           datos de Supabase para las cuentas (vacíos = sin cuentas)
   cuentas.js          inicio de sesión, permisos por función y panel de control
 supabase/esquema.sql  tabla de perfiles y reglas de seguridad para Supabase

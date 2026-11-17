@@ -22,7 +22,8 @@
 
    Todo actúa sobre los botones de siempre (se les hace clic): no hay una
    segunda manera de hacer lo mismo que pueda separarse con el tiempo.
-   Se enciende y se apaga con F o desde Ver ▸ Modo enfocado.
+   Viene encendido. La tecla F o Ver ▸ Modo enfocado lo apagan (la vista
+   clásica, con todo a la vista) y lo vuelven a encender; se recuerda.
    =========================================================== */
 (() => {
   'use strict';
@@ -116,6 +117,10 @@
   function copiarEstado(copia, original) {
     copia.disabled = original.disabled;
     if (original.title) copia.title = original.title;
+    // lo que el administrador apagó se ve apagado también aquí (y al tocarlo
+    // se explica, igual que en el original: assets/cuentas.js mira la clase)
+    copia.classList.toggle('bloqueado-admin', original.classList.contains('bloqueado-admin'));
+    if (original.dataset.funcion) copia.dataset.funcion = original.dataset.funcion;
   }
   $$('[data-espejo]', acciones).forEach((copia) => {
     const original = $(copia.dataset.espejo);
@@ -123,8 +128,18 @@
     copia.addEventListener('click', () => original.click());
     copiarEstado(copia, original);
     new MutationObserver(() => copiarEstado(copia, original))
-      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title'] });
+      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title', 'class', 'data-funcion'] });
   });
+
+  /** Lo que la cuenta tiene permitido (sin cuentas, todo). */
+  const cuentas = () => (window.Grapa && window.Grapa.cuentas) || null;
+  function permitida(h) {
+    const C = cuentas();
+    if (!C) return true;
+    if (h.va && !C.seccionPermitida(h.va)) return false;
+    if (h.fn && !C.puede(h.fn)) return false;
+    return true;
+  }
 
   // La ruta del expediente, en seis puntos y el paso siguiente
   const ruta = $('#ruta');
@@ -241,6 +256,9 @@
 
   const cajonAbierto = () => cuerpo.classList.contains('cajon-abierto');
   function abrirCajon(cual) {
+    const C = cuentas();
+    // una herramienta apagada por el administrador: se explica, sin abrir un cajón vacío
+    if (C && !C.seccionPermitida(cual)) { C.permitido(C.funcionDeSeccion(cual)); return; }
     cuerpo.classList.add('cajon-abierto');
     const b = $(`.riel-btn[data-va="${cual}"]`);
     if (b && !b.classList.contains('activo')) b.click();
@@ -291,15 +309,15 @@
 
   const HERRAMIENTAS = [
     { ico: 'abrir', txt: 'Abrir', largo: 'Abrir archivos (Ctrl+O)', hacer: () => $('#btnAbrir').click() },
-    { ico: 'docs', txt: 'Docs', largo: 'Documentos del expediente', hacer: () => abrirCajon('docs') },
-    { ico: 'lupa', txt: 'Buscar', largo: 'Buscar en todas las hojas (Ctrl+F)', hacer: () => abrirCajon('buscar') },
-    { ico: 'revisar', txt: 'Revisar', largo: 'Hojas en blanco o torcidas', hacer: () => abrirCajon('revisar') },
-    { ico: 'firma', txt: 'Firmas', largo: 'Firmas y sellos', hacer: () => abrirCajon('firmas') },
-    { ico: 'sello', txt: 'Marca', largo: 'Marca de agua o sello de texto', hacer: () => abrirCajon('marca') },
-    { ico: 'folios', txt: 'Folios', largo: 'Foliación y numeración', hacer: () => abrirCajon('foliar') },
-    { ico: 'dividir', txt: 'Separar', largo: 'Separar hojas en otro PDF', hacer: () => abrirCajon('dividir') },
+    { ico: 'docs', txt: 'Docs', largo: 'Documentos del expediente', va: 'docs', hacer: () => abrirCajon('docs') },
+    { ico: 'lupa', txt: 'Buscar', largo: 'Buscar en todas las hojas (Ctrl+F)', va: 'buscar', hacer: () => abrirCajon('buscar') },
+    { ico: 'revisar', txt: 'Revisar', largo: 'Hojas en blanco o torcidas', va: 'revisar', hacer: () => abrirCajon('revisar') },
+    { ico: 'firma', txt: 'Firmas', largo: 'Firmas y sellos', va: 'firmas', hacer: () => abrirCajon('firmas') },
+    { ico: 'sello', txt: 'Marca', largo: 'Marca de agua o sello de texto', va: 'marca', hacer: () => abrirCajon('marca') },
+    { ico: 'folios', txt: 'Folios', largo: 'Foliación y numeración', va: 'foliar', hacer: () => abrirCajon('foliar') },
+    { ico: 'dividir', txt: 'Separar', largo: 'Separar hojas en otro PDF', va: 'dividir', hacer: () => abrirCajon('dividir') },
     { ico: 'comparar', txt: 'Grande', largo: 'Ver las hojas en grande (V)', hacer: () => $('#btnLector').click() },
-    { ico: 'salida', txt: 'Opciones', largo: 'Nombre, peso y carpeta del PDF', hacer: () => abrirCajon('salida') },
+    { ico: 'salida', txt: 'Opciones', largo: 'Nombre, peso y carpeta del PDF', va: 'salida', hacer: () => abrirCajon('salida') },
   ];
 
   /** Lo que se hace con una hoja: los mismos botones que salen al pasar por encima de ella. */
@@ -315,12 +333,12 @@
         lista: [
           { ico: 'girar-izq', txt: 'Girar izq.', largo: 'Girar a la izquierda', hacer: por('#btnGirarIzq') },
           { ico: 'girar-der', txt: 'Girar der.', largo: 'Girar a la derecha', hacer: por('#btnGirarDer') },
-          { ico: 'firma', txt: 'Firmar', largo: 'Firmar estas hojas', hacer: por('#bsFirmar') },
+          { ico: 'firma', txt: 'Firmar', largo: 'Firmar estas hojas', fn: 'firmas', hacer: por('#bsFirmar') },
           { ico: 'comparar', txt: 'Comparar', largo: 'Verlas una al lado de otra', hacer: por('#btnComparar') },
           { ico: 'inicio', txt: 'Al inicio', largo: 'Moverlas al inicio', hacer: por('#btnMoverInicio') },
           { ico: 'fin', txt: 'Al final', largo: 'Moverlas al final', hacer: por('#btnMoverFin') },
-          { ico: 'guardar', txt: 'Extraer', largo: 'Bajarlas en un PDF aparte', hacer: por('#btnDescargarSel') },
-          { ico: 'imprimir', txt: 'Imprimir', largo: 'Imprimir solo estas', hacer: por('#btnImprimirSel') },
+          { ico: 'guardar', txt: 'Extraer', largo: 'Bajarlas en un PDF aparte', fn: 'exportar', hacer: por('#btnDescargarSel') },
+          { ico: 'imprimir', txt: 'Imprimir', largo: 'Imprimir solo estas', fn: 'imprimir', hacer: por('#btnImprimirSel') },
           { ico: 'duplicar', txt: 'Duplicar', largo: 'Duplicarlas (Ctrl+D)', hacer: por('#btnDuplicar') },
           { ico: 'borrar', txt: 'Eliminar', largo: 'Eliminarlas (Supr)', hacer: por('#btnEliminar'), peligro: true },
         ],
@@ -333,10 +351,10 @@
         { ico: 'girar-izq', txt: 'Girar izq.', largo: 'Girar a la izquierda', hacer: de(0) },
         { ico: 'girar-der', txt: 'Girar der.', largo: 'Girar a la derecha', hacer: de(1) },
         { ico: 'lupa', txt: 'Grande', largo: 'Ver esta hoja en grande', hacer: de(2) },
-        { ico: 'firma', txt: 'Firmar', largo: 'Colocar firma o sello', hacer: de(3) },
-        { ico: 'texto', txt: 'Texto', largo: 'Corregir el texto de esta hoja', hacer: de(4) },
-        { ico: 'guardar', txt: 'Bajar', largo: 'Descargar solo esta hoja', hacer: de(5) },
-        { ico: 'imprimir', txt: 'Imprimir', largo: 'Imprimir esta hoja', hacer: de(6) },
+        { ico: 'firma', txt: 'Firmar', largo: 'Colocar firma o sello', fn: 'firmas', hacer: de(3) },
+        { ico: 'texto', txt: 'Texto', largo: 'Corregir el texto de esta hoja', fn: 'editarTexto', hacer: de(4) },
+        { ico: 'guardar', txt: 'Bajar', largo: 'Descargar solo esta hoja', fn: 'exportar', hacer: de(5) },
+        { ico: 'imprimir', txt: 'Imprimir', largo: 'Imprimir esta hoja', fn: 'imprimir', hacer: de(6) },
         { ico: 'duplicar', txt: 'Duplicar', largo: 'Duplicar', hacer: de(7) },
         { ico: 'borrar', txt: 'Eliminar', largo: 'Eliminar', hacer: de(8), peligro: true },
       ],
@@ -351,8 +369,10 @@
     const titulo = menu.titulo || 'Herramientas';
     const sub = menu.sub || 'elige una';
     aro.innerHTML = '';
-    menu.lista.forEach((h, i) => {
-      const ang = -Math.PI / 2 + (i * 2 * Math.PI) / menu.lista.length;
+    // solo lo que esta cuenta puede usar: la rueda no ofrece lo apagado
+    const lista = menu.lista.filter(permitida);
+    lista.forEach((h, i) => {
+      const ang = -Math.PI / 2 + (i * 2 * Math.PI) / lista.length;
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'enf-rueda-btn' + (h.peligro ? ' peligro' : '');
@@ -423,9 +443,27 @@
     window.dispatchEvent(new Event('resize'));
     $('#lienzo').dispatchEvent(new Event('scroll'));
   }
-  itemMenu.addEventListener('click', () => aplicar(!activo(), true));
+  const avisar = (texto) => { try { window.Grapa.aviso(texto, 'ok'); } catch (e) { /* sin avisos */ } };
+  /** Lo cambia la persona (tecla F o el menú Ver): se recuerda y se dice cómo volver. */
+  function alternar() {
+    const si = !activo();
+    aplicar(si, true);
+    avisar(si
+      ? 'Modo enfocado: las herramientas están en la rueda y en los bordes. F vuelve a la vista clásica.'
+      : 'Vista clásica, con todo a la vista. F vuelve al modo enfocado.');
+  }
+  itemMenu.addEventListener('click', alternar);
   if (leer(CLAVE_FIJO) === '1') cuerpo.classList.add('cajon-fijo', 'cajon-abierto');
-  aplicar(leer(CLAVE) === '1', false);
+  // Encendido de entrada: solo se apaga si alguien lo apagó a propósito
+  const elegido = leer(CLAVE);
+  aplicar(elegido !== '0', false);
+  // Quien ya usaba Pdflash se encuentra la pantalla cambiada: una vez, se le
+  // dice qué pasó y cómo volver a la de antes. (Quien llega por primera vez
+  // lo aprende en el recorrido guiado.)
+  if (elegido === null && leer('grapa.guia.vista') === '1' && leer('grapa.enfocado.avisado') !== '1') {
+    poner('grapa.enfocado.avisado', '1');
+    setTimeout(() => avisar('Novedad: las hojas ocupan casi toda la pantalla. Las herramientas están en la rueda naranja (o con clic derecho) y en los bordes. ¿Prefieres la vista de antes? Pulsa F.'), 1200);
+  }
 
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
@@ -438,7 +476,7 @@
     const t = ev.target;
     const enCampo = /INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable;
     if (enCampo || ev.ctrlKey || ev.metaKey || ev.altKey || $$('.modal:not([hidden])').length) return;
-    if (ev.key === 'f' || ev.key === 'F') { ev.preventDefault(); aplicar(!activo(), true); }
+    if (ev.key === 'f' || ev.key === 'F') { ev.preventDefault(); alternar(); }
   }, true);
 
   // para las pruebas y las capturas
