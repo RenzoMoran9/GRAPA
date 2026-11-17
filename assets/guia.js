@@ -139,10 +139,12 @@
       texto: 'PDF, Word, Excel o fotos. También puedes arrastrarlos a la pantalla, pegarlos con Ctrl+V o usar Ctrl+O.' },
     { el: '#lienzo', titulo: 'Las hojas, a pantalla completa',
       texto: 'Arrástralas para cambiar el orden. Un clic marca una hoja; con Ctrl o Mayús marcas varias. La tecla V las abre en grande.' },
+    { el: '.enf-vistas', titulo: 'Hojas, Paquetes o en grande',
+      texto: 'Aquí eliges cómo ver el expediente: todas las hojas, una tarjeta por documento (Paquetes) o las hojas en grande para revisarlas una por una.' },
     { el: '.enf-fab', titulo: 'Tus herramientas, en una rueda',
       texto: 'Abrir, buscar, revisar, firmar, foliar, separar… Toca aquí o haz clic derecho en el tablero. Sobre una hoja, la rueda trae lo de esa hoja: girar, firmar, duplicar, borrar…' },
     { el: '#riel', titulo: 'También en el borde izquierdo', lado: 'derecha', mostrar: 'ver-izq',
-      texto: 'Acerca el ratón al borde y salen las herramientas en columna. La que elijas se abre encima de las hojas; con la chincheta se queda fija a un lado.' },
+      texto: 'Acerca el ratón al borde y salen las herramientas en columna. La que elijas se abre encima de las hojas. ¿Las quieres siempre a la vista? Toca «Fijar», abajo del todo.' },
     { el: '.enf-zoom', titulo: 'Hojas del tamaño justo',
       texto: '«+» y «−» acercan y alejan (también Ctrl + rueda del ratón). El de abajo las ajusta para leerlas enteras sin desplazarte.' },
     { el: '.enf-ruta', titulo: 'Lo que te falta',
@@ -150,7 +152,7 @@
     { el: '.enf-exportar', titulo: 'Exporta el PDF final',
       texto: 'Arma el PDF con folios y firmas y lo descarga. Para seguir otro día, guarda el expediente con Ctrl+Mayús+S.' },
     { el: '.enf-logo', titulo: 'Los menús, a un toque',
-      texto: 'Archivo, Editar, Ver y Ayuda bajan al acercar el ratón al borde de arriba o al tocar el logo. ¿Prefieres ver todo siempre? Pulsa F para la vista clásica.' },
+      texto: 'Archivo, Editar, Ver y Ayuda bajan al acercar el ratón al borde de arriba o al tocar el logo; con su chincheta se quedan fijos. En Ver ▸ Fijar… eliges qué barras quieres siempre a la vista, y la tecla F vuelve a la vista clásica.' },
   ];
 
   const capa = document.createElement('div');

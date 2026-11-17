@@ -1810,10 +1810,10 @@ body.enfocado .marca #btnPanel{display:none}
 body.enfocado .taller-cabecera,body.enfocado .ruta,body.enfocado .barra-estado{display:none}
 /* de la barra del taller solo queda lo que avisa de algo: la búsqueda puesta
    o el «volver a Paquetes»; si no hay nada de eso, no ocupa sitio */
-body.enfocado .taller-barra{padding:8px 22px 4px;border-bottom:0}
-body.enfocado .taller-barra > :not(#chipBusqueda):not(.taller-herramientas){display:none}
-body.enfocado .taller-herramientas > :not(#btnVolverPaquetes){display:none}
-body.enfocado .taller-barra:not(:has(#chipBusqueda:not([hidden]),#btnVolverPaquetes:not([hidden]))){display:none}
+body.enfocado:not(.fijo-vistas) .taller-barra{padding:8px 22px 4px;border-bottom:0}
+body.enfocado:not(.fijo-vistas) .taller-barra > :not(#chipBusqueda):not(.taller-herramientas){display:none}
+body.enfocado:not(.fijo-vistas) .taller-herramientas > :not(#btnVolverPaquetes){display:none}
+body.enfocado:not(.fijo-vistas) .taller-barra:not(:has(#chipBusqueda:not([hidden]),#btnVolverPaquetes:not([hidden]))){display:none}
 body.enfocado .lienzo{padding-top:16px}
 
 /* la tira de pestañas: logo, pestañas y, a la derecha, lo de siempre a mano */
@@ -1858,7 +1858,7 @@ body.enfocado .panel{
 body.enfocado.ver-izq .panel,body.enfocado.cajon-abierto .panel{transform:none;box-shadow:var(--sombra-fuerte)}
 body.enfocado .panel .panel-vistas{display:none}
 body.enfocado.cajon-abierto .panel .panel-vistas{display:block;width:calc(var(--panel-ancho) - 64px)}
-body.enfocado.cajon-abierto .enf-cajon-botones{display:flex;position:absolute;top:9px;right:8px;gap:1px;z-index:3}
+body.enfocado.cajon-abierto .enf-cajon-botones{display:flex;position:absolute;top:9px;left:calc(var(--panel-ancho) - 74px);gap:1px;z-index:3}
 body.enfocado.cajon-abierto .bloque-cabecera{padding-right:76px}
 body.enfocado.cajon-fijo .panel{position:relative;top:auto;transform:none;box-shadow:none;border-radius:0;z-index:auto}
 body.enfocado.cajon-fijo [data-cajon="fijar"]{color:var(--acento);background:var(--acento-tenue)}
@@ -1926,3 +1926,63 @@ body.enfocado .avisos{bottom:16px;right:86px}
   .enf-rueda.abierta .enf-rueda-btn,.enf-rueda.abierta::before{animation:none}
   body.enfocado .panel,body.enfocado .barra-superior{transition:none}
 }
+
+/* --- modo enfocado: cómo ver el expediente, en la tira de arriba --- */
+.enf-vistas{display:inline-flex;gap:2px;padding:2px;background:var(--fondo-3);border:1px solid var(--borde);border-radius:8px}
+.enf-vistas button{
+  display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:0;border-radius:6px;
+  background:transparent;color:var(--texto-2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;
+}
+.enf-vistas button:hover:not(:disabled){color:var(--texto)}
+.enf-vistas button.on{background:var(--fondo-2);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.enf-vistas button:disabled{opacity:.45;cursor:default}
+.enf-vistas .ico{width:15px;height:15px}
+.enf-sep{width:1px;height:20px;background:var(--borde);margin:0 5px}
+/* en pantallas angostas, solo los iconos */
+@media (max-width:1180px){.enf-vistas button span{display:none}.enf-vistas button{padding:0 7px}}
+
+/* --- chinchetas: dejar fija cada barra --- */
+.enf-fijar,.enf-solo{display:none}
+body.enfocado .enf-fijar-arriba{display:inline-flex}
+body.enfocado .enf-solo{display:flex}
+.enf-fijar.on{color:var(--acento);background:var(--acento-tenue)}
+.enf-menu-fijar .ico{opacity:0}
+.enf-menu-fijar[aria-checked="true"] .ico{opacity:1;color:var(--acento)}
+body.enfocado .enf-fijar-riel{
+  display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:auto;
+  padding:8px 2px 6px;border:1px solid transparent;border-radius:9px;
+  background:none;cursor:pointer;color:var(--texto-3);font:inherit;
+}
+.enf-fijar-riel:hover{background:var(--fondo-3);color:var(--texto)}
+.enf-fijar-riel .ico{width:18px;height:18px}
+
+/* la barra de menús, fija: vuelve a su sitio arriba y empuja lo demás */
+body.enfocado.fijo-arriba .barra-superior{position:relative;transform:none;box-shadow:none;z-index:30}
+body.enfocado.fijo-arriba .enf-zona-arriba,
+body.enfocado.fijo-arriba .enf-logo,
+body.enfocado.fijo-arriba .enf-dup{display:none}
+body.enfocado.fijo-arriba .panel,
+body.enfocado.fijo-arriba .enf-zona-izq{top:calc(var(--barra-alto) + var(--tableros-alto))}
+body.enfocado.fijo-arriba .tableros{padding-left:22px}
+
+/* las herramientas, fijas: el riel queda a la izquierda y la herramienta
+   elegida sigue abriéndose como cajón encima de las hojas */
+body.enfocado.fijo-riel .panel{
+  position:relative;top:auto;transform:none;box-shadow:none;border-radius:0;overflow:visible;z-index:46;
+}
+body.enfocado.fijo-riel .enf-zona-izq{display:none}
+body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .panel .panel-vistas{
+  position:absolute;left:100%;top:0;bottom:0;z-index:2;
+  background:var(--fondo-2);border-right:1px solid var(--borde);border-radius:0 14px 14px 0;box-shadow:var(--sombra-fuerte);
+}
+body.enfocado.fijo-riel.cajon-fijo .panel{border-right:1px solid var(--borde)}
+
+/* la barra de vistas y selección, fija: Hojas · Paquetes · En grande, el
+   buscador y Seleccionar todo, como en la vista clásica */
+body.enfocado.fijo-vistas .taller-barra{padding:10px 22px 10px}
+body.enfocado.fijo-vistas .enf-vistas,
+body.enfocado.fijo-vistas .enf-buscar,
+body.enfocado.fijo-vistas .enf-acciones .enf-sep{display:none}
+/* con el riel fijo, el cajón empieza bajo las pestañas: no las tapa */
+body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .panel .panel-vistas{top:var(--tableros-alto);border-top:1px solid var(--borde);border-top-right-radius:14px}
+body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:calc(var(--tableros-alto) + 9px)}

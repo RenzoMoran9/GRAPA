@@ -56,15 +56,39 @@
   btnLogo.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 21V12.5a4.5 4.5 0 0 1 9 0V22a3 3 0 0 0 6 0v-7"/></svg>';
   tableros.prepend(btnLogo);
 
-  // …y a la derecha: el paso siguiente, deshacer, rehacer y Exportar
+  // …y a la derecha: cómo ver el expediente (Hojas · Paquetes · En grande),
+  // buscar, el paso siguiente, deshacer, rehacer y Exportar
+  const ICO_GRANDE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/></svg>';
+  const ICO_CHINCHETA = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/></svg>';
   const acciones = document.createElement('div');
   acciones.className = 'enf-acciones';
   acciones.innerHTML = `
+    <div class="enf-vistas" role="group" aria-label="Cómo ver el expediente">
+      <button type="button" data-espejo='#segVista [data-vista="hojas"]' data-vista-enf="hojas">${ico('hojas')}<span>Hojas</span></button>
+      <button type="button" data-espejo='#segVista [data-vista="paquetes"]' data-vista-enf="paquetes">${ico('paquete')}<span>Paquetes</span></button>
+      <button type="button" data-espejo="#btnLector">${ICO_GRANDE}<span>En grande</span></button>
+    </div>
+    <button type="button" class="enf-ico enf-buscar" data-espejo="#btnBuscarBarra" aria-label="Buscar en el expediente (Ctrl+F)">${ico('lupa')}</button>
+    <span class="enf-sep"></span>
     <button type="button" class="enf-ruta" hidden><span class="enf-puntos"></span><span class="enf-ruta-txt"></span></button>
-    <button type="button" class="enf-ico" data-espejo="#btnDeshacer" aria-label="Deshacer">${ico('deshacer')}</button>
-    <button type="button" class="enf-ico" data-espejo="#btnRehacer" aria-label="Rehacer">${ico('rehacer')}</button>
-    <button type="button" class="btn btn-primario enf-exportar" data-espejo="#btnGuardar">${ico('guardar')} Exportar PDF</button>`;
+    <button type="button" class="enf-ico enf-dup" data-espejo="#btnDeshacer" aria-label="Deshacer">${ico('deshacer')}</button>
+    <button type="button" class="enf-ico enf-dup" data-espejo="#btnRehacer" aria-label="Rehacer">${ico('rehacer')}</button>
+    <button type="button" class="btn btn-primario enf-exportar enf-dup" data-espejo="#btnGuardar">${ico('guardar')} Exportar PDF</button>`;
   tableros.append(acciones);
+
+  // Chinchetas: dejar fija cada barra, sin volver a la vista clásica entera
+  const fijarArriba = document.createElement('button');
+  fijarArriba.type = 'button';
+  fijarArriba.className = 'btn btn-fantasma enf-fijar enf-fijar-arriba';
+  fijarArriba.dataset.fijar = 'arriba';
+  fijarArriba.innerHTML = ICO_CHINCHETA;
+  $('.barra-acciones').prepend(fijarArriba);
+  const fijarRiel = document.createElement('button');
+  fijarRiel.type = 'button';
+  fijarRiel.className = 'enf-fijar enf-fijar-riel';
+  fijarRiel.dataset.fijar = 'riel';
+  fijarRiel.innerHTML = `<span class="riel-ico">${ICO_CHINCHETA}</span><span class="riel-txt">Fijar</span>`;
+  $('#riel').append(fijarRiel);
 
   // Zoom en columna, sobre la rueda
   const zoomCol = document.createElement('div');
@@ -110,7 +134,27 @@
   itemMenu.className = 'menu-item';
   itemMenu.setAttribute('role', 'menuitem');
   itemMenu.innerHTML = `${ico('captura')} <span class="enf-menu-txt">Modo enfocado</span><kbd>F</kbd>`;
-  if (menuVer) menuVer.querySelector('.menu-lista').prepend(itemMenu);
+  // y debajo, qué barras se quedan fijas (solo tiene sentido en el modo enfocado)
+  const FIJABLES = {
+    arriba: { clave: 'grapa.enfocado.fijo.arriba', clase: 'fijo-arriba', menu: 'Fijar la barra de menús' },
+    riel: { clave: 'grapa.enfocado.fijo.riel', clase: 'fijo-riel', menu: 'Fijar las herramientas (izquierda)' },
+    vistas: { clave: 'grapa.enfocado.fijo.vistas', clase: 'fijo-vistas', menu: 'Fijar la barra de vistas y selección' },
+  };
+  const itemsFijar = Object.entries(FIJABLES).map(([cual, f]) => {
+    const it = document.createElement('button');
+    it.className = 'menu-item enf-solo enf-menu-fijar';
+    it.setAttribute('role', 'menuitemcheckbox');
+    it.dataset.fijar = cual;
+    it.innerHTML = `${ico('check')} ${f.menu}`;
+    return it;
+  });
+  if (menuVer) {
+    const lista = menuVer.querySelector('.menu-lista');
+    const sep = document.createElement('span');
+    sep.className = 'menu-sep';
+    sep.setAttribute('role', 'separator');
+    lista.prepend(itemMenu, ...itemsFijar, sep);
+  }
 
   /* ---------------- espejos de los botones de siempre ---------------- */
 
@@ -121,14 +165,22 @@
     // se explica, igual que en el original: assets/cuentas.js mira la clase)
     copia.classList.toggle('bloqueado-admin', original.classList.contains('bloqueado-admin'));
     if (original.dataset.funcion) copia.dataset.funcion = original.dataset.funcion;
+    // la vista encendida (Hojas, Paquetes o En grande)
+    copia.classList.toggle('on', original.classList.contains('on'));
+    if (original.hasAttribute('aria-pressed')) copia.setAttribute('aria-pressed', original.getAttribute('aria-pressed'));
   }
+  const lectorAbierto = () => !$('#lector').hidden;
   $$('[data-espejo]', acciones).forEach((copia) => {
     const original = $(copia.dataset.espejo);
     if (!original) { copia.remove(); return; }
-    copia.addEventListener('click', () => original.click());
+    copia.addEventListener('click', () => {
+      // Hojas o Paquetes con las hojas en grande: primero se cierra lo grande
+      if (copia.dataset.vistaEnf && lectorAbierto()) $('#lectorCerrar').click();
+      original.click();
+    });
     copiarEstado(copia, original);
     new MutationObserver(() => copiarEstado(copia, original))
-      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title', 'class', 'data-funcion'] });
+      .observe(original, { attributes: true, attributeFilter: ['disabled', 'title', 'class', 'data-funcion', 'aria-pressed'] });
   });
 
   /** Lo que la cuenta tiene permitido (sin cuentas, todo). */
@@ -219,7 +271,7 @@
     clearTimeout(tArriba);
     tArriba = setTimeout(() => {
       const barra = $('.barra-superior');
-      if (menuAbierto() || barra.matches(':hover') || barra.contains(document.activeElement)) { ocultarArribaLuego(); return; }
+      if (menuAbierto() || barra.matches(':hover') || barra.querySelector(':focus-visible')) { ocultarArribaLuego(); return; }
       verArriba(false);
     }, 450);
   }
@@ -243,7 +295,7 @@
   function ocultarIzqLuego() {
     clearTimeout(tIzq);
     tIzq = setTimeout(() => {
-      if (panel.matches(':hover') || panel.contains(document.activeElement)) return;
+      if (panel.matches(':hover') || panel.querySelector(':focus-visible')) return;
       verIzq(false);
     }, 380);
   }
@@ -443,6 +495,36 @@
     window.dispatchEvent(new Event('resize'));
     $('#lienzo').dispatchEvent(new Event('scroll'));
   }
+  /* ---------------- chinchetas: qué barras se quedan fijas ---------------- */
+
+  const fijada = (cual) => cuerpo.classList.contains(FIJABLES[cual].clase);
+  function pintarFijas() {
+    Object.keys(FIJABLES).forEach((cual) => {
+      const si = fijada(cual);
+      itemsFijar.find((it) => it.dataset.fijar === cual).setAttribute('aria-checked', String(si));
+    });
+    fijarArriba.classList.toggle('on', fijada('arriba'));
+    fijarArriba.title = fijada('arriba') ? 'Soltar esta barra: que se esconda y baje al acercar el ratón' : 'Dejar fija esta barra';
+    fijarArriba.setAttribute('aria-label', fijarArriba.title);
+    fijarRiel.classList.toggle('on', fijada('riel'));
+    fijarRiel.title = fijada('riel') ? 'Soltar las herramientas: que salgan al acercar el ratón al borde' : 'Dejar fijas las herramientas a la izquierda';
+    fijarRiel.setAttribute('aria-label', fijarRiel.title);
+    $('.riel-txt', fijarRiel).textContent = fijada('riel') ? 'Soltar' : 'Fijar';
+  }
+  function fijar(cual, si) {
+    cuerpo.classList.toggle(FIJABLES[cual].clase, si);
+    poner(FIJABLES[cual].clave, si ? '1' : '0');
+    // al soltar, la barra no desaparece bajo el ratón: se va cuando se aleja
+    if (!si && cual === 'arriba') { verArriba(true); ocultarArribaLuego(); }
+    if (!si && cual === 'riel') { verIzq(true); ocultarIzqLuego(); }
+    pintarFijas();
+    window.dispatchEvent(new Event('resize'));
+  }
+  Object.keys(FIJABLES).forEach((cual) => cuerpo.classList.toggle(FIJABLES[cual].clase, leer(FIJABLES[cual].clave) === '1'));
+  pintarFijas();
+  // (el menú se cierra solo: lo hace app.js al tocar cualquier opción)
+  [fijarArriba, fijarRiel, ...itemsFijar].forEach((b) => b.addEventListener('click', () => fijar(b.dataset.fijar, !fijada(b.dataset.fijar))));
+
   const avisar = (texto) => { try { window.Grapa.aviso(texto, 'ok'); } catch (e) { /* sin avisos */ } };
   /** Lo cambia la persona (tecla F o el menú Ver): se recuerda y se dice cómo volver. */
   function alternar() {
