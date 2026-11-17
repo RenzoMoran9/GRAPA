@@ -170,6 +170,15 @@ avanzar con todos en paralelo.
   guardar ofrece **Guardar y cerrar**, *Cerrar sin guardar* o *Cancelar*. Con
   los diez tableros en uso, *Nuevo* pasa a *Vaciar este tablero*.
 
+### Sigue trabajando aunque cambies de ventana
+Abrir archivos, revisar, leer escaneos, ubicar formatos o armar el PDF
+**siguen solos aunque pases a otra ventana o a otro programa**; antes se
+quedaban parados hasta volver a Pdflash, porque el navegador deja de
+"pintar" una pestaña que no se ve. Mientras trabaja, el título de la
+pestaña empieza con **⏳**, y cuando termina, con **✓**, hasta que vuelves:
+así lo ves desde la barra de tareas. Las miniaturas de la zona que estabas
+mirando también se dibujan, para que al volver ya estén.
+
 ### Que no se pierda nada sin guardar
 - **«N sin guardar»**, arriba a la derecha de las pestañas, dice cuántos
   expedientes tienen trabajo sin guardar, aunque su pestaña no esté a la vista.
