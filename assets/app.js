@@ -176,26 +176,85 @@
   };
 
   let contadorCarga = 0;
+  let textoCarga = 'Procesando…';
   /**
    * Cambia el texto de la capa de espera sin tocar su contador. Avisar del
    * avance con G.cargando(true, …) lo subía una vez por hoja y la capa se
    * quedaba abierta al terminar.
    */
   G.progreso = function (texto) {
+    textoCarga = texto;
     const c = $('#cargandoTexto');
-    if (c) c.textContent = texto;
+    if (c && contadorCarga) c.textContent = texto;
   };
 
   G.cargando = function (activo, texto) {
-    const capa = $('#cargando');
     const antes = contadorCarga;
     contadorCarga = Math.max(0, contadorCarga + (activo ? 1 : -1));
-    if (texto) $('#cargandoTexto').textContent = texto;
-    capa.hidden = contadorCarga === 0;
+    if (texto) textoCarga = texto;
+    pintarCapa();
     // un trabajo largo: que siga aunque la pestaña quede detrás de otra ventana
     if (!antes && contadorCarga) G.ocupado(true);
     if (antes && !contadorCarga) G.ocupado(false);
   };
+
+  /**
+   * La capa de espera. Hay dos: la de todo el programa (G.cargando: abrir,
+   * guardar el expediente…) y la de UN tablero que está armando su PDF
+   * (trabajoDe: exportar, descargar, dividir). La de un tablero solo se ve
+   * mientras se mira ese tablero y deja libres las pestañas: se puede pasar
+   * a otro y seguir trabajando allí mientras termina.
+   */
+  function pintarCapa() {
+    const capa = $('#cargando');
+    if (!capa) return;
+    const propio = !contadorCarga && tableroActivo && tableroActivo.trabajo;
+    capa.hidden = !contadorCarga && !propio;
+    capa.classList.toggle('de-tablero', !!propio);
+    document.body.classList.toggle('capa-de-tablero', !!propio);
+    $('#cargandoTexto').textContent = propio ? propio.texto : textoCarga;
+    const nota = $('#cargandoNota');
+    if (nota) nota.hidden = !propio;
+  }
+
+  /**
+   * Empieza un trabajo de un tablero: exportar, descargar o dividir. Solo
+   * LEE sus hojas, así que no hace falta parar todo el programa: se puede
+   * pasar a otro tablero mientras tanto (su pestaña lo dice girando el
+   * punto) y al volver se sigue viendo la espera hasta que acaba. Lo que
+   * necesita (hojas, opciones, nombre) se toma ANTES de llamarlo, mientras
+   * ese tablero todavía es el que se ve. Devuelve { decir, fin }.
+   */
+  function trabajoDe(t, texto) {
+    const tr = { texto: texto || 'Procesando…' };
+    t.trabajo = tr;
+    G.ocupado(true);   // y que siga aunque la pestaña quede detrás de otra ventana
+    pintarCapa();
+    pintarTableros();
+    return {
+      decir(txt) {
+        if (tr.acabado || !txt) return;
+        tr.texto = txt;
+        if (t === tableroActivo) pintarCapa();
+      },
+      fin() {
+        if (tr.acabado) return;
+        tr.acabado = true;
+        if (t.trabajo === tr) t.trabajo = null;
+        G.ocupado(false);
+        pintarCapa();
+        pintarTableros();
+      },
+    };
+  }
+
+  /** Un aviso de lo que terminó en un tablero: si ya se está en otro, dice de cuál. */
+  function avisoDe(t, texto, tipo, accion) {
+    if (t !== tableroActivo && tableros.includes(t)) {
+      texto = `Tablero ${numeroDe(t)} («${nombreCorto(nombreTablero(t), 30)}»): ` + texto;
+    }
+    return G.aviso(texto, tipo, accion);
+  }
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
   // Diez a la vez: con tres se quedaba corto para llevar en paralelo los
@@ -1668,10 +1727,15 @@
     const pedido = destinoCarga;            // el «＋» de un paquete
     destinoCarga = null;
     if (!lote.length) return;
+    // un tablero que está armando su PDF no se toca (pegar con Ctrl+V llega igual)
+    if (tableroActivo.trabajo) {
+      G.aviso('Este tablero está armando su PDF: abre los archivos en otro tablero o espera a que termine.', 'error');
+      return;
+    }
     G.cargando(true, 'Abriendo archivos…');
     try {
       await G.prepararMotor();
-      const r = await G.cargarArchivos(lote, (t) => { $('#cargandoTexto').textContent = t; });
+      const r = await G.cargarArchivos(lote, (t) => G.progreso(t));
       if (r.paginas.length) {
         marcar();
         // lo que entra en un tablero vacío es trabajo nuevo: el expediente que
@@ -2146,12 +2210,13 @@
   }
 
   /* ---------------- guardar y dividir ---------------- */
-  /** Lo que informó el último armado sobre el peso, para contarlo al guardar. */
-  let ultimoInforme = null;
-
+  /**
+   * Cómo armar el PDF de esas hojas, con lo que dice AHORA el tablero que se
+   * ve (folios, título, peso). Se toma al empezar: mientras se arma se puede
+   * pasar a otro tablero, y entonces los campos ya son los de aquel.
+   */
   function opcionesSalida(paginas) {
     recalcularFolios();
-    ultimoInforme = null;
     return {
       titulo: $('#metaTitulo').value.trim() || undefined,
       autor: $('#metaAutor').value.trim() || undefined,
@@ -2159,7 +2224,6 @@
       numeros: paginas.map((p) => folios.get(p.uid)),
       baseIndices: paginas.map((p) => E.paginas.indexOf(p)),
       comprimir: G.PESOS[$('#pesoSalida').value] || null,
-      informe: (d) => { ultimoInforme = d; },
       alProgresar: (t) => G.progreso(t),
     };
   }
@@ -2185,9 +2249,8 @@
     $('#pesoNota').textContent = NOTAS_PESO[v] || NOTAS_PESO.original;
   }
 
-  /** Una línea contando cómo quedó el peso, si se pidió aligerar. */
-  function frasePeso() {
-    const d = ultimoInforme;
+  /** Una línea contando cómo quedó el peso, si se pidió aligerar (d: lo que informó el armado). */
+  function frasePeso(d) {
     if (!d || !d.antes) return '';
     // lo que Pdflash no supo achicar: así se sabe dónde queda el peso
     const quedan = d.sinSaber && d.sinSaber.n
@@ -2232,20 +2295,30 @@
   }
   const primeroQueCabe = (pesos, limite) => ORDEN_PESOS.find((m) => pesos[m] != null && pesos[m] <= limite);
 
-  /** Arma el PDF con cada ajuste, en orden, y para en el primero que cabe. */
-  async function pesarAjustes(limite, yaArmado) {
+  /**
+   * Arma el PDF con cada ajuste, en orden, y para en el primero que cabe.
+   * «de» ({ tablero, paginas, base, decir }) es para cuando lo pide un
+   * trabajo de tablero (exportar): sus hojas y opciones, tomadas al empezar.
+   */
+  async function pesarAjustes(limite, yaArmado, de) {
+    const d = de || {};
+    const tablero = d.tablero || tableroActivo;
+    const paginas = d.paginas || E.paginas;
+    const base = d.base || opcionesSalida(paginas);
+    const decir = d.decir || G.progreso;
     const pesos = {}, bytesDe = {};
     if (yaArmado) { pesos[yaArmado.modo] = yaArmado.bytes.length; bytesDe[yaArmado.modo] = yaArmado.bytes; }
     for (const modo of ORDEN_PESOS) {
       if (pesos[modo] == null) {
-        G.progreso(`Calculando el peso: «${NOMBRE_PESO[modo]}»…`);
-        const op = Object.assign(opcionesSalida(E.paginas), { comprimir: G.PESOS[modo] || null, informe: null });
-        const b = await G.construirPdf(E.paginas, op);
+        decir(`Calculando el peso: «${NOMBRE_PESO[modo]}»…`);
+        const op = Object.assign({}, base, { comprimir: G.PESOS[modo] || null, alProgresar: decir });
+        const b = await G.construirPdf(paginas, op);
         pesos[modo] = b.length; bytesDe[modo] = b;
       }
       if (limite && pesos[modo] <= limite) break;
     }
-    calculoPeso = { firma: firmaPeso(), limite, pesos };
+    // los pesos son de ese tablero: si mientras tanto se pasó a otro, no se le apuntan a aquel
+    if (tablero === tableroActivo) calculoPeso = { firma: firmaPeso(), limite, pesos };
     return { pesos, bytesDe };
   }
 
@@ -2355,6 +2428,7 @@
 
   async function guardar() {
     if (!permitido('exportar')) return;
+    if (tableroActivo.trabajo) return;   // ya está armando su PDF
     if (!E.paginas.length) { G.aviso('No hay páginas para guardar.', 'error'); return; }
     // Antes de armar nada, lo que suele olvidarse: exportar sin foliar o sin
     // firmar obliga a repetirlo todo después. Se puede apagar en «Salida».
@@ -2371,57 +2445,68 @@
       if (r === 'otro') { irASeccion(faltas[0].seccion); return; }
     }
     const t = tableroActivo;
-    // la capa de espera se quita mientras se pregunta: se lleva la cuenta para
-    // no descontarla dos veces al salir
-    let esperando = false;
-    const espera = (si, texto) => { if (si !== esperando) { G.cargando(si, texto); esperando = si; } };
+    // Todo lo de este tablero se toma ahora: mientras se arma se puede pasar
+    // a otro, y entonces E.paginas y los campos ya son los de aquel.
+    const paginas = E.paginas.slice();
+    const base = opcionesSalida(paginas);
+    const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
+    const limite = limitePeso();
+    const modo = $('#pesoSalida').value;
+    const firma = firmaPeso();
+    let informe = null;                  // lo que cuenta el armado sobre el peso
+    // la capa de espera se quita mientras se pregunta
+    let trabajo = null;
+    const espera = (si, texto) => {
+      if (si && !trabajo) trabajo = trabajoDe(t, texto);
+      else if (!si && trabajo) { trabajo.fin(); trabajo = null; }
+    };
+    const decir = (txt) => { if (trabajo) trabajo.decir(txt); };
     espera(true, 'Armando el PDF…');
     try {
-      let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
+      let bytes = await G.construirPdf(paginas, Object.assign({}, base,
+        { informe: (d) => { informe = d; }, alProgresar: decir }));
       // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
       // que sí cabe ya armado
-      const limite = limitePeso();
       if (limite && bytes.length > limite) {
-        const modo = $('#pesoSalida').value;
-        const informe = ultimoInforme;
-        const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
+        const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes }, { tablero: t, paginas, base, decir });
         const cabe = primeroQueCabe(pesos, limite);
         espera(false);
-        pintarPesos();
+        if (t === tableroActivo) pintarPesos();
+        // si se está en otro tablero, la pregunta dice de cuál es
+        const de = t === tableroActivo ? '' : `«${nombreTablero(t)}»: `;
         const ok = cabe
           ? await G.confirmar({
             titulo: 'No cabe en ' + enMb(limite),
-            mensaje: `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
+            mensaje: de + `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
             aceptar: `Guardar con «${NOMBRE_PESO[cabe]}»`,
           })
           : await G.confirmar({
             titulo: 'No cabe en ' + enMb(limite),
-            mensaje: `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
+            mensaje: de + `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
             aceptar: 'Guardar igual', peligro: true,
           });
-        if (!ok) { G.aviso('No se guardó nada.'); return; }
+        if (!ok) { avisoDe(t, 'No se guardó nada.'); return; }
         espera(true, 'Guardando…');
         if (cabe) {
           if (cabe !== modo) usarPeso(cabe);
           bytes = bytesDe[cabe];
-          ultimoInforme = null;
-        } else ultimoInforme = informe;
+          informe = null;
+        }
       }
-      const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
       const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
-      G.aviso(
+      avisoDe(t,
         (r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
           : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.')
-          + (r.estado === 'cancelado' ? '' : frasePeso()),
+          + (r.estado === 'cancelado' ? '' : frasePeso(informe)),
         r.estado === 'cancelado' ? '' : 'ok'
       );
       if (r.estado !== 'cancelado') {
-        t.exportado = firmaPeso();       // para la ruta del expediente
+        t.exportado = firma;             // para la ruta del expediente
         pintarRuta();
         // Mucha gente exporta y cierra: si el expediente no quedó guardado en
         // Pdflash, se dice ahora y se ofrece guardarlo de un clic.
         if (sinGuardar(t)) {
-          G.aviso(estadoDe(t) === 'nuevo'
+          avisoDe(t, estadoDe(t) === 'nuevo'
             ? 'El PDF ya está exportado, pero el expediente no está guardado en Pdflash: para retomarlo otro día, guárdalo.'
             : 'El PDF ya está exportado, pero los últimos cambios del expediente no están guardados en Pdflash.',
           'error', { texto: 'Guardar expediente', fn: () => guardarTablero(t) });
@@ -2429,7 +2514,7 @@
       }
     } catch (e) {
       console.error(e);
-      G.aviso('No se pudo guardar: ' + e.message, 'error');
+      avisoDe(t, 'No se pudo guardar: ' + e.message, 'error');
     } finally {
       espera(false);
     }
@@ -2438,13 +2523,18 @@
   async function entregarGrupos(grupos, prefijo) {
     const validos = grupos.filter((g) => g.length);
     if (!validos.length) { G.aviso('No hay páginas que dividir.', 'error'); return; }
-    G.cargando(true, 'Dividiendo…');
+    const t = tableroActivo;
+    if (t.trabajo) return;
+    // lo de este tablero, tomado ahora: mientras se arma se puede pasar a otro
+    const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+    const opciones = validos.map((g) => opcionesSalida(g));
+    const trabajo = trabajoDe(t, 'Dividiendo…');
     try {
-      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
       const archivos = [];
       for (let i = 0; i < validos.length; i++) {
-        $('#cargandoTexto').textContent = `Generando parte ${i + 1} de ${validos.length}…`;
-        const bytes = await G.construirPdf(validos[i], opcionesSalida(validos[i]));
+        trabajo.decir(`Generando parte ${i + 1} de ${validos.length}…`);
+        const parte = validos.length > 1 ? `Parte ${i + 1} de ${validos.length} · ` : '';
+        const bytes = await G.construirPdf(validos[i], Object.assign(opciones[i], { alProgresar: (x) => trabajo.decir(parte + x) }));
         archivos.push({
           bytes,
           nombre: validos.length === 1
@@ -2453,9 +2543,9 @@
         });
       }
       const guardados = await G.entregarVarios(archivos, `${base}-${prefijo}.zip`, (i, total) => {
-        $('#cargandoTexto').textContent = `Guardando archivo ${i + 1} de ${total}…`;
+        trabajo.decir(`Guardando archivo ${i + 1} de ${total}…`);
       });
-      G.aviso(
+      avisoDe(t,
         guardados === archivos.length
           ? `Listo: ${guardados} archivo(s).`
           : `Se guardaron ${guardados} de ${archivos.length} archivos.`,
@@ -2463,9 +2553,9 @@
       );
     } catch (e) {
       console.error(e);
-      G.aviso('No se pudo dividir: ' + e.message, 'error');
+      avisoDe(t, 'No se pudo dividir: ' + e.message, 'error');
     } finally {
-      G.cargando(false);
+      trabajo.fin();
     }
   }
 
@@ -2719,11 +2809,10 @@
   function prepararCambio() {
     if (lector.abierto) cerrarLector();
     if (capturando) alternarCaptura(false);
-    if (revision.corriendo) revision.corriendo.cancelada = true;
+    // «Revisar» NO se para: sigue con las hojas de su tablero (ver revisarHojas)
     busqueda.turno++;
     busqueda.actual = -1;
     calculoPeso = null;
-    ultimoInforme = null;
     destinoCarga = null;
     // lo que dicen los paneles de Revisar es de las hojas del tablero que se deja
     $('#formatosResultado').hidden = true;
@@ -2784,6 +2873,10 @@
   async function cerrarTablero(id) {
     const t = tableros.find((x) => x.id === id);
     if (!t || tableros.length < 2) return;
+    if (t.trabajo) {
+      G.aviso(`Espera a que termine: el tablero ${numeroDe(t)} está ${t.trabajo.texto.charAt(0).toLowerCase() + t.trabajo.texto.slice(1)}`, 'error');
+      return;
+    }
     if (!(await ofrecerGuardar(t, { verbo: 'lo cierras', accion: 'cerrar', Accion: 'Cerrar' }))) return;
     if (!tableros.includes(t) || tableros.length < 2) return;
     const i = tableros.indexOf(t);
@@ -3051,7 +3144,10 @@
       const estado = estadoDe(t);
       const el = document.createElement('div');
       // «est-»: «vacio» ya es la clase de la pantalla «Aún no hay páginas»
-      el.className = 'tablero est-' + estado + (t === tableroActivo ? ' activo' : '');
+      // lo que sigue haciendo aunque no se mire: armar su PDF o revisar sus hojas
+      const haciendo = t.trabajo ? t.trabajo.texto.replace(/…$/, '')
+        : revisionDe(t) ? 'revisando las hojas' : '';
+      el.className = 'tablero est-' + estado + (t === tableroActivo ? ' activo' : '') + (haciendo ? ' trabajando' : '');
       el.dataset.id = t.id;
       el.setAttribute('role', 'tab');
       el.setAttribute('aria-selected', t === tableroActivo ? 'true' : 'false');
@@ -3064,6 +3160,7 @@
           : estado === 'nuevo' ? 'nunca guardado' : 'con cambios sin guardar')
         + (d.paginas.length ? ` · ${d.paginas.length} ${d.paginas.length === 1 ? 'hoja' : 'hojas'}` : '')
         + (n <= 10 ? ` · Alt+${n % 10}` : '')
+        + (haciendo ? ` · ${haciendo.charAt(0).toLowerCase() + haciendo.slice(1)}…` : '')
         + ' · Clic derecho: ver el nombre completo y copiarlo';
 
       const punto = document.createElement('span');
@@ -3093,6 +3190,8 @@
       lista.appendChild(el);
       if (t === tableroActivo) activa = el;
     });
+    // la espera de un tablero que arma su PDF se ve solo estando en él
+    pintarCapa();
     // Si no caben enteras, se estrechan (sin el número de hojas, que sale al
     // apuntar); y si ni así caben, la tira se desplaza.
     const barra = $('#tableros');
@@ -4370,25 +4469,29 @@
 
   /** Saca una sola hoja a su propio PDF, sin tocar el expediente. */
   async function descargarHoja(pagina) {
-    G.cargando(true, 'Armando la hoja…');
+    const t = tableroActivo;
+    if (t.trabajo) return;
+    // lo de este tablero, tomado ahora: mientras se arma se puede pasar a otro.
+    // Se numera por su sitio en el expediente, para reconocerla después.
+    const n = String(E.paginas.indexOf(pagina) + 1).padStart(2, '0');
+    const opciones = opcionesSalida([pagina]);
+    const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+    const trabajo = trabajoDe(t, 'Armando la hoja…');
     try {
-      // se numera por su sitio en el expediente, para reconocerla después
-      const n = String(E.paginas.indexOf(pagina) + 1).padStart(2, '0');
-      const bytes = await G.construirPdf([pagina], opcionesSalida([pagina]));
-      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      const bytes = await G.construirPdf([pagina], Object.assign(opciones, { alProgresar: trabajo.decir }));
       // a Descargas a propósito: la carpeta vinculada es para el expediente
       // terminado, no para una hoja que se saca de paso
       const r = await G.guardarArchivo(
         bytes, `${base} - hoja ${n}.pdf`, 'application/pdf', { aDescargas: true });
-      G.aviso(r.estado === 'cancelado'
+      avisoDe(t, r.estado === 'cancelado'
         ? 'Descarga cancelada.'
         : `Hoja ${n} descargada (va a Descargas, no a la carpeta vinculada).`,
         r.estado === 'cancelado' ? '' : 'ok');
     } catch (e) {
       console.error(e);
-      G.aviso('No se pudo descargar la hoja: ' + e.message, 'error');
+      avisoDe(t, 'No se pudo descargar la hoja: ' + e.message, 'error');
     } finally {
-      G.cargando(false);
+      trabajo.fin();
     }
   }
 
@@ -4415,24 +4518,28 @@
       G.aviso('Marca primero las hojas que quieres bajar.', 'error');
       return;
     }
-    G.cargando(true, 'Armando el PDF…');
+    const t = tableroActivo;
+    if (t.trabajo) return;
+    // lo de este tablero, tomado ahora: mientras se arma se puede pasar a otro
+    const opciones = opcionesSalida(objs);
+    const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+    const trabajo = trabajoDe(t, 'Armando el PDF…');
     try {
-      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
-      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      const bytes = await G.construirPdf(objs, Object.assign(opciones, { alProgresar: trabajo.decir }));
       // a Descargas a propósito, como la hoja suelta: la carpeta vinculada es
       // para el expediente terminado, no para un recorte que se saca de paso
       const r = await G.guardarArchivo(
         bytes, `${base} - seleccion (${objs.length} hojas).pdf`, 'application/pdf',
         { aDescargas: true });
-      G.aviso(r.estado === 'cancelado'
+      avisoDe(t, r.estado === 'cancelado'
         ? 'Descarga cancelada.'
         : `${objs.length} hoja(s) descargadas en un PDF (van a Descargas).`,
         r.estado === 'cancelado' ? '' : 'ok');
     } catch (e) {
       console.error(e);
-      G.aviso('No se pudo descargar la selección: ' + e.message, 'error');
+      avisoDe(t, 'No se pudo descargar la selección: ' + e.message, 'error');
     } finally {
-      G.cargando(false);
+      trabajo.fin();
     }
   }
 
@@ -4561,24 +4668,28 @@
       G.aviso('La dirección del editor no es válida. Revísala en «Archivo ▸ Ajustes».', 'error');
       return;
     }
+    const t = tableroActivo;
+    if (t.trabajo) return;
     window.open(destino, '_blank', 'noopener,noreferrer');
-    G.cargando(true, 'Armando el PDF para editar…');
+    // lo de este tablero, tomado ahora: mientras se arma se puede pasar a otro
+    const opciones = opcionesSalida(objs);
+    const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+    const trabajo = trabajoDe(t, 'Armando el PDF para editar…');
     try {
-      const bytes = await G.construirPdf(objs, opcionesSalida(objs));
-      const base = G.nombreSeguro($('#nombreSalida').value, 'documento');
+      const bytes = await G.construirPdf(objs, Object.assign(opciones, { alProgresar: trabajo.decir }));
       // a Descargas, como la hoja suelta: es un archivo de paso para subirlo
       // a otro sitio, no tiene por qué acabar en la carpeta del expediente
       const r = await G.guardarArchivo(
         bytes, `${base} - para editar.pdf`, 'application/pdf', { aDescargas: true });
-      G.aviso(r.estado === 'cancelado'
+      avisoDe(t, r.estado === 'cancelado'
         ? 'Se abrió el editor, pero no se guardó el PDF.'
         : `«${base} - para editar.pdf» está en Descargas (${objs.length} hoja(s)). `
           + 'Arrástralo en la pestaña que se abrió.', r.estado === 'cancelado' ? '' : 'ok');
     } catch (e) {
       console.error(e);
-      G.aviso('No se pudo armar el PDF: ' + e.message, 'error');
+      avisoDe(t, 'No se pudo armar el PDF: ' + e.message, 'error');
     } finally {
-      G.cargando(false);
+      trabajo.fin();
     }
   }
 
@@ -7560,18 +7671,22 @@
      que se enseña se calcula siempre sobre cómo están ahora las hojas: si
      una se endereza, se gira a mano o se borra, su aviso desaparece solo, y
      con Ctrl+Z vuelve. Nada se toca hasta pulsar «Borrarlas» o
-     «Enderezarlas», y solo lo que siga con la casilla puesta. */
+     «Enderezarlas», y solo lo que siga con la casilla puesta.
+
+     Cada tablero revisa lo suyo y SIGUE aunque se pase a otro tablero (o a
+     otra ventana): antes, cambiar de pestaña la detenía. Al terminar en uno
+     que no se está mirando, un aviso lo dice y lleva a verlo. */
   const revision = {
     hechas: new Map(),   // uid -> { r, giro, enderezo } · la hoja tal como se miró
     fuera: new Set(),    // 'b:uid' o 'g:uid' · lo que se quitó de la lista a mano
-    corriendo: null,     // { cancelada } mientras revisa
-    revisadas: 0,        // cuántas se miraron la última vez
+    enCurso: new Map(),  // tablero -> { cancelada, texto } · la revisión que lleva cada uno
   };
+  const revisionDe = (t) => (t && revision.enCurso.get(t)) || null;
 
-  /** Lo que queda por hacer, con las hojas como están ahora. */
-  function avisosRevision() {
+  /** Lo que queda por hacer, con las hojas como están ahora (las del tablero que se ve, si no se dice otra cosa). */
+  function avisosRevision(paginas) {
     const blancas = [], giradas = [];
-    E.paginas.forEach((p, i) => {
+    (paginas || E.paginas).forEach((p, i) => {
       const h = revision.hechas.get(p.uid);
       if (!h) return;
       if (h.r.blanca) { blancas.push({ p, num: i + 1 }); return; }
@@ -7648,15 +7763,19 @@
     const { blancas, giradas } = avisosRevision();
     const boton = $('#btnRevisar');
     const estado = $('#revisarEstado');
-    if (revision.corriendo) {
-      boton.textContent = 'Detener';
+    const tarea = revisionDe(tableroActivo);
+    if (tarea) {
+      boton.textContent = tarea.cancelada ? 'Deteniendo…' : 'Detener';
+      boton.disabled = !!tarea.cancelada;
+      estado.textContent = tarea.texto || '';
     } else {
       const faltan = E.paginas.filter((p) => !revision.hechas.has(p.uid)).length;
       boton.textContent = !revision.hechas.size || faltan === E.paginas.length
         ? 'Revisar las hojas'
         : faltan ? `Revisar también las ${faltan} nuevas` : 'Volver a revisar';
       boton.disabled = !E.paginas.length;
-      if (!revision.hechas.size) estado.textContent = '';
+      // «todo en orden» solo si se revisó algo de ESTE tablero (lo revisado es de todos)
+      if (faltan === E.paginas.length) estado.textContent = '';
       else if (!blancas.length && !giradas.length) {
         estado.textContent = 'Todo en orden: ninguna hoja en blanco, de lado ni torcida.';
       } else estado.textContent = '';
@@ -7856,31 +7975,40 @@
   }
 
   async function revisarHojas() {
-    if (revision.corriendo) { revision.corriendo.cancelada = true; return; }
+    const dueno = tableroActivo;     // se puede cambiar de tablero mientras revisa
+    const enMarcha = revisionDe(dueno);
+    if (enMarcha) { enMarcha.cancelada = true; pintarRevision(); return; }
     if (!E.paginas.length) return;
-    const tarea = (revision.corriendo = { cancelada: false });
+    const tarea = { cancelada: false, texto: '' };
+    revision.enCurso.set(dueno, tarea);
     G.ocupado(true);   // que siga aunque la pestaña quede detrás de otra ventana
-    const estado = $('#revisarEstado');
+    const aqui = () => dueno === tableroActivo;
+    // lo que dice el panel es del tablero que se ve: el avance se apunta y se
+    // enseña solo estando en el suyo
+    const decir = (t) => { tarea.texto = t; if (aqui()) $('#revisarEstado').textContent = t; };
     pintarRevision();
+    pintarTableros();
     const lista = E.paginas.slice();
+    // las hojas de SU tablero, aunque se esté mirando otro; si se cerró, ninguna
+    const sigue = (p) => tableros.includes(dueno) && datosDe(dueno).paginas.includes(p);
     const t0 = performance.now();
     // Varias a la vez: mientras se hacen las cuentas de una hoja, las siguientes
     // se van dibujando en los hilos aparte del lector (una copia del PDF cada uno).
     // El resultado de cada hoja es el mismo; solo se espera menos.
     const enCurso = new Map();
     const lanzar = (j) => {
-      if (j >= lista.length || enCurso.has(j) || !E.paginas.includes(lista[j])) return;
+      if (j >= lista.length || enCurso.has(j) || !sigue(lista[j])) return;
       const q = lista[j];
       const foto = { giro: G.norm(q.giro), enderezo: q.enderezo || 0 };
       enCurso.set(j, G.revisarHoja(q).then((r) => ({ r, foto }), (e) => ({ e, foto })));
     };
     try {
-      for (let i = 0; i < lista.length && !tarea.cancelada; i++) {
+      for (let i = 0; i < lista.length && !tarea.cancelada && tableros.includes(dueno); i++) {
         const p = lista[i];
         const adelante = (G.copiasParaLeer ? G.copiasParaLeer() : 1) + 1;
         for (let j = i; j <= i + adelante; j++) lanzar(j);
         if (!enCurso.has(i)) continue;
-        estado.textContent = `Revisando hoja ${i + 1} de ${lista.length}…`;
+        decir(`Revisando hoja ${i + 1} de ${lista.length}…`);
         const hecho = await enCurso.get(i);
         enCurso.delete(i);
         const foto = hecho.foto;
@@ -7892,22 +8020,41 @@
         revision.fuera.delete('g:' + p.uid);
       }
     } finally {
-      revision.corriendo = null;
+      revision.enCurso.delete(dueno);
       G.ocupado(false);
     }
-    pintar();
+    pintarTableros();
+    if (!tableros.includes(dueno)) return;       // se cerró su tablero mientras revisaba
+    if (aqui()) pintar();
     if (tarea.cancelada) {
-      estado.textContent = 'Revisión detenida. Lo que se alcanzó a revisar está abajo.';
+      if (aqui()) $('#revisarEstado').textContent = 'Revisión detenida. Lo que se alcanzó a revisar está abajo.';
       return;
     }
-    const { blancas, giradas } = avisosRevision();
-    if (blancas.length || giradas.length) {
-      const partes = [];
-      if (blancas.length) partes.push(blancas.length === 1 ? '1 en blanco' : `${blancas.length} en blanco`);
-      if (giradas.length) partes.push(giradas.length === 1 ? '1 por enderezar' : `${giradas.length} por enderezar`);
-      estado.textContent = `Revisadas ${lista.length} hojas en ${Math.max(1, Math.round((performance.now() - t0) / 1000))} s: `
-        + partes.join(' y ') + '. Quita la marca a las que estén bien.';
+    const paginas = datosDe(dueno).paginas;
+    if (!lista.some((p) => paginas.includes(p))) return;   // ya no tiene esas hojas
+    const { blancas, giradas } = avisosRevision(paginas);
+    const partes = [];
+    if (blancas.length) partes.push(blancas.length === 1 ? '1 en blanco' : `${blancas.length} en blanco`);
+    if (giradas.length) partes.push(giradas.length === 1 ? '1 por enderezar' : `${giradas.length} por enderezar`);
+    const resumen = partes.length
+      ? `Revisadas ${lista.length} hojas en ${Math.max(1, Math.round((performance.now() - t0) / 1000))} s: `
+        + partes.join(' y ') + '. Quita la marca a las que estén bien.'
+      : '';
+    if (aqui()) {
+      if (resumen) $('#revisarEstado').textContent = resumen;
+      return;
     }
+    // terminó en un tablero que no se está mirando: se dice, y se lleva a verlo
+    G.aviso(`Ya se revisó el tablero ${numeroDe(dueno)} («${nombreCorto(nombreTablero(dueno), 30)}»): `
+      + (partes.length ? partes.join(' y ') + '.' : 'ninguna hoja en blanco, de lado ni torcida.'),
+    partes.length ? '' : 'ok', {
+      texto: 'Verlo',
+      fn: () => {
+        if (dueno !== tableroActivo && !activarTablero(dueno.id)) return;
+        irASeccion('revisar');
+        if (resumen) $('#revisarEstado').textContent = resumen;
+      },
+    });
   }
 
   function marcarLasDeRevision(lista) {
@@ -7959,6 +8106,13 @@
     const escribiendo = ev.target.isContentEditable || ev.target.tagName === 'TEXTAREA'
       || (ev.target.tagName === 'INPUT' && !/^(range|checkbox|radio|button|color|file)$/.test(ev.target.type));
     const ctrl = ev.ctrlKey || ev.metaKey;
+    // Un tablero que está armando su PDF no se toca hasta que termine (se ve
+    // su espera); solo se puede pasar a otro con Alt+número.
+    if (tableroActivo && tableroActivo.trabajo && !contadorCarga
+        && !(ev.altKey && !ctrl && /^Digit[0-9]$/.test(ev.code))) {
+      if (ctrl && /^[sp]$/i.test(ev.key)) ev.preventDefault();   // ni «guardar página» ni imprimir
+      return;
+    }
 
     if (ev.key === 'Escape') {
       // estando a media captura, Esc cancela la captura y no cierra el lector
@@ -8537,7 +8691,9 @@
     // Avisar antes de cerrar solo si algo está sin guardar: preguntar también
     // con todo guardado acostumbraba a decir que sí sin leer.
     window.addEventListener('beforeunload', (ev) => {
-      if (tableros.some(sinGuardar)) { ev.preventDefault(); ev.returnValue = ''; }
+      // y si algo sigue trabajando (exportar, revisar…): cerrar la pestaña lo corta
+      const trabajando = tableros.some((t) => t.trabajo || revisionDe(t));
+      if (trabajando || tableros.some(sinGuardar)) { ev.preventDefault(); ev.returnValue = ''; }
     });
     // lo que estaba por autoguardarse se guarda ya, aunque se cierre en esos 2,5 s
     window.addEventListener('pagehide', adelantarAutoguardado);

@@ -170,7 +170,7 @@ avanzar con todos en paralelo.
   guardar ofrece **Guardar y cerrar**, *Cerrar sin guardar* o *Cancelar*. Con
   los diez tableros en uso, *Nuevo* pasa a *Vaciar este tablero*.
 
-### Sigue trabajando aunque cambies de ventana
+### Sigue trabajando aunque cambies de ventana o de tablero
 Abrir archivos, revisar, leer escaneos, ubicar formatos o armar el PDF
 **siguen solos aunque pases a otra ventana o a otro programa**; antes se
 quedaban parados hasta volver a Pdflash, porque el navegador deja de
@@ -178,6 +178,22 @@ quedaban parados hasta volver a Pdflash, porque el navegador deja de
 pestaña empieza con **⏳**, y cuando termina, con **✓**, hasta que vuelves:
 así lo ves desde la barra de tareas. Las miniaturas de la zona que estabas
 mirando también se dibujan, para que al volver ya estén.
+
+Y **también siguen si pasas a otro tablero** (otra pestaña de Pdflash):
+- **Revisar las hojas** ya no se detiene al cambiar de tablero. Cada
+  tablero lleva su propia revisión: puedes revisar varios a la vez. Al
+  terminar uno que no estás mirando, un aviso lo dice y *Verlo* te lleva.
+- **Exportar el PDF, descargar las hojas marcadas o una hoja, separar en
+  varios PDF** y *armar el PDF para editar* ya no paran todo el programa:
+  la espera tapa solo ese tablero y deja libres las pestañas. Pasa a otro
+  tablero y sigue trabajando allí; el aviso de que terminó dice de qué
+  tablero era. Lo que sale es lo que tenía ese tablero al pulsar el botón.
+- Mientras un tablero trabaja, **el punto de su pestaña gira**. Ese tablero
+  no se deja cerrar ni tocar hasta que termine (para que el PDF salga como
+  estaba), y si intentas cerrar Pdflash, el navegador pregunta antes.
+
+Lo único que lo corta es **cerrar la pestaña o el navegador**: todo ocurre
+dentro de esa pestaña.
 
 ### Que no se pierda nada sin guardar
 - **«N sin guardar»**, arriba a la derecha de las pestañas, dice cuántos

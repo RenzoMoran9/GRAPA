@@ -540,10 +540,21 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
 .aviso-veces:empty{display:none}
 @keyframes entra{from{opacity:0;transform:translateY(8px)}}
 .cargando{
-  position:fixed;inset:0;background:rgba(12,16,22,.5);display:grid;place-items:center;z-index:90;
+  position:fixed;inset:0;background:rgba(12,16,22,.5);display:grid;place-items:center;align-content:center;z-index:90;
   color:#fff;font-weight:600;gap:14px;grid-auto-flow:row;backdrop-filter:blur(2px);
 }
 .cargando[hidden]{display:none}
+.cargando-nota{max-width:440px;padding:0 20px;text-align:center;font-weight:500;font-size:13px;color:rgba(255,255,255,.82)}
+.cargando-nota[hidden]{display:none}
+/* La espera de UN tablero (exportar, descargar, dividir) deja libres las
+   pestañas: se puede pasar a otro tablero mientras termina. Y una pregunta
+   que haga ese trabajo (no cabe en el peso máximo) sale por encima. */
+body.capa-de-tablero .tableros{z-index:91}
+/* de esa tira, solo las pestañas: lo que el modo enfocado pone en ella
+   (menús, deshacer, Exportar…) es del tablero que se está armando */
+body.capa-de-tablero .tableros > .enf-logo,
+body.capa-de-tablero .tableros > .enf-acciones{pointer-events:none;opacity:.35}
+body.capa-de-tablero .modal{z-index:93}
 .giro{width:34px;height:34px;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:girar .8s linear infinite}
 
 /* ---------- expedientes guardados ---------- */
@@ -979,6 +990,12 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
   background:var(--color-tablero);border-radius:9px 9px 0 0;
 }
 .tablero-punto{width:8px;height:8px;border-radius:50%;background:var(--color-tablero);flex:none}
+/* el tablero sigue trabajando (exportar, revisar…) aunque no se mire: su punto gira */
+.tablero.trabajando .tablero-punto{
+  width:10px;height:10px;box-sizing:border-box;background:none;
+  border:2px solid var(--color-tablero);border-right-color:transparent;animation:girar .8s linear infinite;
+}
+@media (prefers-reduced-motion:reduce){.tablero.trabajando .tablero-punto{animation-duration:2.4s}}
 .tablero-nombre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tablero-meta{color:var(--texto-3);font-size:12px;font-weight:400;flex:none}
 .tablero-estado{display:none;width:7px;height:7px;border-radius:50%;background:var(--aviso);margin-left:auto;flex:none}

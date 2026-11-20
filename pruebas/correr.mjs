@@ -1201,6 +1201,68 @@ const PRUEBAS = {
     afirmar(!(await candado()), 'y lo suelta al terminar');
   },
 
+  async 'tableros: revisar, exportar y descargar siguen al pasar a otro tablero'({ page }) {
+    await page.evaluate(() => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      // que cada hoja tarde un poco: así da tiempo a cambiar de tablero a medias
+      const G = window.Grapa, revisar = G.revisarHoja, armar = G.construirPdf;
+      G.revisarHoja = async (p) => { await new Promise((r) => setTimeout(r, 120)); return revisar(p); };
+      G.construirPdf = async (...a) => { await new Promise((r) => setTimeout(r, 1500)); return armar(...a); };
+    });
+    const avisoCon = (re) => page.waitForFunction((fuente) => [...document.querySelectorAll('#avisos .aviso')]
+      .some((a) => new RegExp(fuente).test(a.textContent)), re.source, { timeout: 20000 });
+    await abrir(page, ['Uno', 12]);
+
+    // revisar el tablero 1 y, a medias, pasar a uno nuevo: antes se detenía
+    await page.evaluate(() => { document.querySelector('.riel-btn[data-va="revisar"]').click(); document.querySelector('#btnRevisar').click(); });
+    await page.waitForFunction(() => /Revisando hoja/.test(document.querySelector('#revisarEstado').textContent));
+    await page.click('#btnTableroNuevo');
+    await abrir(page, ['Dos', 2]);
+    afirmar(await titulo(page) === 'Dos', 'se está en el tablero 2', await titulo(page));
+    afirmar((await pestanas(page))[0].includes('trabajando'), 'la pestaña del 1 dice que sigue revisando', await pestanas(page));
+    const enDos = await page.evaluate(() => [document.querySelector('#btnRevisar').textContent, document.querySelector('#revisarEstado').textContent]);
+    afirmar(enDos[0] === 'Revisar las hojas' && !enDos[1], 'el panel de Revisar del 2 es del 2', enDos);
+    // termina sola, lo avisa y lleva a verlo
+    await avisoCon(/Ya se revisó el tablero 1/);
+    afirmar(!(await pestanas(page))[0].includes('trabajando'), 'al terminar, la pestaña deja de girar', await pestanas(page));
+    afirmar(!(await page.textContent('#revisarEstado')), 'el 2, sin revisar, no dice «todo en orden»', await page.textContent('#revisarEstado'));
+    await page.getByRole('button', { name: 'Verlo' }).click();
+    afirmar(await titulo(page) === 'Uno', '«Verlo» lleva al tablero 1', await titulo(page));
+    afirmar(await page.textContent('#btnRevisar') === 'Volver a revisar', 'se revisaron las 12 hojas', await page.textContent('#btnRevisar'));
+
+    // exportar el 1 y pasar al 2 mientras se arma: la espera es solo del 1
+    const descarga1 = page.waitForEvent('download', { timeout: 20000 });
+    await page.evaluate(() => document.querySelector('#btnGuardar').click());
+    await page.waitForSelector('#cargando.de-tablero:not([hidden])');
+    afirmar(await page.isVisible('#cargandoNota'), 'la espera dice que se puede pasar a otro tablero');
+    await page.click('.tablero:nth-child(2)');           // la pestaña se puede pulsar con la espera puesta
+    afirmar(await titulo(page) === 'Dos', 'pasó al 2 mientras el 1 exporta', await titulo(page));
+    afirmar(await page.isHidden('#cargando'), 'en el 2 no hay espera');
+    afirmar((await pestanas(page))[0].includes('trabajando'), 'la pestaña del 1 sigue girando');
+    // en el 2 se trabaja con normalidad, y el 1 no se deja cerrar a medias
+    await page.click('#btnSelTodo');
+    afirmar(await page.evaluate(() => window.Grapa.estado.seleccion.size) === 2, 'en el 2 se pueden marcar hojas');
+    await page.click('.tablero:nth-child(1) .tablero-cerrar');
+    await avisoCon(/Espera a que termine/);
+    afirmar((await pestanas(page)).length === 2, 'el 1 no se cerró');
+    const d1 = await descarga1;
+    afirmar(/^Uno/.test(d1.suggestedFilename()), 'el PDF es del tablero 1', d1.suggestedFilename());
+    await avisoCon(/^Tablero 1 .*PDF guardado/);
+
+    // descargar las marcadas del 2 y volver al 1 con Alt+1 mientras se arma
+    const descarga2 = page.waitForEvent('download', { timeout: 20000 });
+    await page.evaluate(() => document.querySelector('#btnDescargarSel').click());
+    await page.waitForSelector('#cargando.de-tablero:not([hidden])');
+    await page.keyboard.press('Alt+1');
+    afirmar(await titulo(page) === 'Uno', 'Alt+1 vuelve al 1 con la espera del 2 puesta', await titulo(page));
+    afirmar(await page.isHidden('#cargando'), 'en el 1 no hay espera');
+    const d2 = await descarga2;
+    afirmar(/^Dos - seleccion \(2 hojas\)/.test(d2.suggestedFilename()), 'el PDF es de las marcadas del 2', d2.suggestedFilename());
+    await avisoCon(/^Tablero 2 .*descargadas/);
+    afirmar(!(await pestanas(page)).some((c) => c.includes('trabajando')), 'ya no trabaja ninguno');
+    await page.waitForFunction(async () => !(await navigator.locks.query()).held.some((l) => l.name === 'pdflash-trabajando'), null, { timeout: 3000 });
+  },
+
   async 'nombre completo: la pestaña y los documentos lo enseñan entero y se copia'({ page }) {
     const largo = 'INFORME N° 0457-2026-GRA-OA-ABASTECIMIENTO - ADQUISICION DE UTILES DE ESCRITORIO PARA LAS OFICINAS';
     await abrir(page, [largo, 2], ['Cotizacion A', 1]);
