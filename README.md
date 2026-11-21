@@ -127,12 +127,13 @@ aparta hasta que lo buscas. Así se leen sin estar acercando y alejando.
 - Selección múltiple con `Ctrl` y `Shift`, y **deshacer / rehacer**.
 
 ### Varios expedientes a la vez: tableros
-Pdflash abre **hasta diez expedientes a la vez**, cada uno en su pestaña, para
+Pdflash abre **hasta quince expedientes a la vez**, cada uno en su pestaña, para
 avanzar con todos en paralelo.
 
 - **Nuevo tablero** (el **＋** de las pestañas o *Archivo ▸ Nuevo tablero*) abre
   otro en blanco; si ya tienes uno en blanco, te lleva a ese. **Alt+1 … Alt+9**
-  cambian de uno a otro, y **Alt+0** va al décimo.
+  cambian de uno a otro, y **Alt+0** va al décimo; del 11 al 15 se llega con
+  un clic en su pestaña o desde la lista de todos.
 - **El nombre completo, para copiarlo:** en la pestaña el nombre va cortado.
   Con **clic derecho en la pestaña** (o un clic en la que ya está abierta, o en
   el nombre de un documento del panel *Documentos*) sale una ficha con el
@@ -153,7 +154,7 @@ avanzar con todos en paralelo.
   sellos, la carpeta de salida y las preferencias.
 - **Un expediente guardado solo puede estar abierto en un tablero.** Si lo
   abres otra vez, te lleva al tablero que ya lo tiene. Al abrir uno se usa
-  primero un tablero en blanco; si los diez están en uso, pregunta antes de
+  primero un tablero en blanco; si los quince están en uso, pregunta antes de
   reemplazar el actual.
 - **La pestaña dice cómo está:** un punto naranja significa *sin guardar*; sin
   punto, ya está guardado. El título, la barra de abajo y la lista de guardados
@@ -168,7 +169,7 @@ avanzar con todos en paralelo.
   Allí Ctrl+Z las quita.
 - **Cerrar un tablero** (la **×**, o clic con el botón central) con cambios sin
   guardar ofrece **Guardar y cerrar**, *Cerrar sin guardar* o *Cancelar*. Con
-  los diez tableros en uso, *Nuevo* pasa a *Vaciar este tablero*.
+  los quince tableros en uso, *Nuevo* pasa a *Vaciar este tablero*.
 
 ### Sigue trabajando aunque cambies de ventana
 Abrir archivos, revisar, leer escaneos, ubicar formatos o armar el PDF
@@ -711,7 +712,7 @@ salga tal como se ve.
 | `Ctrl+S` | Exportar PDF |
 | `Ctrl+P` | Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta) |
 | `Ctrl+Mayús+S` | Guardar el expediente (para retomarlo otro día) |
-| `Alt+1` … `Alt+9`, `Alt+0` | Cambiar de tablero (`Alt+0`, el décimo) |
+| `Alt+1` … `Alt+9`, `Alt+0` | Cambiar de tablero (`Alt+0`, el décimo; del 11 al 15, con un clic en su pestaña) |
 | `Ctrl+F` | Buscar una palabra en todas las hojas · `Enter` pasa a la siguiente |
 | `Ctrl+Z` / `Ctrl+Y` | Deshacer / Rehacer (escribiendo en un campo, deshacen el texto, no las hojas) |
 | `Ctrl+A` | Seleccionar todas las páginas |
@@ -849,7 +850,7 @@ node construir.mjs
 ### Pruebas
 
 `pruebas/correr.mjs` abre Pdflash en Chromium y repite lo que haría una
-persona: cargar, soltar un PDF entre dos hojas, deshacer, abrir diez
+persona: cargar, soltar un PDF entre dos hojas, deshacer, abrir quince
 tableros, cerrar sin guardar, recuperar el autoguardado con dos ventanas,
 exportar y leer los folios del PDF que sale, la ruta, las cabeceras, los
 avisos, la memoria y la base de datos. Cada prueba empieza con el navegador
