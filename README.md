@@ -139,9 +139,10 @@ avanzar con todos en paralelo.
   el nombre de un documento del panel *Documentos*) sale una ficha con el
   nombre entero, ya seleccionado, y el de cada uno de sus documentos, cada
   uno con su botón **Copiar**.
-- **Con muchas pestañas** se estrechan y la tira se desplaza (también con la
-  rueda del ratón); la pestaña que ves siempre queda a la vista y un
-  degradado avisa de que hay más a un lado.
+- **Con muchas pestañas** se estrechan y la tira se desplaza. Aparecen
+  **flechas ‹ ›** a los lados (dicen cuántas hay escondidas de cada lado y se
+  apagan al llegar al extremo), la tira **se arrastra** con el ratón y también
+  se mueve con la rueda. La pestaña que ves siempre queda a la vista.
 - **Todos de un vistazo:** la **flecha** junto a las pestañas despliega una
   tarjeta por tablero, con la portada, cuántas hojas y documentos trae y si
   está **guardado, foliado y firmado**. Un clic en la tarjeta va a ese
@@ -153,9 +154,15 @@ avanzar con todos en paralelo.
 - **Se comparte lo común:** la lista de expedientes guardados, las firmas y los
   sellos, la carpeta de salida y las preferencias.
 - **Un expediente guardado solo puede estar abierto en un tablero.** Si lo
-  abres otra vez, te lleva al tablero que ya lo tiene. Al abrir uno se usa
-  primero un tablero en blanco; si los quince están en uso, pregunta antes de
-  reemplazar el actual.
+  abres otra vez, te lleva al tablero que ya lo tiene y te lo dice. Al abrir
+  uno se usa primero un tablero en blanco; si los quince están en uso,
+  pregunta antes de reemplazar el actual.
+- **También entre ventanas:** si está abierto en **otra pestaña de Pdflash**,
+  en *Exped.* sale «En otra ventana» y, al abrirlo, Pdflash lo dice: esa otra
+  pestaña lo pone a la vista y su título empieza con 👉 para encontrarla. Puedes
+  seguir allí o **traerlo a esta ventana**: allí se cierra y aquí se abre lo
+  último guardado. Si allí tiene cambios sin guardar, no se toca nada y se te
+  dice que lo guardes primero.
 - **La pestaña dice cómo está:** un punto naranja significa *sin guardar*; sin
   punto, ya está guardado. El título, la barra de abajo y la lista de guardados
   lo muestran igual y en qué tablero está abierto cada expediente.
