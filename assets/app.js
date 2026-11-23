@@ -192,10 +192,39 @@
     contadorCarga = Math.max(0, contadorCarga + (activo ? 1 : -1));
     if (texto) $('#cargandoTexto').textContent = texto;
     capa.hidden = contadorCarga === 0;
+    if (capa.hidden) $('#cargandoCancelar').hidden = true;
     // un trabajo largo: que siga aunque la pestaña quede detrás de otra ventana
     if (!antes && contadorCarga) G.ocupado(true);
     if (antes && !contadorCarga) G.ocupado(false);
   };
+
+  /* ---------- «Cancelar» en la capa de espera ----------
+     Un trabajo que se queda parado dejaba la pantalla tapada y no quedaba
+     más que recargar. Pasado un rato aparece «Cancelar»: suelta la pantalla
+     y lo que estaba en marcha, si termina después, ya no hace nada.
+     Devuelve con qué quitar el botón al terminar. */
+  let alCancelar = null;
+  let relojCancelar = null;
+  G.ofrecerCancelar = function (fn, tras) {
+    clearTimeout(relojCancelar);
+    alCancelar = fn;
+    relojCancelar = setTimeout(() => {
+      if (alCancelar === fn && !$('#cargando').hidden) $('#cargandoCancelar').hidden = false;
+    }, tras || 0);
+    return () => {
+      if (alCancelar !== fn) return;
+      alCancelar = null;
+      clearTimeout(relojCancelar);
+      $('#cargandoCancelar').hidden = true;
+    };
+  };
+  $('#cargandoCancelar').addEventListener('click', () => {
+    const fn = alCancelar;
+    alCancelar = null;
+    $('#cargandoCancelar').hidden = true;
+    if (fn) fn();
+  });
+  G.cancelarTras = 15000;   // antes, casi todo termina solo (las pruebas lo bajan)
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
   // Quince a la vez: con tres se quedaba corto para llevar en paralelo los
@@ -2381,63 +2410,84 @@
     // no descontarla dos veces al salir
     let esperando = false;
     const espera = (si, texto) => { if (si !== esperando) { G.cargando(si, texto); esperando = si; } };
+    // el permiso de la carpeta vinculada, ahora que dura el clic
+    await G.prepararCarpeta();
+    let cancelado = false;
+    let quitarCancelar = () => {};
+    const alCancelar = new Promise((listo) => {
+      quitarCancelar = G.ofrecerCancelar(() => { cancelado = true; listo(); }, G.cancelarTras);
+    });
     espera(true, 'Armando el PDF…');
-    try {
-      let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
-      // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
-      // que sí cabe ya armado
-      const limite = limitePeso();
-      if (limite && bytes.length > limite) {
-        const modo = $('#pesoSalida').value;
-        const informe = ultimoInforme;
-        const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
-        const cabe = primeroQueCabe(pesos, limite);
-        espera(false);
-        pintarPesos();
-        const ok = cabe
-          ? await G.confirmar({
-            titulo: 'No cabe en ' + enMb(limite),
-            mensaje: `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
-            aceptar: `Guardar con «${NOMBRE_PESO[cabe]}»`,
-          })
-          : await G.confirmar({
-            titulo: 'No cabe en ' + enMb(limite),
-            mensaje: `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
-            aceptar: 'Guardar igual', peligro: true,
-          });
-        if (!ok) { G.aviso('No se guardó nada.'); return; }
-        espera(true, 'Guardando…');
-        if (cabe) {
-          if (cabe !== modo) usarPeso(cabe);
-          bytes = bytesDe[cabe];
-          ultimoInforme = null;
-        } else ultimoInforme = informe;
-      }
-      const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
-      const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
-      G.aviso(
-        (r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
-          : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.')
-          + (r.estado === 'cancelado' ? '' : frasePeso()),
-        r.estado === 'cancelado' ? '' : 'ok'
-      );
-      if (r.estado !== 'cancelado') {
-        t.exportado = firmaPeso();       // para la ruta del expediente
-        pintarRuta();
-        // Mucha gente exporta y cierra: si el expediente no quedó guardado en
-        // Pdflash, se dice ahora y se ofrece guardarlo de un clic.
-        if (sinGuardar(t)) {
-          G.aviso(estadoDe(t) === 'nuevo'
-            ? 'El PDF ya está exportado, pero el expediente no está guardado en Pdflash: para retomarlo otro día, guárdalo.'
-            : 'El PDF ya está exportado, pero los últimos cambios del expediente no están guardados en Pdflash.',
-          'error', { texto: 'Guardar expediente', fn: () => guardarTablero(t) });
+    const trabajo = (async () => {
+      try {
+        let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
+        if (cancelado) return;
+        // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
+        // que sí cabe ya armado
+        const limite = limitePeso();
+        if (limite && bytes.length > limite) {
+          const modo = $('#pesoSalida').value;
+          const informe = ultimoInforme;
+          const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
+          const cabe = primeroQueCabe(pesos, limite);
+          espera(false);
+          pintarPesos();
+          const ok = cabe
+            ? await G.confirmar({
+              titulo: 'No cabe en ' + enMb(limite),
+              mensaje: `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
+              aceptar: `Guardar con «${NOMBRE_PESO[cabe]}»`,
+            })
+            : await G.confirmar({
+              titulo: 'No cabe en ' + enMb(limite),
+              mensaje: `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
+              aceptar: 'Guardar igual', peligro: true,
+            });
+          if (!ok) { G.aviso('No se guardó nada.'); return; }
+          espera(true, 'Guardando…');
+          if (cabe) {
+            if (cabe !== modo) usarPeso(cabe);
+            bytes = bytesDe[cabe];
+            ultimoInforme = null;
+          } else ultimoInforme = informe;
         }
+        const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
+        if (cancelado) return;
+        G.progreso(G.carpeta && G.carpeta.actual() ? `Guardando en «${G.carpeta.nombre()}»…` : 'Descargando el PDF…');
+        const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
+        G.aviso(
+          (r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
+            : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.')
+            + (r.estado === 'cancelado' ? '' : frasePeso()),
+          r.estado === 'cancelado' ? '' : 'ok'
+        );
+        if (r.estado !== 'cancelado') {
+          t.exportado = firmaPeso();       // para la ruta del expediente
+          pintarRuta();
+          // Mucha gente exporta y cierra: si el expediente no quedó guardado en
+          // Pdflash, se dice ahora y se ofrece guardarlo de un clic.
+          if (sinGuardar(t)) {
+            G.aviso(estadoDe(t) === 'nuevo'
+              ? 'El PDF ya está exportado, pero el expediente no está guardado en Pdflash: para retomarlo otro día, guárdalo.'
+              : 'El PDF ya está exportado, pero los últimos cambios del expediente no están guardados en Pdflash.',
+            'error', { texto: 'Guardar expediente', fn: () => guardarTablero(t) });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelado) G.aviso('No se pudo guardar: ' + e.message, 'error');
       }
-    } catch (e) {
-      console.error(e);
-      G.aviso('No se pudo guardar: ' + e.message, 'error');
+    })();
+    try {
+      await Promise.race([trabajo, alCancelar]);
     } finally {
+      quitarCancelar();
       espera(false);
+    }
+    if (cancelado) {
+      G.reanudarMiniaturas();
+      G.aviso('Se canceló la exportación; tu trabajo sigue aquí. Si vuelve a quedarse parada, '
+        + 'prueba con el peso «Original» o recarga la página con Ctrl+F5 (todo queda autoguardado).', 'error');
     }
   }
 

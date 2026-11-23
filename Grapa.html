@@ -570,6 +570,9 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
   color:#fff;font-weight:600;gap:14px;grid-auto-flow:row;backdrop-filter:blur(2px);
 }
 .cargando[hidden]{display:none}
+.cargando-cancelar{justify-self:center;color:#fff;border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.08);padding:6px 16px;font-weight:600}
+.cargando-cancelar:hover{background:rgba(255,255,255,.18);border-color:#fff}
+.cargando-cancelar[hidden]{display:none}
 .giro{width:34px;height:34px;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:girar .8s linear infinite}
 
 /* ---------- expedientes guardados ---------- */
@@ -2954,7 +2957,7 @@ body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:ca
 </div>
 
 <div class="avisos" id="avisos"></div>
-<div class="cargando" id="cargando" hidden><div class="giro"></div><span id="cargandoTexto">Procesando…</span></div>
+<div class="cargando" id="cargando" hidden><div class="giro"></div><span id="cargandoTexto">Procesando…</span><button class="btn cargando-cancelar" id="cargandoCancelar" type="button" hidden>Cancelar</button></div>
 
 <!-- lib/pdf-lib.min.js -->
 <script>
@@ -4626,6 +4629,8 @@ window.GRAPA_CONFIG = {
     pausas = Math.max(0, pausas + (si ? 1 : -1));
     if (!pausas) siguienteDeCola();
   };
+  /** Al cancelar un PDF que se quedó parado: las miniaturas siguen ya, sin esperarlo. */
+  G.reanudarMiniaturas = function () { pausas = 0; siguienteDeCola(); };
   function siguienteDeCola() {
     if (pausas) return;
     while (enCola < limiteCola() && cola.length) {
@@ -6452,12 +6457,18 @@ window.GRAPA_CONFIG = {
   async function capacidadDescargas() {
     if (capDescargas !== undefined) return capDescargas;
     try {
+      // Si la página la abrió el visor de Claude, él guarda el archivo. Pero
+      // `window.claude` también puede ponerlo otra cosa (una extensión del
+      // navegador) que nunca contesta: la descarga se quedaba esperando para
+      // siempre en «Escribiendo el PDF…». Si no contesta en 3 s, no hay visor.
       capDescargas = (window.claude && typeof window.claude.use === 'function')
-        ? await window.claude.use('downloads')
+        ? (await G.conTope(Promise.resolve(window.claude.use('downloads')), G.topesEntrega.visor)) || null
         : null;
     } catch (e) { capDescargas = null; }
     return capDescargas;
   }
+  // cuánto se espera a cada paso de la entrega; las pruebas los bajan
+  G.topesEntrega = { visor: 3000, permiso: 60000, escribir: 30000, guardarVisor: 120000 };
 
   /**
    * Entrega un archivo al usuario.
@@ -6471,22 +6482,34 @@ window.GRAPA_CONFIG = {
    */
   G.guardarArchivo = async function (bytes, nombre, tipo, opciones) {
     const o = opciones || {};
+    // Cada paso tiene un tiempo máximo: si alguno no contesta, el archivo
+    // sale por la descarga de siempre en vez de quedarse esperando.
     if (!o.aDescargas && G.carpeta && G.carpeta.actual()) {
-      const permiso = await G.carpeta.permiso(true);
+      const permiso = await G.conTope(G.carpeta.permiso(true), G.topesEntrega.permiso).catch(() => 'tarde');
       if (permiso === 'granted') {
         try {
-          const final = await G.carpeta.escribir(nombre, bytes);
+          const final = await G.conTope(G.carpeta.escribir(nombre, bytes), G.topesEntrega.escribir);
           return { estado: 'carpeta', nombre: final };
         } catch (e) {
           console.error(e);
-          G.aviso('No se pudo escribir en la carpeta vinculada; va a Descargas.', 'error');
+          // Escribir en la carpeta vinculada podía no terminar nunca (una
+          // carpeta de red o de OneDrive, o el antivirus revisando el archivo
+          // al cerrarlo): «Exportar» se quedaba colgado mientras «Extraer»,
+          // que va a Descargas, funcionaba. Pasado el tope, va a Descargas.
+          G.aviso(e && e.message === 'tarde'
+            ? `La carpeta «${G.carpeta.nombre()}» no terminó de guardar en ${Math.round(G.topesEntrega.escribir / 1000)} s, así que el PDF se descargó en Descargas. `
+              + 'Si es una carpeta de red o de OneDrive, prueba con una de tu disco. Si más tarde el archivo aparece también allí, es el mismo.'
+            : 'No se pudo escribir en la carpeta vinculada; va a Descargas.', 'error');
         }
+      } else {
+        G.aviso(`La carpeta «${G.carpeta.nombre()}» no dio permiso para escribir; el PDF va a Descargas. `
+          + 'Al exportar otra vez, el navegador te lo vuelve a preguntar.');
       }
     }
     const cap = await capacidadDescargas();
     if (cap) {
       try {
-        await cap.save({ filename: nombre, data: bytes });
+        await G.conTope(Promise.resolve(cap.save({ filename: nombre, data: bytes })), G.topesEntrega.guardarVisor);
         return { estado: 'guardado', nombre };
       } catch (e) {
         if (e && e.code === 'declined') return { estado: 'cancelado', nombre };
@@ -6495,6 +6518,17 @@ window.GRAPA_CONFIG = {
     }
     G.descargar(bytes, nombre, tipo);
     return { estado: 'guardado', nombre };
+  };
+
+  /**
+   * Pide el permiso de la carpeta vinculada AHORA, mientras dura el clic de
+   * «Exportar»: el navegador solo deja preguntarlo justo después de un clic.
+   * Pedido al final, tras medio minuto armando el PDF, fallaba en silencio y
+   * el archivo acababa en Descargas sin decir por qué.
+   */
+  G.prepararCarpeta = async function () {
+    if (!G.carpeta || !G.carpeta.actual()) return;
+    try { await G.conTope(G.carpeta.permiso(true), G.topesEntrega.permiso); } catch (e) { /* se vuelve a mirar al guardar */ }
   };
 
   /**
@@ -12501,10 +12535,39 @@ window.GRAPA_CONFIG = {
     contadorCarga = Math.max(0, contadorCarga + (activo ? 1 : -1));
     if (texto) $('#cargandoTexto').textContent = texto;
     capa.hidden = contadorCarga === 0;
+    if (capa.hidden) $('#cargandoCancelar').hidden = true;
     // un trabajo largo: que siga aunque la pestaña quede detrás de otra ventana
     if (!antes && contadorCarga) G.ocupado(true);
     if (antes && !contadorCarga) G.ocupado(false);
   };
+
+  /* ---------- «Cancelar» en la capa de espera ----------
+     Un trabajo que se queda parado dejaba la pantalla tapada y no quedaba
+     más que recargar. Pasado un rato aparece «Cancelar»: suelta la pantalla
+     y lo que estaba en marcha, si termina después, ya no hace nada.
+     Devuelve con qué quitar el botón al terminar. */
+  let alCancelar = null;
+  let relojCancelar = null;
+  G.ofrecerCancelar = function (fn, tras) {
+    clearTimeout(relojCancelar);
+    alCancelar = fn;
+    relojCancelar = setTimeout(() => {
+      if (alCancelar === fn && !$('#cargando').hidden) $('#cargandoCancelar').hidden = false;
+    }, tras || 0);
+    return () => {
+      if (alCancelar !== fn) return;
+      alCancelar = null;
+      clearTimeout(relojCancelar);
+      $('#cargandoCancelar').hidden = true;
+    };
+  };
+  $('#cargandoCancelar').addEventListener('click', () => {
+    const fn = alCancelar;
+    alCancelar = null;
+    $('#cargandoCancelar').hidden = true;
+    if (fn) fn();
+  });
+  G.cancelarTras = 15000;   // antes, casi todo termina solo (las pruebas lo bajan)
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
   // Quince a la vez: con tres se quedaba corto para llevar en paralelo los
@@ -14690,63 +14753,84 @@ window.GRAPA_CONFIG = {
     // no descontarla dos veces al salir
     let esperando = false;
     const espera = (si, texto) => { if (si !== esperando) { G.cargando(si, texto); esperando = si; } };
+    // el permiso de la carpeta vinculada, ahora que dura el clic
+    await G.prepararCarpeta();
+    let cancelado = false;
+    let quitarCancelar = () => {};
+    const alCancelar = new Promise((listo) => {
+      quitarCancelar = G.ofrecerCancelar(() => { cancelado = true; listo(); }, G.cancelarTras);
+    });
     espera(true, 'Armando el PDF…');
-    try {
-      let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
-      // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
-      // que sí cabe ya armado
-      const limite = limitePeso();
-      if (limite && bytes.length > limite) {
-        const modo = $('#pesoSalida').value;
-        const informe = ultimoInforme;
-        const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
-        const cabe = primeroQueCabe(pesos, limite);
-        espera(false);
-        pintarPesos();
-        const ok = cabe
-          ? await G.confirmar({
-            titulo: 'No cabe en ' + enMb(limite),
-            mensaje: `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
-            aceptar: `Guardar con «${NOMBRE_PESO[cabe]}»`,
-          })
-          : await G.confirmar({
-            titulo: 'No cabe en ' + enMb(limite),
-            mensaje: `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
-            aceptar: 'Guardar igual', peligro: true,
-          });
-        if (!ok) { G.aviso('No se guardó nada.'); return; }
-        espera(true, 'Guardando…');
-        if (cabe) {
-          if (cabe !== modo) usarPeso(cabe);
-          bytes = bytesDe[cabe];
-          ultimoInforme = null;
-        } else ultimoInforme = informe;
-      }
-      const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
-      const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
-      G.aviso(
-        (r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
-          : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.')
-          + (r.estado === 'cancelado' ? '' : frasePeso()),
-        r.estado === 'cancelado' ? '' : 'ok'
-      );
-      if (r.estado !== 'cancelado') {
-        t.exportado = firmaPeso();       // para la ruta del expediente
-        pintarRuta();
-        // Mucha gente exporta y cierra: si el expediente no quedó guardado en
-        // Pdflash, se dice ahora y se ofrece guardarlo de un clic.
-        if (sinGuardar(t)) {
-          G.aviso(estadoDe(t) === 'nuevo'
-            ? 'El PDF ya está exportado, pero el expediente no está guardado en Pdflash: para retomarlo otro día, guárdalo.'
-            : 'El PDF ya está exportado, pero los últimos cambios del expediente no están guardados en Pdflash.',
-          'error', { texto: 'Guardar expediente', fn: () => guardarTablero(t) });
+    const trabajo = (async () => {
+      try {
+        let bytes = await G.construirPdf(E.paginas, opcionesSalida(E.paginas));
+        if (cancelado) return;
+        // ¿cabe en el máximo? Si no, se dice ANTES de guardar, con el ajuste
+        // que sí cabe ya armado
+        const limite = limitePeso();
+        if (limite && bytes.length > limite) {
+          const modo = $('#pesoSalida').value;
+          const informe = ultimoInforme;
+          const { pesos, bytesDe } = await pesarAjustes(limite, { modo, bytes });
+          const cabe = primeroQueCabe(pesos, limite);
+          espera(false);
+          pintarPesos();
+          const ok = cabe
+            ? await G.confirmar({
+              titulo: 'No cabe en ' + enMb(limite),
+              mensaje: `Con «${NOMBRE_PESO[modo]}» pesa ${enMb(bytes.length)}. Con «${NOMBRE_PESO[cabe]}» queda en ${enMb(pesos[cabe])} y sí cabe.`,
+              aceptar: `Guardar con «${NOMBRE_PESO[cabe]}»`,
+            })
+            : await G.confirmar({
+              titulo: 'No cabe en ' + enMb(limite),
+              mensaje: `Pesa ${enMb(bytes.length)}, y ni con el ajuste más chico baja de ${enMb(Math.min(...Object.values(pesos)))}. Puedes dividirlo en partes en «Dividir».`,
+              aceptar: 'Guardar igual', peligro: true,
+            });
+          if (!ok) { G.aviso('No se guardó nada.'); return; }
+          espera(true, 'Guardando…');
+          if (cabe) {
+            if (cabe !== modo) usarPeso(cabe);
+            bytes = bytesDe[cabe];
+            ultimoInforme = null;
+          } else ultimoInforme = informe;
         }
+        const nombre = G.nombreSeguro($('#nombreSalida').value, 'documento-unido') + '.pdf';
+        if (cancelado) return;
+        G.progreso(G.carpeta && G.carpeta.actual() ? `Guardando en «${G.carpeta.nombre()}»…` : 'Descargando el PDF…');
+        const r = await G.guardarArchivo(bytes, nombre, 'application/pdf');
+        G.aviso(
+          (r.estado === 'carpeta' ? `Guardado en «${G.carpeta.nombre()}» como ${r.nombre}`
+            : r.estado === 'guardado' ? 'PDF guardado.' : 'Guardado cancelado.')
+            + (r.estado === 'cancelado' ? '' : frasePeso()),
+          r.estado === 'cancelado' ? '' : 'ok'
+        );
+        if (r.estado !== 'cancelado') {
+          t.exportado = firmaPeso();       // para la ruta del expediente
+          pintarRuta();
+          // Mucha gente exporta y cierra: si el expediente no quedó guardado en
+          // Pdflash, se dice ahora y se ofrece guardarlo de un clic.
+          if (sinGuardar(t)) {
+            G.aviso(estadoDe(t) === 'nuevo'
+              ? 'El PDF ya está exportado, pero el expediente no está guardado en Pdflash: para retomarlo otro día, guárdalo.'
+              : 'El PDF ya está exportado, pero los últimos cambios del expediente no están guardados en Pdflash.',
+            'error', { texto: 'Guardar expediente', fn: () => guardarTablero(t) });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelado) G.aviso('No se pudo guardar: ' + e.message, 'error');
       }
-    } catch (e) {
-      console.error(e);
-      G.aviso('No se pudo guardar: ' + e.message, 'error');
+    })();
+    try {
+      await Promise.race([trabajo, alCancelar]);
     } finally {
+      quitarCancelar();
       espera(false);
+    }
+    if (cancelado) {
+      G.reanudarMiniaturas();
+      G.aviso('Se canceló la exportación; tu trabajo sigue aquí. Si vuelve a quedarse parada, '
+        + 'prueba con el peso «Original» o recarga la página con Ctrl+F5 (todo queda autoguardado).', 'error');
     }
   }
 
