@@ -2892,6 +2892,35 @@
       G.aviso(`«${r.nombre}» ya estaba abierto en el tablero ${numeroDe(abierto)}.`, 'ok');
       return;
     }
+    // ¿abierto en otra ventana (otra pestaña de Pdflash)?
+    const fuera = (await abiertosFuera()).get(r.id);
+    if (fuera) {
+      pedirAVentana(fuera.ventana, { tipo: 'mostrar', id: r.id }, 1500);
+      const q = await G.confirmar({
+        titulo: 'Ya está abierto en otra ventana',
+        mensaje: `«${r.nombre}» ya está abierto en otra pestaña de Pdflash, en el tablero ${fuera.tablero}. `
+          + 'Esa pestaña ahora empieza con 👉.\n\nPuedes seguir allí, o traerlo a esta ventana: allí se cierra '
+          + '(si tiene cambios sin guardar, se te avisa y no se toca nada).',
+        aceptar: 'Traerlo aquí',
+        otro: 'Sigo en la otra',
+      });
+      if (q !== true) return;
+      G.cargando(true, 'Trayéndolo de la otra ventana…');
+      let resp = null;
+      try { resp = await pedirAVentana(fuera.ventana, { tipo: 'soltar', id: r.id }, 10000); } finally { G.cargando(false); }
+      if (!resp) {
+        G.aviso('La otra ventana de Pdflash no contestó. Ve a esa pestaña (la que empieza con 👉) y sigue allí, o ciérrala y vuelve a abrirlo aquí.', 'error');
+        return;
+      }
+      if (!resp.ok) {
+        G.aviso(resp.motivo === 'sin-guardar'
+          ? `En la otra ventana «${r.nombre}» tiene cambios sin guardar, así que no se tocó. Ve a esa pestaña (la que empieza con 👉), guárdalo, y vuelve a abrirlo aquí.`
+          : 'La otra ventana está ocupada ahora mismo; prueba otra vez en unos segundos.', 'error');
+        return;
+      }
+      // lo último que se guardó allí
+      try { r = (await G.bd.leerExpediente(r.id)) || r; } catch (e) { /* se abre lo que había */ }
+    }
     if (!E.paginas.length) { await restaurarExpediente(r); return; }
     // un tablero en blanco que ya esté abierto se aprovecha antes que ocupar otro sitio
     const enBlanco = tableros.find((t) => t !== tableroActivo && !datosDe(t).paginas.length);
@@ -3044,6 +3073,112 @@
     if (el) { el.classList.remove('recibe'); void el.offsetWidth; el.classList.add('recibe'); }
   }
 
+  /* ---------- el mismo expediente en otra ventana de Pdflash ----------
+     Un expediente guardado solo puede estar abierto en un tablero, pero eso
+     solo se miraba en ESTA ventana: con dos pestañas de Pdflash, abrirlo en
+     la otra hacía una segunda copia, y la que se guardaba última pisaba a la
+     primera. Cada ventana anota en el navegador qué expedientes tiene
+     abiertos y en qué tablero. Al abrir uno se mira ahí y, si está en otra,
+     se dice, esa otra lo pone a la vista y marca su pestaña con 👉, y se
+     ofrece traerlo (allí se cierra, si no tiene cambios sin guardar). */
+  const CLAVE_ABIERTOS = 'pdflash.abiertos:';
+  let anotadoAbiertos = null;
+  function anotarAbiertos() {
+    const items = [];
+    tableros.forEach((t) => {
+      const d = datosDe(t);
+      if (d.expediente) items.push({ id: d.expediente.id, nombre: d.expediente.nombre, tablero: numeroDe(t) });
+    });
+    const txt = JSON.stringify(items);
+    if (txt === anotadoAbiertos) return;
+    anotadoAbiertos = txt;
+    try { localStorage.setItem(CLAVE_ABIERTOS + G.ventana.id(), txt); } catch (e) { /* sin almacenamiento: solo esta ventana */ }
+  }
+  window.addEventListener('pagehide', () => {
+    try { localStorage.removeItem(CLAVE_ABIERTOS + G.ventana.id()); } catch (e) { /* nada que quitar */ }
+    anotadoAbiertos = null;
+  });
+  window.addEventListener('pageshow', (ev) => { if (ev.persisted) anotarAbiertos(); });
+
+  /** Los expedientes abiertos en las OTRAS ventanas vivas: Map id → {ventana, tablero, nombre}. */
+  async function abiertosFuera() {
+    const fuera = new Map();
+    let vivas;
+    try { vivas = await G.ventana.vivas(); } catch (e) { return fuera; }
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(CLAVE_ABIERTOS)) continue;
+        const ventana = k.slice(CLAVE_ABIERTOS.length);
+        if (ventana === G.ventana.id()) continue;
+        // de una ventana que se cerró sin avisar: se limpia
+        if (!vivas.has(ventana)) { localStorage.removeItem(k); continue; }
+        (JSON.parse(localStorage.getItem(k) || '[]') || []).forEach((x) => {
+          if (x && x.id && !fuera.has(x.id)) fuera.set(x.id, Object.assign({ ventana }, x));
+        });
+      }
+    } catch (e) { /* sin almacenamiento */ }
+    return fuera;
+  }
+
+  let canalVentanas = null;
+  try { if ('BroadcastChannel' in window) canalVentanas = new BroadcastChannel('pdflash-ventanas'); } catch (e) { canalVentanas = null; }
+  const respuestas = new Map();
+  /** Le pide algo a otra ventana y espera su respuesta (null si no contesta a tiempo). */
+  function pedirAVentana(ventana, msg, espera) {
+    if (!canalVentanas) return Promise.resolve(null);
+    const n = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    return new Promise((listo) => {
+      const reloj = setTimeout(() => { respuestas.delete(n); listo(null); }, espera);
+      respuestas.set(n, (r) => { clearTimeout(reloj); listo(r); });
+      canalVentanas.postMessage(Object.assign({ n, de: G.ventana.id(), para: ventana }, msg));
+    });
+  }
+  // 👉 delante del título mientras esta ventana no está al frente: «lo que buscas está aquí»
+  let llamado = false;
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && llamado) { llamado = false; pintarCabeceraYEstado(); }
+  });
+  if (canalVentanas) {
+    canalVentanas.onmessage = async (ev) => {
+      const m = ev.data || {};
+      if (m.para !== G.ventana.id()) return;
+      if (m.tipo === 'respuesta') {
+        const fn = respuestas.get(m.n);
+        if (fn) { respuestas.delete(m.n); fn(m); }
+        return;
+      }
+      const responder = (extra) => canalVentanas.postMessage(Object.assign({ tipo: 'respuesta', n: m.n, de: G.ventana.id(), para: m.de }, extra));
+      const t = tableros.find((x) => { const d = datosDe(x); return d.expediente && d.expediente.id === m.id; });
+      if (m.tipo === 'mostrar') {
+        if (t) {
+          if (t !== tableroActivo && !(G.trabajando && G.trabajando())) activarTablero(t.id, { interno: true });
+          if (document.hidden) llamado = true;
+          pintarCabeceraYEstado();
+          G.aviso(`Desde otra ventana de Pdflash buscaron «${nombreTablero(t)}»: está aquí, en el tablero ${numeroDe(t)}.`, 'ok');
+        }
+        responder({ ok: !!t });
+        return;
+      }
+      if (m.tipo === 'soltar') {
+        if (!t) { responder({ ok: true }); return; }
+        const nombre = nombreTablero(t);
+        if (sinGuardar(t)) {
+          if (document.hidden) llamado = true;
+          pintarCabeceraYEstado();
+          G.aviso(`Otra ventana de Pdflash quiere abrir «${nombre}», pero aquí tiene cambios sin guardar. Guárdalo aquí y vuelve a abrirlo allí, o sigue aquí.`, 'error');
+          responder({ ok: false, motivo: 'sin-guardar' });
+          return;
+        }
+        if (G.trabajando && G.trabajando()) { responder({ ok: false, motivo: 'ocupado' }); return; }
+        if (tableros.length > 1) await cerrarTablero(t.id);
+        else await empezarDeCero({ sinPreguntar: true });
+        G.aviso(`«${nombre}» se pasó a otra ventana de Pdflash.`, 'ok');
+        responder({ ok: true });
+      }
+    };
+  }
+
   /* ---------------- sincronía entre tableros y ventanas ---------------- */
   /** Cambia el nombre en todo tablero que tenga abierto ese expediente. */
   function renombrarEnTableros(id, nombre) {
@@ -3088,8 +3223,32 @@
       }
       const abrir = li.querySelector('.guardado-abrir');
       if (abrir) abrir.textContent = t ? (t === tableroActivo ? 'Abierto' : 'Ir al tablero ' + numeroDe(t)) : 'Abrir';
+      li.classList.toggle('en-otra-ventana', false);
+    });
+    // y los que están abiertos en otra ventana de Pdflash
+    abiertosFuera().then((fuera) => {
+      $$('#listaGuardados li[data-id]').forEach((li) => {
+        const f = fuera.get(li.dataset.id);
+        if (!f || li.classList.contains('actual') || li.classList.contains('en-otro')) return;
+        li.classList.add('en-otra-ventana');
+        let chip = li.querySelector('.guardado-tablero');
+        if (!chip) {
+          chip = document.createElement('span');
+          chip.className = 'guardado-tablero';
+          li.querySelector('.guardado-datos').appendChild(chip);
+        }
+        chip.textContent = 'En otra ventana';
+        chip.title = `Abierto en otra pestaña de Pdflash, en el tablero ${f.tablero}`;
+        chip.style.setProperty('--color-tablero', 'var(--texto-3)');
+        const abrir = li.querySelector('.guardado-abrir');
+        if (abrir) abrir.textContent = 'Ver';
+      });
     });
   }
+  // otra ventana abrió o cerró un expediente: la lista lo dice al momento
+  window.addEventListener('storage', (ev) => {
+    if (ev.key && ev.key.startsWith(CLAVE_ABIERTOS)) marcarGuardadosAbiertos();
+  });
 
   /** Otra ventana de Pdflash guardó, renombró o borró un expediente. */
   function alCambioDeOtraVentana(msg) {
@@ -3181,6 +3340,7 @@
     }
 
     marcarDesborde();
+    anotarAbiertos();
 
     const lleno = tableros.length >= MAX_TABLEROS;
     const nuevo = $('#btnTableroNuevo');
@@ -3250,6 +3410,22 @@
     const sobra = lista.scrollWidth - lista.clientWidth > 2;
     lista.classList.toggle('mas-izq', sobra && lista.scrollLeft > 2);
     lista.classList.toggle('mas-der', sobra && lista.scrollLeft < lista.scrollWidth - lista.clientWidth - 2);
+    // cuántas quedan escondidas a cada lado, para las flechas
+    const izq = $('#tablerosIzq'), der = $('#tablerosDer');
+    izq.hidden = der.hidden = !sobra;
+    if (sobra) {
+      const caja = lista.getBoundingClientRect();
+      let antes = 0, despues = 0;
+      lista.querySelectorAll('.tablero').forEach((p) => {
+        const r = p.getBoundingClientRect();
+        if (r.left < caja.left - 4) antes++;
+        else if (r.right > caja.right + 4) despues++;
+      });
+      izq.disabled = lista.scrollLeft <= 2;
+      der.disabled = lista.scrollLeft >= lista.scrollWidth - lista.clientWidth - 2;
+      izq.title = antes ? `${antes} ${antes === 1 ? 'pestaña' : 'pestañas'} más a la izquierda` : 'Ya estás en la primera';
+      der.title = despues ? `${despues} ${despues === 1 ? 'pestaña' : 'pestañas'} más a la derecha` : 'Ya estás en la última';
+    }
     $('#btnTodosTableros').hidden = tableros.length < 2;
     if (!$('#menuTodosTableros').hidden) abrirMenuTodos();
   }
@@ -3645,7 +3821,7 @@
     // «●» delante, como los editores, si algo de esta ventana está sin guardar:
     // se ve en la pestaña del navegador aunque Pdflash no esté al frente
     const pendientes = tableros.filter(sinGuardar).length;
-    document.title = (G.marcaTitulo ? G.marcaTitulo() : '') + (pendientes ? '● ' : '')
+    document.title = (llamado && document.hidden ? '👉 ' : '') + (G.marcaTitulo ? G.marcaTitulo() : '') + (pendientes ? '● ' : '')
       + (estado === 'vacio' ? 'Pdflash · Taller de PDF' : nombre + ' · Pdflash')
       + (pendientes > 1 ? ` (${pendientes} sin guardar)` : '');
 
@@ -3859,6 +4035,49 @@
     }, { passive: false });
     lista.addEventListener('scroll', marcarDesborde, { passive: true });
     window.addEventListener('resize', marcarDesborde);
+    // Con muchas pestañas no había cómo volver a las de la izquierda sin
+    // saber lo de la rueda o abrir la lista de todos: flechas a los lados…
+    const correr = (lado) => lista.scrollBy({ left: lado * Math.max(150, lista.clientWidth * 0.75), behavior: 'smooth' });
+    $('#tablerosIzq').addEventListener('click', () => correr(-1));
+    $('#tablerosDer').addEventListener('click', () => correr(1));
+    [$('#tablerosIzq'), $('#tablerosDer')].forEach((b) => b.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      lista.scrollLeft += ev.deltaY || ev.deltaX;
+    }, { passive: false }));
+    // …y la tira se puede arrastrar con el ratón, como una lista en el móvil.
+    // Arrastrar no cambia de pestaña: solo un clic sin mover lo hace.
+    let arrastre = null;
+    let tragarClic = false;
+    lista.addEventListener('pointerdown', (ev) => {
+      tragarClic = false;
+      if (ev.button !== 0 || ev.pointerType === 'touch' || ev.target.closest('.tablero-cerrar')) return;
+      if (lista.scrollWidth - lista.clientWidth <= 2) return;
+      arrastre = { x: ev.clientX, desde: lista.scrollLeft, movio: false, id: ev.pointerId };
+    });
+    lista.addEventListener('pointermove', (ev) => {
+      if (!arrastre || ev.pointerId !== arrastre.id) return;
+      const dx = ev.clientX - arrastre.x;
+      if (!arrastre.movio) {
+        if (Math.abs(dx) < 6) return;
+        arrastre.movio = true;
+        try { lista.setPointerCapture(ev.pointerId); } catch (e) { /* ya soltó */ }
+        lista.classList.add('arrastrando');
+      }
+      lista.scrollLeft = arrastre.desde - dx;
+    });
+    const soltarArrastre = () => {
+      if (arrastre && arrastre.movio) { tragarClic = true; lista.classList.remove('arrastrando'); }
+      arrastre = null;
+    };
+    lista.addEventListener('pointerup', soltarArrastre);
+    lista.addEventListener('pointercancel', soltarArrastre);
+    // el clic que cierra un arrastre no abre la pestaña donde se soltó
+    lista.addEventListener('click', (ev) => {
+      if (!tragarClic) return;
+      tragarClic = false;
+      ev.stopPropagation();
+      ev.preventDefault();
+    }, true);
     // abrir uno cierra los demás: el clic no llega al documento, que es quien los cierra
     $('#btnTodosTableros').addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -3898,6 +4117,7 @@
   let expedienteAbierto = null;
 
   function actualizarEstadoGuardado() {
+    anotarAbiertos();
     const caja = $('#expedienteActual');
     const btn = $('#btnActualizarTrabajo');
     if (!caja || !btn) return;
@@ -4397,8 +4617,8 @@
    * PDF de origen, una vuelta atrás dejaría páginas apuntando a archivos
    * que ya no están en memoria.
    */
-  async function empezarDeCero() {
-    if (E.paginas.length) {
+  async function empezarDeCero(opciones) {
+    if (E.paginas.length && !(opciones && opciones.sinPreguntar && !sinGuardar(tableroActivo))) {
       // Antes decía «queda guardado» con solo tener un expediente abierto,
       // aunque lo último que se hizo en él no se hubiera guardado.
       if (sinGuardar(tableroActivo)) {

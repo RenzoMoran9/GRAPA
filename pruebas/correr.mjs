@@ -239,6 +239,42 @@ const PRUEBAS = {
     afirmar(await page.textContent('#sinGuardarTexto') === '15 sin guardar', 'dice cuántos faltan');
   },
 
+  async 'tableros: con muchas pestañas, las flechas y arrastrar llevan a las de los lados'({ page }) {
+    for (let i = 1; i <= 12; i++) {
+      if (i > 1) await page.click('#btnTableroNuevo');
+      await abrir(page, ['Doc ' + i, 1]);
+    }
+    const tira = () => page.evaluate(() => { const l = document.querySelector('#tablerosLista'); return { sl: Math.round(l.scrollLeft), max: l.scrollWidth - l.clientWidth }; });
+    afirmar(await page.isVisible('#tablerosIzq') && await page.isVisible('#tablerosDer'), 'con muchas se ven las flechas');
+    let t = await tira();
+    afirmar(t.max > 100 && t.sl > t.max - 5, 'la tira está al final, en la última', t);
+    afirmar(await page.isDisabled('#tablerosDer'), 'la de la derecha, apagada en el extremo');
+    afirmar(/más a la izquierda/.test(await page.getAttribute('#tablerosIzq', 'title')), 'la de la izquierda dice cuántas hay');
+    // ‹ hasta el principio
+    for (let k = 0; k < 8 && !(await page.isDisabled('#tablerosIzq')); k++) { await page.click('#tablerosIzq'); await page.waitForTimeout(450); }
+    t = await tira();
+    afirmar(t.sl <= 2 && await page.isDisabled('#tablerosIzq'), 'vuelve a la primera', t);
+    afirmar(await page.isVisible('#tablerosLista .tablero:nth-child(1)'), 'y se ve la primera');
+    // › avanza
+    await page.click('#tablerosDer');
+    await page.waitForTimeout(450);
+    afirmar((await tira()).sl > 50, 'la flecha derecha avanza', await tira());
+    // arrastrar la tira la mueve sin cambiar de tablero
+    const antes = await titulo(page);
+    const caja = await page.locator('#tablerosLista').boundingBox();
+    const desde = (await tira()).sl;
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(caja.x + caja.width / 2 + 120, caja.y + caja.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    afirmar((await tira()).sl < desde - 80, 'arrastrar a la derecha muestra las de la izquierda', [desde, await tira()]);
+    afirmar((await titulo(page)) === antes, 'y no cambia de tablero', await titulo(page));
+    // un clic de verdad sí cambia
+    await page.click('#tablerosLista .tablero:nth-child(1)');
+    afirmar((await titulo(page)) === 'Doc 1', 'un clic lleva a esa', await titulo(page));
+  },
+
   async 'cerrar un tablero sin guardar ofrece guardar'({ page }) {
     await abrir(page, ['Uno', 1]);
     await page.click('#btnTableroNuevo');
@@ -281,6 +317,79 @@ const PRUEBAS = {
     await page.click('#btnRestaurar');
     await page.waitForTimeout(800);
     afirmar(await titulo(page) === 'Exp G' && await chip(page) === 'Guardado', 'vuelve guardado', [await titulo(page), await chip(page)]);
+  },
+
+  async 'expedientes: abrir uno que ya está en otro tablero lleva a ese y lo dice'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await guardarCon(page, 'Exp A');
+    await page.click('#btnTableroNuevo');
+    await abrir(page, ['Otro', 1]);
+    await page.click('[data-va="guardados"]');
+    await page.click('#listaGuardados li:has-text("Exp A") .guardado-abrir');
+    await page.waitForTimeout(300);
+    afirmar((await titulo(page)) === 'Exp A', 'lleva a su tablero', await titulo(page));
+    afirmar((await pestanas(page)).length === 2, 'no abre otro', (await pestanas(page)).length);
+    const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+    afirmar(/ya estaba abierto en el tablero 1/.test(avisos), 'lo dice', avisos);
+  },
+
+  async 'expedientes: tras continuar donde lo dejé, abrirlo otra vez lleva a su tablero'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await guardarCon(page, 'Exp A');
+    await page.click('#btnTableroNuevo');
+    await abrir(page, ['Otro', 1]);
+    await page.waitForTimeout(3200);
+    await page.reload();
+    await page.waitForFunction(() => window.Grapa && window.Grapa.pintar);
+    await page.waitForSelector('#restaurar:not([hidden])', { timeout: 5000 });
+    await page.click('#btnRestaurar');
+    await page.waitForTimeout(1200);
+    afirmar((await pestanas(page)).length === 2, 'vuelven los dos', (await pestanas(page)).length);
+    await page.click('[data-va="guardados"]');
+    await page.click('#listaGuardados li:has-text("Exp A") .guardado-abrir');
+    await page.waitForTimeout(500);
+    afirmar((await pestanas(page)).length === 2, 'no abre un tercero', (await pestanas(page)).length);
+    afirmar((await titulo(page)) === 'Exp A', 'lleva a su tablero', await titulo(page));
+  },
+
+  async 'expedientes: abierto en otra ventana de Pdflash, lo dice y no lo duplica'({ page, nueva }) {
+    await abrir(page, ['Base', 2]);
+    await guardarCon(page, 'Exp A');
+    const otra = await nueva();
+    await abrir(otra, ['Otro', 1]);
+    await otra.click('[data-va="guardados"]');
+    await otra.waitForSelector('#listaGuardados li:has-text("Exp A")');
+    afirmar(/En otra ventana/.test(await otra.textContent('#listaGuardados li:has-text("Exp A")')), 'la lista dice que está en otra ventana');
+    await otra.click('#listaGuardados li:has-text("Exp A") .guardado-abrir');
+    await otra.waitForSelector('#modalConfirmar:not([hidden])', { timeout: 5000 });
+    const msg = await otra.textContent('#confirmarMensaje');
+    afirmar(/otra pestaña de Pdflash, en el tablero 1/.test(msg), 'dice dónde está', msg);
+    // la otra ventana lo pone a la vista y lo dice
+    await page.waitForFunction(() => [...document.querySelectorAll('#avisos .aviso')].some((a) => /buscaron «Exp A»/.test(a.textContent)), null, { timeout: 5000 });
+    // «Sigo en la otra»: no se abre nada aquí
+    await otra.click('#confirmarOtro');
+    await otra.waitForTimeout(300);
+    afirmar((await pestanas(otra)).length === 1 && (await titulo(otra)) === 'Otro', 'no lo duplica', [await titulo(otra), (await pestanas(otra)).length]);
+    // con cambios sin guardar allí, traerlo no toca nada
+    await page.evaluate(() => { document.activeElement && document.activeElement.blur(); });
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Control+d');
+    await page.waitForTimeout(300);
+    await otra.click('#listaGuardados li:has-text("Exp A") .guardado-abrir');
+    await otra.waitForSelector('#modalConfirmar:not([hidden])');
+    await otra.click('#confirmarSi');
+    await otra.waitForFunction(() => [...document.querySelectorAll('#avisos .aviso')].some((a) => /cambios sin guardar, así que no se tocó/.test(a.textContent)), null, { timeout: 12000 });
+    afirmar((await orden(page)).length === 4 && (await titulo(page)) === 'Exp A', 'allí sigue igual', [await titulo(page), (await orden(page)).length]);
+    // guardado allí, «Traerlo aquí» lo cierra allí y lo abre aquí
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(300);
+    afirmar(await chip(page) === 'Guardado', 'allí vuelve a estar guardado', await chip(page));
+    await otra.click('#listaGuardados li:has-text("Exp A") .guardado-abrir');
+    await otra.waitForSelector('#modalConfirmar:not([hidden])');
+    await otra.click('#confirmarSi');
+    await otra.waitForFunction(() => document.querySelector('#tituloTablero').textContent === 'Exp A', null, { timeout: 12000 });
+    afirmar((await pestanas(otra)).length === 2 && (await orden(otra)).length === 2, 'aquí, en su propio tablero', [(await pestanas(otra)).length, (await orden(otra)).length]);
+    afirmar((await orden(page)).length === 0, 'y allí se soltó', (await orden(page)).length);
   },
 
   async 'exportar: avisa de lo que falta y el PDF lleva los folios'({ page }) {

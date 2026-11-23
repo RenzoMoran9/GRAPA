@@ -1089,6 +1089,16 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .tableros-todos .ico{width:15px;height:15px}
 .tableros-todos[hidden]{display:none}
 /* un degradado avisa de que hay más pestañas a un lado */
+/* con muchas pestañas, flechas a los lados de la tira para ir y volver */
+.tableros-flecha{
+  align-self:center;flex:none;width:26px;height:28px;display:grid;place-items:center;padding:0;
+  border:1px solid var(--borde);border-radius:7px;background:var(--fondo-2);color:var(--texto-2);cursor:pointer;
+}
+.tableros-flecha:hover:not(:disabled){color:var(--texto);border-color:var(--texto-3);background:var(--fondo)}
+.tableros-flecha:disabled{opacity:.35;cursor:default}
+.tableros-flecha[hidden]{display:none}
+.tableros-flecha .ico{width:16px;height:16px}
+.tableros-lista.arrastrando,.tableros-lista.arrastrando .tablero{cursor:grabbing}
 .tableros-lista.mas-izq{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px);mask-image:linear-gradient(90deg,transparent,#000 28px)}
 .tableros-lista.mas-der{-webkit-mask-image:linear-gradient(270deg,transparent,#000 28px);mask-image:linear-gradient(270deg,transparent,#000 28px)}
 .tableros-lista.mas-izq.mas-der{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
