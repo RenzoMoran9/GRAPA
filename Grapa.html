@@ -1120,6 +1120,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .enviar-caja{position:relative;display:inline-flex}
 .menu-enviar{
   position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);z-index:60;min-width:340px;padding:8px;
+  max-height:min(70vh,560px);overflow-y:auto;   /* con quince tableros, la lista no se sale por arriba */
   background:var(--fondo-2);color:var(--texto);border:1px solid var(--borde);border-radius:var(--radio);box-shadow:var(--sombra-fuerte);
 }
 .menu-enviar[hidden]{display:none}
@@ -2478,7 +2479,7 @@ body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:ca
          la altura del título, y no encima del panel de herramientas. -->
     <div class="tableros" id="tableros">
       <div class="tableros-lista" id="tablerosLista" role="tablist" aria-label="Tableros abiertos"></div>
-      <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 10 a la vez. Alt+1 … Alt+9 (y Alt+0, el décimo) cambian de tablero." aria-label="Nuevo tablero"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> <span class="tablero-nuevo-txt">Nuevo tablero</span></button>
+      <button class="tablero-nuevo" id="btnTableroNuevo" type="button" title="Abre otro tablero en blanco, hasta 15 a la vez. Alt+1 … Alt+9 (y Alt+0, el décimo) cambian de tablero." aria-label="Nuevo tablero"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mas"/></svg> <span class="tablero-nuevo-txt">Nuevo tablero</span></button>
       <span class="lista-tableros-caja">
         <button class="tableros-todos" id="btnTodosTableros" type="button" hidden aria-haspopup="true" aria-expanded="false" title="Ver todos los tableros: portada, hojas y si están guardados, foliados y firmados" aria-label="Ver todos los tableros abiertos"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-abajo"/></svg></button>
         <div class="todos-tableros" id="menuTodosTableros" hidden></div>
@@ -2916,7 +2917,7 @@ body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:ca
         <li><strong>Exporta</strong> el PDF final con <strong>Exportar PDF</strong>, o divídelo si necesitas archivos separados.</li>
         <li><strong>Imprimir:</strong> cada hoja y cada paquete tienen su botón de imprimir; <strong>Imprimir</strong> (o Ctrl+P) saca las hojas marcadas, o todas las que estás viendo. Salen con sus folios y firmas, como al exportar.</li>
         <li><strong>Guarda</strong> el expediente a medio armar con <strong>Guardar</strong> para retomarlo otro día. Lo que hayas guardado en «Expedientes guardados» sigue ahí.</li>
-        <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 10) y avanzas con todos en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero. La flecha junto a las pestañas los muestra todos de un vistazo, con su portada y si están guardados, foliados y firmados.</li>
+        <li><strong>Varios a la vez:</strong> con <strong>Nuevo tablero</strong> abres otro expediente en otra pestaña (hasta 15) y avanzas con todos en paralelo. Cada tablero tiene sus hojas, su deshacer y su autoguardado; lo guardado, las firmas y los sellos son comunes. Un expediente guardado solo puede estar abierto en un tablero. Con hojas marcadas, <strong>Enviar a…</strong> las copia o las mueve a otro tablero. La flecha junto a las pestañas los muestra todos de un vistazo, con su portada y si están guardados, foliados y firmados.</li>
         <li><strong>El nombre completo:</strong> en la pestaña el nombre va cortado. Con <strong>clic derecho en la pestaña</strong> (o un clic en la que ya está abierta, o en el nombre de un documento del panel) sale entero, con el de cada documento, y un botón <strong>Copiar</strong>.</li>
         <li><strong>Lo que no está guardado:</strong> la pestaña lleva un punto naranja y, arriba a la derecha, <strong>«N sin guardar»</strong> dice cuántos expedientes tienen cambios sin guardar; al pulsarlo los ves y los guardas de uno en uno o todos a la vez. Al cerrar un tablero, vaciarlo o reemplazarlo te ofrece <strong>Guardar y …</strong> antes de perder nada, y si llevas 10 minutos sin guardar, te lo recuerda.</li>
         <li><strong>La ruta del expediente:</strong> bajo el título, los pasos Documentos, Revisado, Foliado, Firmado, Guardado y Exportado. El botón de la derecha hace el siguiente. Se oculta con la ×; vuelve desde <strong>Ver</strong>.</li>
@@ -2934,7 +2935,7 @@ body.enfocado.fijo-riel.cajon-abierto:not(.cajon-fijo) .enf-cajon-botones{top:ca
         <tr><td>Ctrl+S</td><td>Exportar PDF</td></tr>
         <tr><td>Ctrl+P</td><td>Imprimir las hojas marcadas (o todas las que ves; en «Ver en grande», la hoja abierta)</td></tr>
         <tr><td>Ctrl+Mayús+S</td><td>Guardar el expediente (para retomarlo después)</td></tr>
-        <tr><td>Alt+1 … Alt+9, Alt+0</td><td>Cambiar de tablero (Alt+0 es el décimo)</td></tr>
+        <tr><td>Alt+1 … Alt+9, Alt+0</td><td>Cambiar de tablero (Alt+0 es el décimo; del 11 al 15, un clic en su pestaña)</td></tr>
         <tr><td>Ctrl+F</td><td>Buscar una palabra en todas las hojas · Enter pasa a la siguiente</td></tr>
         <tr><td>Ctrl+Z / Ctrl+Y</td><td>Deshacer / Rehacer</td></tr>
         <tr><td>Ctrl+A</td><td>Seleccionar todas las páginas</td></tr>
@@ -12359,10 +12360,11 @@ window.GRAPA_CONFIG = {
   };
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
-  // Diez a la vez: con tres se quedaba corto para llevar en paralelo los
-  // expedientes de una semana. Los PDF de origen se comparten, así que un
-  // tablero más no duplica nada que ya esté abierto en otro.
-  const MAX_TABLEROS = 10;
+  // Quince a la vez: con tres se quedaba corto para llevar en paralelo los
+  // expedientes de una semana, y con diez también. Los PDF de origen se
+  // comparten, así que un tablero más no duplica nada que ya esté abierto en
+  // otro; lo que pesa lo vigila el aviso de memoria.
+  const MAX_TABLEROS = 15;
   const tableros = [];          // los abiertos, en el orden de sus pestañas
   let tableroActivo = null;     // el que se está viendo
   let contadorTablero = 0;
@@ -14740,7 +14742,7 @@ window.GRAPA_CONFIG = {
 
   /* =========================================================
      TABLEROS
-     Hasta diez expedientes abiertos a la vez, cada uno en su pestaña, para
+     Hasta quince expedientes abiertos a la vez, cada uno en su pestaña, para
      avanzar con varios en paralelo. Cada tablero tiene lo suyo: sus hojas,
      paquetes, selección, deshacer, el expediente que se está editando, los
      campos del archivo de salida y su propio autoguardado.
@@ -14754,7 +14756,8 @@ window.GRAPA_CONFIG = {
      ========================================================= */
   // uno por pestaña, distinguibles entre sí y legibles en los dos temas
   const COLORES_TABLERO = ['#e0532f', '#2f6fed', '#1f9d64', '#8b5cf6', '#d4930d',
-    '#0e9fa5', '#d6336c', '#64748b', '#a3652f', '#4f46e5'];
+    '#0e9fa5', '#d6336c', '#64748b', '#a3652f', '#4f46e5',
+    '#65a30d', '#c026d3', '#0284c7', '#be123c', '#b45309'];
   const colorDe = (t) => COLORES_TABLERO[(t.slot - 1) % COLORES_TABLERO.length];
   const CAMPOS_TABLERO = ['nombreSalida', 'metaTitulo', 'metaAutor', 'guardarNombre', 'divRangos'];
 
@@ -15286,7 +15289,7 @@ window.GRAPA_CONFIG = {
 
   /* ---------------- memoria ----------------
      Los PDF de todos los tableros están a la vez en la memoria del
-     navegador. Con diez expedientes escaneados de 30 a 50 MB cada uno, más
+     navegador. Con quince expedientes escaneados de 30 a 50 MB cada uno, más
      lo que pdf.js necesita para dibujarlos, el navegador puede quedarse sin
      memoria y cerrar la pestaña. Se vigila el peso de lo abierto y, antes de
      llegar ahí, se avisa y se propone cerrar lo que ya está guardado. */
@@ -15351,7 +15354,7 @@ window.GRAPA_CONFIG = {
    * Todos los tableros de un vistazo: una tarjeta por expediente con su
    * portada, cuántas hojas y documentos trae y si está guardado, foliado y
    * firmado. Se despliega desde la tira de pestañas, sin salir del tablero
-   * que se está viendo: con diez abiertos, los nombres de las pestañas se
+   * que se está viendo: con quince abiertos, los nombres de las pestañas se
    * cortan y no dicen qué falta en cada uno.
    */
   /* ---------- el nombre completo de un tablero, para leerlo y copiarlo ----------
@@ -20149,7 +20152,9 @@ window.GRAPA_CONFIG = {
       if (ev.key === '[') { accionLector((p) => { p.giro = G.norm(p.giro - 90); }); return; }
       if (ev.key === ']') { accionLector((p) => { p.giro = G.norm(p.giro + 90); }); return; }
     }
-    // Alt+1 … Alt+9 y Alt+0 (el décimo): de tablero en tablero
+    // Alt+1 … Alt+9 y Alt+0 (el décimo): de tablero en tablero. Del 11 al 15
+    // no hay atajo (Alt+Mayús cambia el idioma del teclado en Windows): se
+    // llega con un clic en su pestaña o desde la lista de todos.
     if (ev.altKey && !ctrl && /^Digit[0-9]$/.test(ev.code)) {
       const n = Number(ev.code.slice(5)) || 10;
       const t = tableros[n - 1];

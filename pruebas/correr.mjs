@@ -217,20 +217,26 @@ const PRUEBAS = {
     afirmar(await chip(page) === 'Guardado', 'y sigue guardado', await chip(page));
   },
 
-  async 'tableros: hasta 10, Alt+0 y la lista de todos'({ page }) {
-    for (let i = 1; i <= 10; i++) {
+  async 'tableros: hasta 15, Alt+0 y la lista de todos'({ page }) {
+    for (let i = 1; i <= 15; i++) {
       if (i > 1) await page.click('#btnTableroNuevo');
       await abrir(page, ['Doc ' + i, 1]);
     }
-    afirmar((await pestanas(page)).length === 10, '10 pestañas');
+    afirmar((await pestanas(page)).length === 15, '15 pestañas');
     afirmar(await page.isHidden('#btnTableroNuevo'), 'ya no deja abrir otro');
+    afirmar(await page.textContent('#tablerosCupo') === '15 de 15 tableros', 'dice que están todos', await page.textContent('#tablerosCupo'));
+    // cada uno con su color: del 11 al 15 no repiten los de los diez primeros
+    const colores = await page.$$eval('.tablero', (t) => t.map((x) => x.style.getPropertyValue('--color-tablero')));
+    afirmar(new Set(colores).size === 15, '15 colores distintos', colores);
     await page.keyboard.press('Alt+0');
     afirmar((await titulo(page)) === 'Doc 10', 'Alt+0 va al décimo', await titulo(page));
+    await page.click('#tablerosLista .tablero:nth-child(15)');
+    afirmar((await titulo(page)) === 'Doc 15', 'un clic lleva al decimoquinto', await titulo(page));
     await page.click('#btnTodosTableros');
-    afirmar(await page.$$eval('.tt-tarjeta', (x) => x.length) === 10, '10 tarjetas');
+    afirmar(await page.$$eval('.tt-tarjeta', (x) => x.length) === 15, '15 tarjetas');
     await page.click('.tt-tarjeta:nth-child(4)');
     afirmar((await titulo(page)) === 'Doc 4', 'la tarjeta lleva a su tablero');
-    afirmar(await page.textContent('#sinGuardarTexto') === '10 sin guardar', 'dice cuántos faltan');
+    afirmar(await page.textContent('#sinGuardarTexto') === '15 sin guardar', 'dice cuántos faltan');
   },
 
   async 'cerrar un tablero sin guardar ofrece guardar'({ page }) {
@@ -391,7 +397,7 @@ const PRUEBAS = {
     const abiertas = await page.$$eval('.panel-vistas .bloque', (bs) => bs.filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.bloque));
     afirmar(abiertas.length === 1 && abiertas[0] === 'foliar', 'una sola sección a la vista', abiertas);
     // y el cupo de tableros no se ve mientras sobren
-    afirmar(await page.isHidden('#tablerosCupo'), 'sin «1 de 10» con un solo tablero');
+    afirmar(await page.isHidden('#tablerosCupo'), 'sin «1 de 15» con un solo tablero');
   },
 
   async 'separar: se elige qué sacar y dice qué va a salir antes de descargar'({ page }) {

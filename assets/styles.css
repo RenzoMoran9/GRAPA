@@ -1094,6 +1094,7 @@ body.capturando .lector-hojas .hoja *{ pointer-events:none; }
 .enviar-caja{position:relative;display:inline-flex}
 .menu-enviar{
   position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);z-index:60;min-width:340px;padding:8px;
+  max-height:min(70vh,560px);overflow-y:auto;   /* con quince tableros, la lista no se sale por arriba */
   background:var(--fondo-2);color:var(--texto);border:1px solid var(--borde);border-radius:var(--radio);box-shadow:var(--sombra-fuerte);
 }
 .menu-enviar[hidden]{display:none}

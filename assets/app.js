@@ -198,10 +198,11 @@
   };
 
   /* ---------------- tableros: el estado, antes que nada ---------------- */
-  // Diez a la vez: con tres se quedaba corto para llevar en paralelo los
-  // expedientes de una semana. Los PDF de origen se comparten, así que un
-  // tablero más no duplica nada que ya esté abierto en otro.
-  const MAX_TABLEROS = 10;
+  // Quince a la vez: con tres se quedaba corto para llevar en paralelo los
+  // expedientes de una semana, y con diez también. Los PDF de origen se
+  // comparten, así que un tablero más no duplica nada que ya esté abierto en
+  // otro; lo que pesa lo vigila el aviso de memoria.
+  const MAX_TABLEROS = 15;
   const tableros = [];          // los abiertos, en el orden de sus pestañas
   let tableroActivo = null;     // el que se está viendo
   let contadorTablero = 0;
@@ -2579,7 +2580,7 @@
 
   /* =========================================================
      TABLEROS
-     Hasta diez expedientes abiertos a la vez, cada uno en su pestaña, para
+     Hasta quince expedientes abiertos a la vez, cada uno en su pestaña, para
      avanzar con varios en paralelo. Cada tablero tiene lo suyo: sus hojas,
      paquetes, selección, deshacer, el expediente que se está editando, los
      campos del archivo de salida y su propio autoguardado.
@@ -2593,7 +2594,8 @@
      ========================================================= */
   // uno por pestaña, distinguibles entre sí y legibles en los dos temas
   const COLORES_TABLERO = ['#e0532f', '#2f6fed', '#1f9d64', '#8b5cf6', '#d4930d',
-    '#0e9fa5', '#d6336c', '#64748b', '#a3652f', '#4f46e5'];
+    '#0e9fa5', '#d6336c', '#64748b', '#a3652f', '#4f46e5',
+    '#65a30d', '#c026d3', '#0284c7', '#be123c', '#b45309'];
   const colorDe = (t) => COLORES_TABLERO[(t.slot - 1) % COLORES_TABLERO.length];
   const CAMPOS_TABLERO = ['nombreSalida', 'metaTitulo', 'metaAutor', 'guardarNombre', 'divRangos'];
 
@@ -3125,7 +3127,7 @@
 
   /* ---------------- memoria ----------------
      Los PDF de todos los tableros están a la vez en la memoria del
-     navegador. Con diez expedientes escaneados de 30 a 50 MB cada uno, más
+     navegador. Con quince expedientes escaneados de 30 a 50 MB cada uno, más
      lo que pdf.js necesita para dibujarlos, el navegador puede quedarse sin
      memoria y cerrar la pestaña. Se vigila el peso de lo abierto y, antes de
      llegar ahí, se avisa y se propone cerrar lo que ya está guardado. */
@@ -3190,7 +3192,7 @@
    * Todos los tableros de un vistazo: una tarjeta por expediente con su
    * portada, cuántas hojas y documentos trae y si está guardado, foliado y
    * firmado. Se despliega desde la tira de pestañas, sin salir del tablero
-   * que se está viendo: con diez abiertos, los nombres de las pestañas se
+   * que se está viendo: con quince abiertos, los nombres de las pestañas se
    * cortan y no dicen qué falta en cada uno.
    */
   /* ---------- el nombre completo de un tablero, para leerlo y copiarlo ----------
@@ -7988,7 +7990,9 @@
       if (ev.key === '[') { accionLector((p) => { p.giro = G.norm(p.giro - 90); }); return; }
       if (ev.key === ']') { accionLector((p) => { p.giro = G.norm(p.giro + 90); }); return; }
     }
-    // Alt+1 … Alt+9 y Alt+0 (el décimo): de tablero en tablero
+    // Alt+1 … Alt+9 y Alt+0 (el décimo): de tablero en tablero. Del 11 al 15
+    // no hay atajo (Alt+Mayús cambia el idioma del teclado en Windows): se
+    // llega con un clic en su pestaña o desde la lista de todos.
     if (ev.altKey && !ctrl && /^Digit[0-9]$/.test(ev.code)) {
       const n = Number(ev.code.slice(5)) || 10;
       const t = tableros[n - 1];
