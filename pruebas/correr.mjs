@@ -322,6 +322,69 @@ const PRUEBAS = {
     afirmar(await page.isHidden('#cargando'), 'y se quita al terminar');
   },
 
+  async 'exportar: si el lector no dibuja una hoja a tiempo, va tal cual y el PDF sale igual'({ page }) {
+    await page.setInputFiles('#entradaArchivos', [await pdfEscaneado(page)]);
+    await esperarCarga(page);
+    await page.evaluate(() => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      const s = document.querySelector('#pesoSalida');
+      s.value = 'ligero';
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+      // el lector «se atasca»: ninguna hoja termina de dibujarse a tiempo
+      window.Grapa.topesExportar.dibujo = 1;
+    });
+    const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#btnGuardar')]);
+    const b64 = (await import('node:fs')).readFileSync(await descarga.path()).toString('base64');
+    const hojas = await page.evaluate(async (b64) => {
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      return (await window.Grapa.pdfjsLib.getDocument({ data: bin }).promise).numPages;
+    }, b64);
+    afirmar(hojas === 4, 'salen las 4 hojas', hojas);
+    afirmar(await page.isHidden('#cargando'), 'la capa de espera se quita');
+    const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+    afirmar(/4 hojas no se dejaron aligerar a tiempo y van como estaban/.test(avisos), 'dice cuáles no se aligeraron', avisos);
+  },
+
+  async 'memoria: el PDF de otro tablero se duerme y se despierta solo al volver'({ page }) {
+    await abrir(page, ['Uno', 3]);
+    await page.click('#btnTableroNuevo');
+    await abrir(page, ['Dos', 2]);
+    const id = await page.evaluate(() => [...window.Grapa.estado.fuentes.values()].find((f) => f.nombre === 'Uno').id);
+    // el de «Dos» se está viendo: no se duerme; el de «Uno», sí (sin esperar el medio minuto)
+    const r = await page.evaluate((id) => {
+      const G = window.Grapa, F = G.estado.fuentes;
+      const otro = [...F.values()].find((f) => f.nombre === 'Dos');
+      G.dormirLosDeOtros();
+      const nada = otro.doc.despierto;
+      const durmio = G.dormirFuente(id, true);
+      return { nada, durmio, dormido: !F.get(id).doc.despierto };
+    }, id);
+    afirmar(r.nada && r.durmio && r.dormido, 'duerme solo el que no se ve', r);
+    await page.keyboard.press('Alt+1');
+    await page.waitForTimeout(300);
+    afirmar((await titulo(page)) === 'Uno', 'vuelve al primero', await titulo(page));
+    // se puede ver en grande, exportar y sale entero
+    await page.evaluate(() => localStorage.setItem('grapa.avisar-exportar', '0'));
+    const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#btnGuardar')]);
+    const b64 = (await import('node:fs')).readFileSync(await descarga.path()).toString('base64');
+    const textos = await page.evaluate(async (b64) => {
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const doc = await window.Grapa.pdfjsLib.getDocument({ data: bin }).promise;
+      const out = [];
+      for (let i = 1; i <= doc.numPages; i++) out.push((await (await doc.getPage(i)).getTextContent()).items.map((x) => x.str).join(' '));
+      return out;
+    }, b64);
+    afirmar(textos.length === 3 && textos.every((t) => /^Uno/.test(t)), 'el PDF sale con sus 3 hojas', textos.map((t) => t.slice(0, 12)));
+    // una hoja dibujada a un tamaño que no estaba guardado: el lector se despierta solo
+    const dibujo = await page.evaluate(async (id) => {
+      const G = window.Grapa;
+      const p = G.estado.paginas[2];
+      const url = await G.miniatura(p, G.NIVELES_MINI[4]);
+      return { url: String(url).slice(0, 15), despierto: G.estado.fuentes.get(id).doc.despierto };
+    }, id);
+    afirmar(dibujo.url.startsWith('data:image/') && dibujo.despierto, 'dibuja la hoja y el lector se despertó solo', dibujo);
+  },
+
   async 'ruta del expediente: propone el paso siguiente'({ page }) {
     await abrir(page, ['Base', 2]);
     afirmar(await page.isVisible('#ruta'), 'se ve la ruta');

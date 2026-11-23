@@ -307,6 +307,11 @@
     });
   }
 
+  /** Cierra las copias para leer de esos PDF, sin olvidar lo ya leído: cada
+   *  una es un hilo con el PDF entero dentro, y con varios tableros
+   *  revisados o leídos se quedaban todas abiertas. Se vuelven a abrir solas. */
+  G.soltarCopiasLectura = (fuenteIds) => soltarCopias(new Set(fuenteIds));
+
   /** Una de las copias del PDF de la hoja, por turno (o el PDF de siempre, si no se pudo abrir). */
   G.copiaParaLeer = async function (fuenteId) {
     const fuente = G.estado.fuentes.get(fuenteId);

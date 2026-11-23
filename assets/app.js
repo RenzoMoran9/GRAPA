@@ -2191,9 +2191,12 @@
     const d = ultimoInforme;
     if (!d || !d.antes) return '';
     // lo que Pdflash no supo achicar: así se sabe dónde queda el peso
-    const quedan = d.sinSaber && d.sinSaber.n
+    const quedan = (d.sinSaber && d.sinSaber.n
       ? ` Quedaron ${d.sinSaber.n === 1 ? '1 imagen' : d.sinSaber.n + ' imágenes'} en un formato que Pdflash no sabe achicar (${enMb(d.sinSaber.peso)}).`
-      : '';
+      : '')
+      + (d.sinAligerar
+        ? ` ${d.sinAligerar === 1 ? '1 hoja no se dejó' : d.sinAligerar + ' hojas no se dejaron'} aligerar a tiempo y ${d.sinAligerar === 1 ? 'va' : 'van'} como estaba${d.sinAligerar === 1 ? '' : 'n'}.`
+        : '');
     if (d.sinMejora) {
       return ` El archivo ya venía bien comprimido: aligerarlo lo habría engordado, así que se dejó igual (${enMb(d.despues)}).${quedan}`;
     }
@@ -2372,6 +2375,8 @@
       if (r === 'otro') { irASeccion(faltas[0].seccion); return; }
     }
     const t = tableroActivo;
+    // armar el PDF necesita memoria: lo de los otros tableros se duerme ya
+    dormirLosDeOtros(true);
     // la capa de espera se quita mientras se pregunta: se lleva la cuenta para
     // no descontarla dos veces al salir
     let esperando = false;
@@ -2921,6 +2926,24 @@
     G.olvidarBusqueda(sueltas);
     if (G.olvidarLecturas) G.olvidarLecturas(sueltas);
   }
+
+  /* ---------- dormir los PDF de los tableros que no se ven ----------
+     Cada PDF abierto tiene su copia en el lector de pdf.js, y con muchos
+     tableros de escaneos el navegador se quedaba sin memoria: todo iba
+     lento y exportar podía no terminar. Cada tanto, los PDF que solo usan
+     otros tableros (y que nadie tocó en el último medio minuto) se duermen;
+     al volver a ese tablero se despiertan solos al pedir la primera hoja.
+     Mientras hay un trabajo largo en marcha no se duerme nada: puede estar
+     leyendo los escaneos de otro tablero. */
+  const DORMIR_CADA = 15000;
+  /** `ya`: sin esperar el medio minuto (antes de exportar, por ejemplo). */
+  function dormirLosDeOtros(ya) {
+    if (G.trabajando && G.trabajando()) return;
+    const enUso = new Set(E.paginas.map((p) => p.fuenteId));
+    E.fuentes.forEach((f, id) => { if (!enUso.has(id)) G.dormirFuente(id, ya === true); });
+  }
+  G.dormirLosDeOtros = dormirLosDeOtros;   // para las pruebas
+  setInterval(dormirLosDeOtros, DORMIR_CADA);
 
   /* ---------------- enviar hojas a otro tablero ---------------- */
   /**

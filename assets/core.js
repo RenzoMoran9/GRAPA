@@ -180,6 +180,60 @@
     return new Uint8Array(await doc.save());
   }
 
+  /* ---------- el PDF abierto en pdf.js, que se puede dormir ----------
+     Cada PDF abierto vive dos veces: sus bytes (para guardar y exportar) y
+     su copia en el lector de pdf.js (para dibujar las hojas), con lo que el
+     lector va guardando de cada hoja que dibuja. Con quince tableros de
+     escaneos, el navegador se quedaba sin memoria: todo iba lento y armar
+     un PDF podía no terminar nunca.
+     Los PDF de los tableros que no se ven se «duermen»: se cierra su copia
+     en el lector y se vuelve a abrir sola (unas décimas de segundo) la
+     primera vez que se pide una hoja. Quien usa `fuente.doc` no se entera:
+     solo se le pide `getPage`. */
+  const DORMIR_SIN_USO = 30000;   // nunca se duerme lo que se usó hace menos de esto
+  function docDormible(real, bytes) {
+    let doc = real, abriendo = null, ultimoUso = Date.now();
+    const abrir = () => {
+      ultimoUso = Date.now();
+      if (doc) return Promise.resolve(doc);
+      if (!abriendo) {
+        abriendo = pdfjsLib.getDocument({ data: bytes.slice(0), isEvalSupported: false, disableAutoFetch: true }).promise
+          .then((d) => { doc = d; abriendo = null; ultimoUso = Date.now(); return d; },
+            (e) => { abriendo = null; throw e; });
+      }
+      return abriendo;
+    };
+    return {
+      async getPage(n) { const d = await abrir(); ultimoUso = Date.now(); return d.getPage(n); },
+      get despierto() { return !!doc; },
+      /** Cierra la copia del lector si nadie la usa hace rato. true si la cerró. */
+      dormir(ya) {
+        if (!doc || abriendo || (!ya && Date.now() - ultimoUso < DORMIR_SIN_USO)) return false;
+        const d = doc;
+        doc = null;
+        try { d.destroy(); } catch (e) { /* ya estaba cerrado */ }
+        return true;
+      },
+      destroy() { const d = doc; doc = null; if (d) { try { d.destroy(); } catch (e) { /* ya estaba cerrado */ } } },
+    };
+  }
+
+  /**
+   * Duerme el PDF `id`: cierra su copia en el lector y suelta lo que se
+   * guardó de él para armar PDF y para leer escaneos. Sus bytes y sus
+   * miniaturas ya dibujadas se quedan. true si soltó algo.
+   */
+  G.dormirFuente = function (id, ya) {
+    const f = G.estado.fuentes.get(id);
+    if (!f || !f.doc || !f.doc.dormir) return false;
+    const durmio = f.doc.dormir(ya);
+    if (durmio) {
+      cacheDocsPdfLib.delete(id);
+      if (G.soltarCopiasLectura) G.soltarCopiasLectura([id]);
+    }
+    return durmio;
+  };
+
   /**
    * Añade archivos al taller. Devuelve {fuentes:[], paginas:[], errores:[]}
    */
@@ -244,7 +298,7 @@
           nombre: file.name.replace(/\.[^.]+$/, ''),
           nombreCompleto: file.name,
           bytes,
-          doc,
+          doc: docDormible(doc, bytes),
           color: COLORES[contadorColor++ % COLORES.length],
           paginas: metas,
         };
@@ -288,7 +342,7 @@
         bytes: f.bytes,
         color: f.color,
         paginas: f.paginas,
-        doc,
+        doc: docDormible(doc, f.bytes),
       });
     }
   };
@@ -463,7 +517,14 @@
   // a la vista. Si cuando le toca ya no hace falta, se descarta (quien la
   // pidió la vuelve a pedir cuando la hoja vuelva a verse).
   const FUERA = 'fuera de vista';
+  let pausas = 0;
+  /** Mientras se arma un PDF, no se empiezan miniaturas nuevas (se pueden anidar). */
+  G.pausarMiniaturas = function (si) {
+    pausas = Math.max(0, pausas + (si ? 1 : -1));
+    if (!pausas) siguienteDeCola();
+  };
   function siguienteDeCola() {
+    if (pausas) return;
     while (enCola < limiteCola() && cola.length) {
       let i = cola.findIndex((t) => !t.vigente || t.vigente() === 'ya');
       if (i < 0) i = cola.findIndex((t) => t.vigente() !== false);
@@ -578,6 +639,23 @@
   /* ---------- construcción del PDF final ---------- */
   const cacheDocsPdfLib = new Map();
 
+  /**
+   * Espera `promesa`, pero no más de `ms`: si no llega, falla con «tarde»
+   * (y llama a `alVencer`, para cancelar lo que quedó corriendo). Armar un
+   * PDF depende del lector de pdf.js, y si este se atasca —sin memoria, o
+   * con una hoja que no sabe dibujar— la espera no terminaba nunca.
+   */
+  function conTope(promesa, ms, alVencer) {
+    let reloj;
+    const tarde = new Promise((_, no) => {
+      reloj = setTimeout(() => { try { if (alVencer) alVencer(); } catch (e) { /* nada que cancelar */ } no(new Error('tarde')); }, ms);
+    });
+    return Promise.race([promesa, tarde]).finally(() => clearTimeout(reloj));
+  }
+  G.conTope = conTope;
+  // cuánto se espera al lector, por hoja; las pruebas los bajan
+  G.topesExportar = { texto: 20000, dibujo: 90000 };
+
   async function docPdfLib(fuenteId) {
     if (cacheDocsPdfLib.has(fuenteId)) return cacheDocsPdfLib.get(fuenteId);
     const fuente = G.estado.fuentes.get(fuenteId);
@@ -612,12 +690,18 @@
     let r = false;
     try {
       const fuente = G.estado.fuentes.get(pagina.fuenteId);
-      const pag = await fuente.doc.getPage(pagina.indice + 1);
-      const tc = await pag.getTextContent();
+      const tc = await conTope((async () => {
+        const pag = await fuente.doc.getPage(pagina.indice + 1);
+        return pag.getTextContent();
+      })(), G.topesExportar.texto);
       const letras = tc.items.reduce((n, it) => n + String(it.str || '').replace(/\s/g, '').length, 0);
       // un par de letras sueltas puede ser basura del escáner; 20 ya es texto
       r = letras >= 20;
-    } catch (e) { r = true; }   // ante la duda, no se toca
+    } catch (e) {
+      // ante la duda, no se toca; si fue por tardar, se vuelve a mirar otra vez
+      if (e && e.message === 'tarde') return true;
+      r = true;
+    }
     cacheTexto.set(k, r);
     return r;
   };
@@ -740,10 +824,29 @@
   }
 
   /** La hoja a un bit, lista para meter en el PDF; null si es una foto. */
+  /**
+   * Dibuja la hoja para aligerarla, sin esperar para siempre: si el lector
+   * no termina a tiempo se cancela y falla (quien llama copia la hoja tal
+   * cual). Al terminar, el lector suelta lo que guardó de la hoja: una foto
+   * de 300 ppp ya descomprimida ocupa decenas de MB, y de hoja en hoja eso
+   * se iba sumando.
+   */
+  async function dibujarConTope(pag, params, lienzo) {
+    const tarea = pag.render(params);
+    try {
+      await conTope(tarea.promise, G.topesExportar.dibujo, () => tarea.cancel());
+    } catch (e) {
+      lienzo.width = lienzo.height = 0;
+      throw e;
+    } finally {
+      try { pag.cleanup(); } catch (e) { /* sigue dibujando otra cosa: ya se soltará */ }
+    }
+  }
+
   async function hojaEnUnBit(pagina, ppp) {
     if (typeof CompressionStream !== 'function') return null;
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
-    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    const pag = await conTope(fuente.doc.getPage(pagina.indice + 1), G.topesExportar.texto);
     const base = pag.getViewport({ scale: 1, rotation: 0 });
     const vp = pag.getViewport({ scale: ppp / 72, rotation: 0 });
     const lienzo = document.createElement('canvas');
@@ -752,7 +855,7 @@
     const ctx = lienzo.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, lienzo.width, lienzo.height);
-    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    await dibujarConTope(pag, { canvasContext: ctx, viewport: vp }, lienzo);
     const W = lienzo.width, H = lienzo.height;
     const img = ctx.getImageData(0, 0, W, H).data;
     lienzo.width = lienzo.height = 0;
@@ -784,7 +887,7 @@
   /** Vuelve a dibujar la hoja a la resolución pedida y la devuelve en JPEG. */
   async function hojaEnJpeg(pagina, ppp, calidad) {
     const fuente = G.estado.fuentes.get(pagina.fuenteId);
-    const pag = await fuente.doc.getPage(pagina.indice + 1);
+    const pag = await conTope(fuente.doc.getPage(pagina.indice + 1), G.topesExportar.texto);
     // sin girar: el giro lo pone después setRotation, igual que en la copia
     const base = pag.getViewport({ scale: 1, rotation: 0 });
     const vp = pag.getViewport({ scale: ppp / 72, rotation: 0 });
@@ -794,7 +897,7 @@
     const ctx = lienzo.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, lienzo.width, lienzo.height);
-    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    await dibujarConTope(pag, { canvasContext: ctx, viewport: vp }, lienzo);
     const url = lienzo.toDataURL('image/jpeg', calidad);
     lienzo.width = lienzo.height = 0;   // suelta la memoria del lienzo
     return { bytes: G.dataUrlABytes(url), ancho: base.width, alto: base.height, x: pag.view[0], y: pag.view[1] };
@@ -1267,6 +1370,8 @@
     }
     if (G.pintarTitulo) G.pintarTitulo();
   };
+  /** ¿Hay un trabajo largo en marcha (abrir, leer escaneos, armar un PDF…)? */
+  G.trabajando = () => ocupados > 0;
   /** Lo que va delante del título de la pestaña mientras no se mira. */
   G.marcaTitulo = () => (!document.hidden ? '' : ocupados ? '⏳ ' : terminoEscondida ? '✓ ' : '');
   document.addEventListener('visibilitychange', () => {
@@ -1789,6 +1894,18 @@
   }
 
   G.construirPdf = async function (paginas, opciones) {
+    // Mientras se arma, el lector es solo para esto: las miniaturas esperan.
+    // Antes competían por él y armar un PDF largo se quedaba parado en
+    // «Armando el PDF…» mientras se dibujaban las hojas de detrás.
+    G.pausarMiniaturas(true);
+    try {
+      return await armarPdf(paginas, opciones);
+    } finally {
+      G.pausarMiniaturas(false);
+    }
+  };
+
+  async function armarPdf(paginas, opciones) {
     opciones = opciones || {};
     const salida = await PDFDocument.create();
     const comp = opciones.comprimir || null;
@@ -1808,11 +1925,23 @@
     //     imágenes (1d); en «Mínimo» también se redibujan, salvo las que
     //     pesan por sus imágenes —un escaneo con texto buscable, una ficha
     //     con fotos—, que así conservan su texto.
+    //     Se miran de ocho en ocho y se dice por cuál va: de una en una,
+    //     con un expediente largo, se quedaba en «Armando el PDF…» sin
+    //     decir nada.
     const aligerar = new Set();
     if (comp) {
-      for (let i = 0; i < paginas.length; i++) {
-        if (!(await G.tieneTexto(paginas[i]))) { aligerar.add(i); continue; }
-        if (comp.tambienConTexto && (await pesoImagenes(paginas[i]).catch(() => 0)) <= PESO_ESCANEO) aligerar.add(i);
+      const LOTE = 8;
+      for (let desde = 0; desde < paginas.length; desde += LOTE) {
+        if (paginas.length > LOTE) await avisar(`Viendo qué hojas son escaneos: ${desde} de ${paginas.length}…`);
+        const hasta = Math.min(paginas.length, desde + LOTE);
+        const lote = [];
+        for (let i = desde; i < hasta; i++) {
+          lote.push((async () => {
+            if (!(await G.tieneTexto(paginas[i]))) return true;
+            return !!comp.tambienConTexto && (await pesoImagenes(paginas[i]).catch(() => 0)) <= PESO_ESCANEO;
+          })().then((si) => { if (si) aligerar.add(i); }));
+        }
+        await Promise.all(lote);
       }
     }
 
@@ -1848,6 +1977,7 @@
     const hechasImg = new Set();
     let imagenesAchicadas = 0;
     const sinSaber = { n: 0, peso: 0 };   // imágenes que no se saben leer
+    let sinAligerar = 0;                    // escaneos que el lector no pudo dibujar: van tal cual
     for (let i = 0; i < paginas.length; i++) {
       if (comp && paginas.length > 3) await avisar(`Comprimiendo hoja ${i + 1} de ${paginas.length}…`);
       if (!aligerar.has(i)) {
@@ -1876,9 +2006,21 @@
       // Sin blanco y negro, o con él pero siendo la hoja una foto de verdad:
       // por el camino de siempre. A un bit una foto se destroza, así que se
       // guarda en JPEG, a algo menos de resolución para que no se dispare.
-      const jpeg = comp.bn
-        ? await hojaEnJpeg(paginas[i], 150, 0.7)
-        : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
+      let jpeg = null;
+      try {
+        jpeg = comp.bn
+          ? await hojaEnJpeg(paginas[i], 150, 0.7)
+          : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
+      } catch (e) {
+        // El lector no la pudo dibujar (o no a tiempo): va tal cual, como
+        // estaba en su archivo. Mejor una hoja sin aligerar que un PDF que
+        // no sale nunca.
+        console.warn('La hoja ' + (i + 1) + ' no se pudo aligerar; va como estaba', e);
+        const [comoEstaba] = await salida.copyPages(await docPdfLib(paginas[i].fuenteId), [paginas[i].indice]);
+        salida.addPage(comoEstaba);
+        sinAligerar++;
+        continue;
+      }
       const img = await salida.embedJpg(jpeg.bytes);
       const hoja = salida.addPage([jpeg.ancho, jpeg.alto]);
       hoja.drawImage(img, { x: 0, y: 0, width: jpeg.ancho, height: jpeg.alto });
@@ -2169,7 +2311,7 @@
     // Si el archivo ya venía bien comprimido, aligerarlo puede engordarlo.
     // En ese caso se rehace sin tocar nada: nunca se entrega algo peor.
     if (comp && antes && bytes.length >= antes) {
-      const limpio = await G.construirPdf(paginas, Object.assign({}, opciones, {
+      const limpio = await armarPdf(paginas, Object.assign({}, opciones, {
         comprimir: null, informe: null,
       }));
       if (opciones.informe) {
@@ -2183,12 +2325,12 @@
 
     if (opciones.informe) {
       opciones.informe({
-        aligeradas: porAligerar, intactas: tal, imagenes: imagenesAchicadas, sinSaber,
+        aligeradas: porAligerar - sinAligerar, intactas: tal, imagenes: imagenesAchicadas, sinSaber, sinAligerar,
         sinMejora: false, antes: Math.round(antes), despues: bytes.length,
       });
     }
     return bytes;
-  };
+  }
 
   /* ---------- ayudas de binarios ---------- */
   G.dataUrlABytes = function (dataUrl) {
