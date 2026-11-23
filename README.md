@@ -208,6 +208,25 @@ cerrar la pestaña. Por eso Pdflash vigila cuánto ocupa lo abierto:
   cerrarlos: se vuelven a abrir desde **Exped.** cuando hagan falta.
 - En la lista de tableros (la flecha) cada tarjeta dice lo que pesan sus PDF.
 - Cerrar un tablero suelta de la memoria los PDF que ya no usa ningún otro.
+- **Los tableros que no ves se duermen:** cada PDF tiene además su copia en el
+  lector que dibuja las hojas, la que se usa para armar el PDF y, si los
+  revisaste o leíste, hasta tres copias más para leer escaneos. Pasado medio
+  minuto sin usarlas, las de los tableros que no estás viendo se cierran
+  (sus hojas, deshacer y miniaturas ya dibujadas se quedan). Al volver a ese
+  tablero se abren solas en una fracción de segundo.
+- **Antes de exportar** se duermen al momento las de los otros tableros, para
+  que armar el PDF tenga la memoria libre.
+
+### Exportar nunca se queda colgado
+- Mientras se arma el PDF, las miniaturas esperan: el lector de PDF trabaja
+  solo para la exportación.
+- Con un peso que aligera (*Ligero*, *Mínimo*, *Blanco y negro*), Pdflash dice
+  por qué hoja va desde el principio («Viendo qué hojas son escaneos: 16 de
+  57…»), y las revisa de ocho en ocho.
+- Cada hoja tiene un tiempo máximo. Si el lector no la puede dibujar a tiempo
+  (por falta de memoria o una hoja que no sabe leer), esa hoja va **tal como
+  estaba** en su archivo y el PDF sale igual; al terminar, el aviso dice
+  cuántas hojas no se aligeraron.
 
 ### La ruta del expediente
 Bajo el título, una tira con los pasos de siempre: **Documentos · Revisado ·
