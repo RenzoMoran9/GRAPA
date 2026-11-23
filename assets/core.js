@@ -2362,7 +2362,7 @@
     return capDescargas;
   }
   // cuánto se espera a cada paso de la entrega; las pruebas los bajan
-  G.topesEntrega = { visor: 3000, permiso: 60000, escribir: 90000, guardarVisor: 120000 };
+  G.topesEntrega = { visor: 3000, permiso: 60000, escribir: 30000, guardarVisor: 120000 };
 
   /**
    * Entrega un archivo al usuario.
@@ -2386,8 +2386,13 @@
           return { estado: 'carpeta', nombre: final };
         } catch (e) {
           console.error(e);
+          // Escribir en la carpeta vinculada podía no terminar nunca (una
+          // carpeta de red o de OneDrive, o el antivirus revisando el archivo
+          // al cerrarlo): «Exportar» se quedaba colgado mientras «Extraer»,
+          // que va a Descargas, funcionaba. Pasado el tope, va a Descargas.
           G.aviso(e && e.message === 'tarde'
-            ? 'La carpeta vinculada no respondió a tiempo; el PDF va a Descargas.'
+            ? `La carpeta «${G.carpeta.nombre()}» no terminó de guardar en ${Math.round(G.topesEntrega.escribir / 1000)} s, así que el PDF se descargó en Descargas. `
+              + 'Si es una carpeta de red o de OneDrive, prueba con una de tu disco. Si más tarde el archivo aparece también allí, es el mismo.'
             : 'No se pudo escribir en la carpeta vinculada; va a Descargas.', 'error');
         }
       } else {

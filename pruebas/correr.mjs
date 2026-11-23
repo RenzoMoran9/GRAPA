@@ -376,6 +376,71 @@ const PRUEBAS = {
     afirmar(await page.isHidden('#cargandoCancelar'), 'el botón se va con la capa');
   },
 
+  async 'carpeta vinculada: Exportar escribe el PDF ahí'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await page.evaluate(async () => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      // una carpeta de verdad del navegador hace de carpeta elegida
+      window.showDirectoryPicker = () => navigator.storage.getDirectory();
+      await window.Grapa.carpeta.vincular();
+    });
+    await page.click('#btnGuardar');
+    await page.waitForFunction(() => [...document.querySelectorAll('#avisos .aviso')].some((a) => /Guardado en/.test(a.textContent)), null, { timeout: 15000 });
+    const r = await page.evaluate(async () => {
+      const dir = await navigator.storage.getDirectory();
+      const nombres = [];
+      for await (const [n, h] of dir.entries()) nombres.push([n, h.kind === 'file' ? (await h.getFile()).size : 0]);
+      return nombres;
+    });
+    afirmar(r.some(([n, t]) => /\.pdf$/.test(n) && t > 1000), 'el PDF está en la carpeta', r);
+    const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+    afirmar(/Guardado en/.test(avisos), 'dice dónde se guardó', avisos);
+  },
+
+  async 'carpeta vinculada: si no termina de guardar, el PDF va a Descargas'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await page.evaluate(async () => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      const dir = await navigator.storage.getDirectory();
+      // como una carpeta de red que no contesta
+      dir.getFileHandle = () => new Promise(() => {});
+      window.showDirectoryPicker = async () => dir;
+      await window.Grapa.carpeta.vincular();
+      window.Grapa.topesEntrega.escribir = 400;
+    });
+    const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.click('#btnGuardar')]);
+    afirmar(/\.pdf$/.test(descarga.suggestedFilename()), 'sale por Descargas', descarga.suggestedFilename());
+    await page.waitForFunction(() => document.querySelector('#cargando').hidden);
+    const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+    afirmar(/no terminó de guardar/.test(avisos), 'y dice por qué', avisos);
+  },
+
+  async 'carpeta vinculada: el permiso se pide durante el clic de Exportar'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await page.evaluate(async () => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      const dir = await navigator.storage.getDirectory();
+      let estado = 'prompt';
+      window.__pedido = [];
+      dir.queryPermission = async () => estado;
+      // el navegador solo deja preguntar justo después de un clic
+      dir.requestPermission = async () => {
+        const activo = navigator.userActivation.isActive;
+        window.__pedido.push(activo);
+        if (activo) estado = 'granted';
+        return estado;
+      };
+      window.showDirectoryPicker = async () => dir;
+      await window.Grapa.carpeta.vincular();
+    });
+    await page.click('#btnGuardar');
+    await page.waitForFunction(() => [...document.querySelectorAll('#avisos .aviso')].some((a) => /Guardado en/.test(a.textContent)), null, { timeout: 15000 });
+    const pedido = await page.evaluate(() => window.__pedido);
+    afirmar(pedido.length >= 1 && pedido[0] === true, 'se pidió con el clic aún vivo', pedido);
+    const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+    afirmar(/Guardado en/.test(avisos), 'y se guardó en la carpeta', avisos);
+  },
+
   async 'memoria: el PDF de otro tablero se duerme y se despierta solo al volver'({ page }) {
     await abrir(page, ['Uno', 3]);
     await page.click('#btnTableroNuevo');

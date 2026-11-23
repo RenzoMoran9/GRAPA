@@ -227,11 +227,14 @@ cerrar la pestaña. Por eso Pdflash vigila cuánto ocupa lo abierto:
   (por falta de memoria o una hoja que no sabe leer), esa hoja va **tal como
   estaba** en su archivo y el PDF sale igual; al terminar, el aviso dice
   cuántas hojas no se aligeraron.
-- **La entrega también tiene tiempo máximo.** Si algo de la página dice ser
-  el visor de Claude (por ejemplo, una extensión del navegador) y no contesta
-  en 3 segundos, o la carpeta vinculada no responde, el PDF se descarga de la
-  forma de siempre. La pantalla dice en qué paso va («Descargando el PDF…»,
-  «Guardando en «carpeta»…»).
+- **Guardar en la carpeta vinculada tiene tiempo máximo.** Escribir ahí podía
+  no terminar nunca (una carpeta de red o de OneDrive, o el antivirus
+  revisando el archivo): *Exportar* se quedaba colgado mientras *Extraer*, que
+  va a Descargas, funcionaba. Si en 30 segundos no terminó, el PDF se
+  descarga en Descargas y el aviso lo explica. La pantalla dice en qué paso va
+  («Guardando en «carpeta»…», «Descargando el PDF…»).
+- Lo mismo si algo de la página dice ser el visor de Claude y no contesta en
+  3 segundos: el PDF se descarga de la forma de siempre.
 - **El permiso de la carpeta vinculada se pide al pulsar Exportar**, cuando el
   navegador deja preguntarlo; pedido al final fallaba en silencio y el PDF
   acababa en Descargas sin decir por qué. Si no hay permiso, ahora lo dice.
