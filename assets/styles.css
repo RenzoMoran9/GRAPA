@@ -544,6 +544,9 @@ body.sin-panel .marca #btnPanel{background:var(--acento-tenue);color:var(--acent
   color:#fff;font-weight:600;gap:14px;grid-auto-flow:row;backdrop-filter:blur(2px);
 }
 .cargando[hidden]{display:none}
+.cargando-cancelar{justify-self:center;color:#fff;border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.08);padding:6px 16px;font-weight:600}
+.cargando-cancelar:hover{background:rgba(255,255,255,.18);border-color:#fff}
+.cargando-cancelar[hidden]{display:none}
 .giro{width:34px;height:34px;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:girar .8s linear infinite}
 
 /* ---------- expedientes guardados ---------- */

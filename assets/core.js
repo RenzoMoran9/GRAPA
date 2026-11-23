@@ -523,6 +523,8 @@
     pausas = Math.max(0, pausas + (si ? 1 : -1));
     if (!pausas) siguienteDeCola();
   };
+  /** Al cancelar un PDF que se quedó parado: las miniaturas siguen ya, sin esperarlo. */
+  G.reanudarMiniaturas = function () { pausas = 0; siguienteDeCola(); };
   function siguienteDeCola() {
     if (pausas) return;
     while (enCola < limiteCola() && cola.length) {
@@ -2349,12 +2351,18 @@
   async function capacidadDescargas() {
     if (capDescargas !== undefined) return capDescargas;
     try {
+      // Si la página la abrió el visor de Claude, él guarda el archivo. Pero
+      // `window.claude` también puede ponerlo otra cosa (una extensión del
+      // navegador) que nunca contesta: la descarga se quedaba esperando para
+      // siempre en «Escribiendo el PDF…». Si no contesta en 3 s, no hay visor.
       capDescargas = (window.claude && typeof window.claude.use === 'function')
-        ? await window.claude.use('downloads')
+        ? (await G.conTope(Promise.resolve(window.claude.use('downloads')), G.topesEntrega.visor)) || null
         : null;
     } catch (e) { capDescargas = null; }
     return capDescargas;
   }
+  // cuánto se espera a cada paso de la entrega; las pruebas los bajan
+  G.topesEntrega = { visor: 3000, permiso: 60000, escribir: 90000, guardarVisor: 120000 };
 
   /**
    * Entrega un archivo al usuario.
@@ -2368,22 +2376,29 @@
    */
   G.guardarArchivo = async function (bytes, nombre, tipo, opciones) {
     const o = opciones || {};
+    // Cada paso tiene un tiempo máximo: si alguno no contesta, el archivo
+    // sale por la descarga de siempre en vez de quedarse esperando.
     if (!o.aDescargas && G.carpeta && G.carpeta.actual()) {
-      const permiso = await G.carpeta.permiso(true);
+      const permiso = await G.conTope(G.carpeta.permiso(true), G.topesEntrega.permiso).catch(() => 'tarde');
       if (permiso === 'granted') {
         try {
-          const final = await G.carpeta.escribir(nombre, bytes);
+          const final = await G.conTope(G.carpeta.escribir(nombre, bytes), G.topesEntrega.escribir);
           return { estado: 'carpeta', nombre: final };
         } catch (e) {
           console.error(e);
-          G.aviso('No se pudo escribir en la carpeta vinculada; va a Descargas.', 'error');
+          G.aviso(e && e.message === 'tarde'
+            ? 'La carpeta vinculada no respondió a tiempo; el PDF va a Descargas.'
+            : 'No se pudo escribir en la carpeta vinculada; va a Descargas.', 'error');
         }
+      } else {
+        G.aviso(`La carpeta «${G.carpeta.nombre()}» no dio permiso para escribir; el PDF va a Descargas. `
+          + 'Al exportar otra vez, el navegador te lo vuelve a preguntar.');
       }
     }
     const cap = await capacidadDescargas();
     if (cap) {
       try {
-        await cap.save({ filename: nombre, data: bytes });
+        await G.conTope(Promise.resolve(cap.save({ filename: nombre, data: bytes })), G.topesEntrega.guardarVisor);
         return { estado: 'guardado', nombre };
       } catch (e) {
         if (e && e.code === 'declined') return { estado: 'cancelado', nombre };
@@ -2392,6 +2407,17 @@
     }
     G.descargar(bytes, nombre, tipo);
     return { estado: 'guardado', nombre };
+  };
+
+  /**
+   * Pide el permiso de la carpeta vinculada AHORA, mientras dura el clic de
+   * «Exportar»: el navegador solo deja preguntarlo justo después de un clic.
+   * Pedido al final, tras medio minuto armando el PDF, fallaba en silencio y
+   * el archivo acababa en Descargas sin decir por qué.
+   */
+  G.prepararCarpeta = async function () {
+    if (!G.carpeta || !G.carpeta.actual()) return;
+    try { await G.conTope(G.carpeta.permiso(true), G.topesEntrega.permiso); } catch (e) { /* se vuelve a mirar al guardar */ }
   };
 
   /**

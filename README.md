@@ -227,6 +227,17 @@ cerrar la pestaña. Por eso Pdflash vigila cuánto ocupa lo abierto:
   (por falta de memoria o una hoja que no sabe leer), esa hoja va **tal como
   estaba** en su archivo y el PDF sale igual; al terminar, el aviso dice
   cuántas hojas no se aligeraron.
+- **La entrega también tiene tiempo máximo.** Si algo de la página dice ser
+  el visor de Claude (por ejemplo, una extensión del navegador) y no contesta
+  en 3 segundos, o la carpeta vinculada no responde, el PDF se descarga de la
+  forma de siempre. La pantalla dice en qué paso va («Descargando el PDF…»,
+  «Guardando en «carpeta»…»).
+- **El permiso de la carpeta vinculada se pide al pulsar Exportar**, cuando el
+  navegador deja preguntarlo; pedido al final fallaba en silencio y el PDF
+  acababa en Descargas sin decir por qué. Si no hay permiso, ahora lo dice.
+- **Cancelar:** si al cabo de 15 segundos sigue trabajando, aparece
+  *Cancelar* en la pantalla de espera. Suelta la pantalla sin tocar tu
+  trabajo; lo que estaba en marcha, si termina después, ya no hace nada.
 
 ### La ruta del expediente
 Bajo el título, una tira con los pasos de siempre: **Documentos · Revisado ·

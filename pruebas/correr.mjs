@@ -345,6 +345,37 @@ const PRUEBAS = {
     afirmar(/4 hojas no se dejaron aligerar a tiempo y van como estaban/.test(avisos), 'dice cuáles no se aligeraron', avisos);
   },
 
+  async 'exportar: si algo en la página se hace pasar por el visor y no contesta, el PDF se descarga igual'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await page.evaluate(() => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      // como una extensión del navegador que deja un `window.claude` que nunca responde
+      window.claude = { use: () => new Promise(() => {}) };
+      window.Grapa.topesEntrega.visor = 300;
+    });
+    const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.click('#btnGuardar')]);
+    afirmar(/\.pdf$/.test(descarga.suggestedFilename()), 'sale el PDF', descarga.suggestedFilename());
+    await page.waitForFunction(() => document.querySelector('#cargando').hidden);
+  },
+
+  async 'exportar: si se queda parada, «Cancelar» suelta la pantalla'({ page }) {
+    await abrir(page, ['Base', 2]);
+    await page.evaluate(() => {
+      localStorage.setItem('grapa.avisar-exportar', '0');
+      window.Grapa.cancelarTras = 200;
+      window.Grapa.construirPdf = () => new Promise(() => {});   // nunca termina
+    });
+    await page.click('#btnGuardar');
+    await page.waitForSelector('#cargandoCancelar:not([hidden])', { timeout: 5000 });
+    afirmar(await page.isVisible('#cargando'), 'la pantalla está tapada');
+    await page.click('#cargandoCancelar');
+    await page.waitForFunction(() => document.querySelector('#cargando').hidden, null, { timeout: 3000 });
+    const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+    afirmar(/Se canceló la exportación/.test(avisos), 'dice que se canceló', avisos);
+    afirmar((await orden(page)).length === 2, 'las hojas siguen ahí');
+    afirmar(await page.isHidden('#cargandoCancelar'), 'el botón se va con la capa');
+  },
+
   async 'memoria: el PDF de otro tablero se duerme y se despierta solo al volver'({ page }) {
     await abrir(page, ['Uno', 3]);
     await page.click('#btnTableroNuevo');
