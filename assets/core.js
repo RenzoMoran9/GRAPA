@@ -1901,11 +1901,48 @@
     // «Armando el PDF…» mientras se dibujaban las hojas de detrás.
     G.pausarMiniaturas(true);
     try {
-      return await armarPdf(paginas, opciones);
+      try {
+        return await armarPdf(paginas, opciones);
+      } catch (e) {
+        // Algún PDF de origen está dañado por dentro y no se deja copiar tal
+        // cual (el armado fallaba entero con un mensaje incomprensible). Se
+        // averigua cuál y se vuelve a armar con sus hojas como imagen: el
+        // lector de pdf.js sí sabe dibujarlas.
+        const ya = (opciones && opciones.comoImagen) || [];
+        const malas = await fuentesQueNoSeCopian(paginas, ya);
+        if (!malas.length) throw e;
+        console.warn('Estos PDF no se dejan copiar tal cual; sus hojas van como imagen:', malas, e);
+        return await armarPdf(paginas, Object.assign({}, opciones, { comoImagen: ya.concat(malas) }));
+      }
     } finally {
       G.pausarMiniaturas(false);
     }
   };
+
+  /** Los PDF de origen de esas hojas que no se pueden copiar tal cual a otro PDF. */
+  async function fuentesQueNoSeCopian(paginas, ya) {
+    const porFuente = new Map();
+    paginas.forEach((p) => {
+      if (ya.includes(p.fuenteId)) return;
+      if (!porFuente.has(p.fuenteId)) porFuente.set(p.fuenteId, new Set());
+      porFuente.get(p.fuenteId).add(p.indice);
+    });
+    const malas = [];
+    for (const [id, indices] of porFuente) {
+      try {
+        const prueba = await PDFDocument.create();
+        const copiadas = await prueba.copyPages(await docPdfLib(id), [...indices]);
+        copiadas.forEach((pg) => { prueba.addPage(pg); pg.getSize(); pg.node.Resources(); });
+        await prueba.save({ useObjectStreams: false });
+      } catch (e) {
+        malas.push(id);
+      }
+    }
+    return malas;
+  }
+
+  // cómo se dibuja como imagen una hoja que no se puede copiar, cuando no se pidió aligerar
+  const COMO_IMAGEN = { ppp: 200, calidad: 0.88 };
 
   async function armarPdf(paginas, opciones) {
     opciones = opciones || {};
@@ -1930,7 +1967,24 @@
     //     Se miran de ocho en ocho y se dice por cuál va: de una en una,
     //     con un expediente largo, se quedaba en «Armando el PDF…» sin
     //     decir nada.
+    //
+    //     Las hojas de un PDF PROTEGIDO (cifrado, como suelen venir los
+    //     certificados) no se pueden copiar: pdf-lib no sabe descifrarlas, y
+    //     salían en blanco o el armado fallaba entero («Expected instance of
+    //     e, but got instance of undefined»). El lector de pdf.js sí las
+    //     descifra para dibujarlas, así que van como imagen, igual que un
+    //     escaneo aligerado. Lo mismo con un PDF que no se deja leer.
+    const comoImagen = new Set((opciones && opciones.comoImagen) || []);
+    const cifradas = new Set();
+    for (const id of new Set(paginas.map((p) => p.fuenteId))) {
+      if (comoImagen.has(id)) continue;
+      try {
+        if ((await docPdfLib(id)).isEncrypted) { comoImagen.add(id); cifradas.add(id); }
+      } catch (e) { comoImagen.add(id); }
+    }
     const aligerar = new Set();
+    const forzadas = new Set();
+    paginas.forEach((p, i) => { if (comoImagen.has(p.fuenteId)) { aligerar.add(i); forzadas.add(i); } });
     if (comp) {
       const LOTE = 8;
       for (let desde = 0; desde < paginas.length; desde += LOTE) {
@@ -1938,6 +1992,7 @@
         const hasta = Math.min(paginas.length, desde + LOTE);
         const lote = [];
         for (let i = desde; i < hasta; i++) {
+          if (forzadas.has(i)) continue;
           lote.push((async () => {
             if (!(await G.tieneTexto(paginas[i]))) return true;
             return !!comp.tambienConTexto && (await pesoImagenes(paginas[i]).catch(() => 0)) <= PESO_ESCANEO;
@@ -1946,6 +2001,17 @@
         await Promise.all(lote);
       }
     }
+
+    /** Qué documentos fueron como imagen y por qué, para decirlo al terminar. */
+    const resumenComoImagen = () => {
+      const r = { cifradas: [], danadas: [], hojas: forzadas.size };
+      comoImagen.forEach((id) => {
+        if (!paginas.some((p) => p.fuenteId === id)) return;
+        const nombre = (G.estado.fuentes.get(id) || {}).nombre || 'un documento';
+        (cifradas.has(id) ? r.cifradas : r.danadas).push(nombre);
+      });
+      return r;
+    };
 
     // 1b. copiar del origen las que no se aligeran, agrupando por documento
     const porFuente = new Map();
@@ -1980,8 +2046,10 @@
     let imagenesAchicadas = 0;
     const sinSaber = { n: 0, peso: 0 };   // imágenes que no se saben leer
     let sinAligerar = 0;                    // escaneos que el lector no pudo dibujar: van tal cual
+    let perdidas = 0;                       // hojas que no se pudieron ni copiar ni dibujar
     for (let i = 0; i < paginas.length; i++) {
       if (comp && paginas.length > 3) await avisar(`Comprimiendo hoja ${i + 1} de ${paginas.length}…`);
+      else if (forzadas.has(i)) await avisar(`Pasando a imagen las hojas protegidas: ${i + 1} de ${paginas.length}…`);
       if (!aligerar.has(i)) {
         salida.addPage(copiadas[i]);
         if (comp) {
@@ -1995,9 +2063,11 @@
         }
         continue;
       }
+      // sin aligerar, a 200 ppp; al rehacerlo «sin mejora», con el ajuste que se había pedido
+      const aj = comp || opciones.ajusteImagen || COMO_IMAGEN;
       let bn = null;
-      if (comp.bn) {
-        try { bn = await hojaEnUnBit(paginas[i], comp.ppp); }
+      if (aj.bn) {
+        try { bn = await hojaEnUnBit(paginas[i], aj.ppp); }
         catch (e) { bn = null; }
       }
       if (bn) {
@@ -2010,17 +2080,26 @@
       // guarda en JPEG, a algo menos de resolución para que no se dispare.
       let jpeg = null;
       try {
-        jpeg = comp.bn
+        jpeg = aj.bn
           ? await hojaEnJpeg(paginas[i], 150, 0.7)
-          : await hojaEnJpeg(paginas[i], comp.ppp, comp.calidad);
+          : await hojaEnJpeg(paginas[i], aj.ppp, aj.calidad);
       } catch (e) {
         // El lector no la pudo dibujar (o no a tiempo): va tal cual, como
         // estaba en su archivo. Mejor una hoja sin aligerar que un PDF que
         // no sale nunca.
         console.warn('La hoja ' + (i + 1) + ' no se pudo aligerar; va como estaba', e);
-        const [comoEstaba] = await salida.copyPages(await docPdfLib(paginas[i].fuenteId), [paginas[i].indice]);
-        salida.addPage(comoEstaba);
-        sinAligerar++;
+        try {
+          if (forzadas.has(i)) throw new Error('no se puede copiar');
+          const [comoEstaba] = await salida.copyPages(await docPdfLib(paginas[i].fuenteId), [paginas[i].indice]);
+          salida.addPage(comoEstaba);
+          sinAligerar++;
+        } catch (e2) {
+          // ni copiarla ni dibujarla: una hoja que lo dice, en su sitio, y el resto sale
+          const meta = ((G.estado.fuentes.get(paginas[i].fuenteId) || {}).paginas || [])[paginas[i].indice] || {};
+          const hoja = salida.addPage([meta.w || 595.28, meta.h || 841.89]);
+          hoja.drawText('Esta hoja no se pudo copiar de su archivo original.', { x: 50, y: (meta.h || 841.89) / 2, size: 14 });
+          perdidas++;
+        }
         continue;
       }
       const img = await salida.embedJpg(jpeg.bytes);
@@ -2314,11 +2393,12 @@
     // En ese caso se rehace sin tocar nada: nunca se entrega algo peor.
     if (comp && antes && bytes.length >= antes) {
       const limpio = await armarPdf(paginas, Object.assign({}, opciones, {
-        comprimir: null, informe: null,
+        comprimir: null, informe: null, ajusteImagen: comp,
       }));
       if (opciones.informe) {
         opciones.informe({
-          aligeradas: 0, intactas: paginas.length, sinMejora: true, sinSaber,
+          aligeradas: 0, intactas: paginas.length, sinMejora: true, sinSaber, comp: true,
+          comoImagen: resumenComoImagen(), perdidas,
           antes: Math.round(antes), despues: limpio.length,
         });
       }
@@ -2327,8 +2407,9 @@
 
     if (opciones.informe) {
       opciones.informe({
-        aligeradas: porAligerar - sinAligerar, intactas: tal, imagenes: imagenesAchicadas, sinSaber, sinAligerar,
-        sinMejora: false, antes: Math.round(antes), despues: bytes.length,
+        aligeradas: porAligerar - sinAligerar - forzadas.size, intactas: tal, imagenes: imagenesAchicadas, sinSaber, sinAligerar,
+        sinMejora: false, antes: Math.round(antes), despues: bytes.length, comp: !!comp,
+        comoImagen: resumenComoImagen(), perdidas,
       });
     }
     return bytes;

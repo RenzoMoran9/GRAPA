@@ -416,6 +416,54 @@ const PRUEBAS = {
     afirmar(/no está guardado en Pdflash/.test(avisos), 'ofrece guardar el expediente', avisos);
   },
 
+  async 'exportar: un PDF protegido (cifrado) sale entero, con sus hojas como imagen'({ page }) {
+    // pruebas/protegido.pdf: dos hojas, cifradas con AES-256 y flujos de objetos,
+    // como los certificados que mandan los proveedores. Antes: «Expected
+    // instance of e, but got instance of undefined» y no salía nada.
+    await page.setInputFiles('#entradaArchivos', [RAIZ + 'pruebas/protegido.pdf']);
+    await esperarCarga(page);
+    await abrir(page, ['Normal', 1]);
+    afirmar((await orden(page)).length === 3, 'se abren las 3 hojas', await orden(page));
+    for (const modo of ['original', 'ligero']) {
+      await page.evaluate((m) => {
+        localStorage.setItem('grapa.avisar-exportar', '0');
+        const s = document.querySelector('#pesoSalida');
+        s.value = m;
+        s.dispatchEvent(new Event('change', { bubbles: true }));
+        document.querySelectorAll('#avisos .aviso').forEach((a) => a.remove());
+      }, modo);
+      const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#btnGuardar')]);
+      const b64 = (await import('node:fs')).readFileSync(await descarga.path()).toString('base64');
+      const r = await page.evaluate(async (b64) => {
+        const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const doc = await window.Grapa.pdfjsLib.getDocument({ data: bin }).promise;
+        const hojas = [];
+        for (let i = 1; i <= doc.numPages; i++) {
+          const pag = await doc.getPage(i);
+          const vp = pag.getViewport({ scale: 0.5 });
+          const c = document.createElement('canvas');
+          c.width = vp.width; c.height = vp.height;
+          const x = c.getContext('2d');
+          x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+          await pag.render({ canvasContext: x, viewport: vp }).promise;
+          const d = x.getImageData(0, 0, c.width, c.height).data;
+          let tinta = 0;
+          for (let k = 0; k < d.length; k += 4) if (d[k] < 128) tinta++;
+          const texto = (await pag.getTextContent()).items.map((t) => t.str).join(' ');
+          hojas.push({ tinta, texto: texto.slice(0, 30) });
+        }
+        return hojas;
+      }, b64);
+      afirmar(r.length === 3, modo + ': salen las 3 hojas', r);
+      const normal = r.filter((h) => /Normal/.test(h.texto));
+      const protegidas = r.filter((h) => !/Normal/.test(h.texto));
+      afirmar(normal.length === 1, modo + ': la normal conserva su texto', r);
+      afirmar(protegidas.length === 2 && protegidas.every((h) => h.tinta > 300), modo + ': las protegidas no salen en blanco', r);
+      const avisos = await page.$$eval('#avisos .aviso', (a) => a.map((x) => x.textContent).join(' | '));
+      afirmar(/«protegido» viene protegido \(cifrado\): sus hojas van como imagen/.test(avisos), modo + ': lo dice', avisos);
+    }
+  },
+
   async 'exportar: se ve la capa de espera mientras se arma el PDF'({ page }) {
     await abrir(page, ['Largo', 30]);
     await page.evaluate(() => {
