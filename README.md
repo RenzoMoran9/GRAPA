@@ -224,6 +224,22 @@ cerrar la pestaña. Por eso Pdflash vigila cuánto ocupa lo abierto:
 - **Antes de exportar** se duermen al momento las de los otros tableros, para
   que armar el PDF tenga la memoria libre.
 
+### PDF protegidos (cifrados) y PDF dañados
+Muchos certificados (ISO, registros sanitarios) llegan **protegidos**: se
+abren sin contraseña, pero vienen cifrados para que nadie los modifique.
+Pdflash los ve bien, pero la parte que arma el PDF final no sabe descifrarlos:
+antes la exportación fallaba entera («Expected instance of e, but got
+instance of undefined») o sus hojas salían en blanco.
+
+- Ahora las hojas de un PDF protegido van **como imagen**: se ven igual y
+  salen completas, aunque su texto no se puede seleccionar. Con *Original*, a
+  200 ppp; con *Ligero* o *Mínimo*, a la resolución de ese peso.
+- Si un PDF está **dañado por dentro** y no se deja copiar tal cual, Pdflash lo
+  detecta solo, vuelve a armar el PDF con las hojas de ese documento como
+  imagen y lo dice al terminar.
+- El aviso final nombra qué documentos fueron como imagen y por qué. También
+  al sacar hojas con *Extraer*.
+
 ### Exportar nunca se queda colgado
 - Mientras se arma el PDF, las miniaturas esperan: el lector de PDF trabaja
   solo para la exportación.

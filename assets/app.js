@@ -2216,8 +2216,33 @@
   }
 
   /** Una línea contando cómo quedó el peso, si se pidió aligerar. */
+  /** Lo que fue como imagen porque no se podía copiar: se dice siempre, con cualquier peso. */
+  function fraseComoImagen(d) {
+    const c = d && d.comoImagen;
+    let f = '';
+    const lista = (xs) => xs.slice(0, 3).map((x) => `«${nombreCorto(x, 40)}»`).join(', ') + (xs.length > 3 ? ` y ${xs.length - 3} más` : '');
+    if (c && c.cifradas.length) {
+      f += ` ${lista(c.cifradas)} ${c.cifradas.length === 1 ? 'viene protegido' : 'vienen protegidos'} (cifrado): `
+        + 'sus hojas van como imagen. Se ven igual, pero su texto no se puede seleccionar.';
+    }
+    if (c && c.danadas.length) {
+      f += ` ${lista(c.danadas)} ${c.danadas.length === 1 ? 'está dañado' : 'están dañados'} por dentro y no se podía copiar tal cual: sus hojas van como imagen.`;
+    }
+    if (d && d.perdidas) {
+      f += ` ${d.perdidas === 1 ? '1 hoja no se pudo' : d.perdidas + ' hojas no se pudieron'} copiar ni dibujar: en su lugar va una hoja que lo dice.`;
+    }
+    return f;
+  }
+
   function frasePeso() {
     const d = ultimoInforme;
+    if (!d) return '';
+    const comoImagen = fraseComoImagen(d);
+    if (!d.comp) return comoImagen;
+    return frasePesoAligerado(d) + comoImagen;
+  }
+
+  function frasePesoAligerado(d) {
     if (!d || !d.antes) return '';
     // lo que Pdflash no supo achicar: así se sabe dónde queda el peso
     const quedan = (d.sinSaber && d.sinSaber.n
@@ -4721,7 +4746,7 @@
         { aDescargas: true });
       G.aviso(r.estado === 'cancelado'
         ? 'Descarga cancelada.'
-        : `${objs.length} hoja(s) descargadas en un PDF (van a Descargas).`,
+        : `${objs.length} hoja(s) descargadas en un PDF (van a Descargas).` + fraseComoImagen(ultimoInforme),
         r.estado === 'cancelado' ? '' : 'ok');
     } catch (e) {
       console.error(e);
